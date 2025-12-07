@@ -1,73 +1,105 @@
 name: Update AUR Packages
-
 on:
   schedule:
-    - cron: "0 18 * * *" # UTC 18点（北京时间 02:00 每日执行）
+    - cron: '0 18 * * *'
   workflow_dispatch:
-
 jobs:
-  aur:
+  update:
     runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+    defaults:
+      run:
+        # 默认工作目录设为仓库根
+        working-directory: ${{ github.workspace }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 安装 uv
-      - name: Install uv
+      # 安装必要工具
+      - name: Setup system packages
         run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm base-devel git openssh sudo curl
 
-      # 通过 uv 安装依赖
-      - name: Install Python dependencies with uv
+      # 使用官方 action 安装 uv + Python 3.13（自动添加 PATH，无需手动 export）
+      - name: Setup uv & Python 3.13
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.13'
+          enable-cache: true  # 启用 uv 缓存，加速依赖安装
+
+      # 使用 uv 安装 Python 依赖
+      - name: Setup Python dependencies
         run: |
-          if [ -f requirements.txt ]; then
-            uv pip sync requirements.txt
-          elif [ -f pyproject.toml ]; then
+          if [ -f "pyproject.toml" ]; then
+            echo "Found pyproject.toml, syncing dependencies..."
+            ls -la  # 调试：列出根目录文件
             uv sync
           else
-            echo "No Python dependency file found, skipping."
+            echo "Error: pyproject.toml not found in ${{ github.workspace }}!"
+            echo "Available files:"
+            ls -la
+            echo "This workflow requires pyproject.toml for Python dependency management."
+            exit 1
           fi
 
-      # 安装构建 AUR 包所需工具
-      - name: Install AUR build tools
+      # 运行更新脚本
+      - name: Run main update script
         run: |
-          sudo apt update
-          sudo apt install -y base-devel fakeroot git pacman arch-install-scripts
+          uv run main.py
 
-      # 生成 .SRCINFO
-      - name: Generate .SRCINFO
+      # 创建非 root 构建用户
+      - name: Create build user
         run: |
-          makepkg --printsrcinfo > .SRCINFO
+          useradd -m builduser
+          echo "builduser ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builduser
+          passwd -d builduser
 
-      # 测试构建：构建失败直接退出
-      - name: Build package for validation
+      # SSH 配置用于 push AUR
+      - name: Setup SSH for AUR
         run: |
-          echo "Start building AUR package..."
-          makepkg -fs --noconfirm
-        continue-on-error: false   # 构建失败立即停止整个 workflow
+          sudo -u builduser mkdir -p /home/builduser/.ssh
+          echo "${{ secrets.AUR_SSH_PRIVATE_KEY }}" | sudo -u builduser tee /home/builduser/.ssh/id_ed25519 >/dev/null
+          sudo -u builduser chmod 600 /home/builduser/.ssh/id_ed25519
+          sudo -u builduser ssh-keyscan aur.archlinux.org >> /home/builduser/.ssh/known_hosts
 
-      # 设置 SSH
-      - name: Setup SSH
+      # builduser 构建目录权限
+      - name: Configure makepkg for builduser
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.AUR_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
+          cp /etc/makepkg.conf /home/builduser/makepkg.conf
+          sed -i 's|^#*\s*BUILDDIR=.*|BUILDDIR=/home/builduser/build|' /home/builduser/makepkg.conf
+          sed -i 's|^#*\s*PKGDEST=.*|PKGDEST=/home/builduser/pkgdest|' /home/builduser/makepkg.conf
+          sed -i 's|^#*\s*SRCDEST=.*|SRCDEST=/home/builduser/srcdest|' /home/builduser/makepkg.conf
+          mkdir -p /home/builduser/build /home/builduser/pkgdest /home/builduser/srcdest
+          chown -R builduser:builduser /home/builduser
 
-      # 4️⃣ 提交到 AUR 仓库
-      - name: Push to AUR
+      # 构建 + 推送所有包
+      - name: Build & Push AUR packages
         run: |
-          git config --global user.email "github-actions@github.com"
-          git config --global user.name "GitHub Actions"
-
-          AUR_REPO=ssh://aur@aur.archlinux.org/linuxqq-nt.git
-
-          git clone "$AUR_REPO" aur-pkg
-
-          cp PKGBUILD .SRCINFO aur-pkg/
-
-          cd aur-pkg
-          git add PKGBUILD .SRCINFO
-          git commit -m "Update: $(date -u +"%Y-%m-%d")" || echo "No changes to commit"
-          git push || echo "Nothing to push"
+          set -e
+          export MAKEPKG_CONF=/home/builduser/makepkg.conf
+          for pkg in packages/*; do
+            if [ -f "$pkg/PKGBUILD" ]; then
+              echo "=== Processing: $pkg ==="
+              pkgname=$(basename "$pkg")
+              aur_repo="ssh://aur@aur.archlinux.org/${pkgname}.git"
+              cd "$pkg"
+              echo "生成 .SRCINFO..."
+              sudo -u builduser MAKEPKG_CONF=$MAKEPKG_CONF makepkg --printsrcinfo > .SRCINFO
+              echo "构建测试 $pkgname ..."
+              sudo -u builduser MAKEPKG_CONF=$MAKEPKG_CONF makepkg -fs --noconfirm
+              cd ../../
+              # 克隆 AUR 仓库
+              sudo -u builduser git clone "$aur_repo" "/home/builduser/aur-$pkgname"
+              # 复制所有文件（包含隐藏文件）
+              sudo -u builduser cp -a "$pkg"/. "/home/builduser/aur-$pkgname/"
+              cd "/home/builduser/aur-$pkgname"
+              sudo -u builduser git config user.email "github-actions@github.com"
+              sudo -u builduser git config user.name "GitHub Actions"
+              sudo -u builduser git add -A
+              sudo -u builduser git commit -m "Update: $(date -u +"%Y-%m-%d")" || echo "No changes"
+              sudo -u builduser git push || echo "Nothing to push"
+              cd -
+            fi
+          done
