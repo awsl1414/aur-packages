@@ -2,34 +2,72 @@ name: Update AUR Packages
 
 on:
   schedule:
-    - cron: "0 18 * * *"   # 每天 18:00 UTC 执行
-  workflow_dispatch:        # 手动触发
-  push:
-    branches:
-      - main
+    - cron: "0 18 * * *" # UTC 18点（北京时间 02:00 每日执行）
+  workflow_dispatch:
 
 jobs:
-  update:
+  aur:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install dependencies
+      # 安装 uv
+      - name: Install uv
         run: |
-          pip install -r requirements.txt
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Run updater
+      # 通过 uv 安装依赖
+      - name: Install Python dependencies with uv
         run: |
-          python main.py
+          if [ -f requirements.txt ]; then
+            uv pip sync requirements.txt
+          elif [ -f pyproject.toml ]; then
+            uv sync
+          else
+            echo "No Python dependency file found, skipping."
+          fi
 
-      - name: Commit and push changes
+      # 安装构建 AUR 包所需工具
+      - name: Install AUR build tools
         run: |
-          git config user.name "github-actions[bot]"
-          ...
+          sudo apt update
+          sudo apt install -y base-devel fakeroot git pacman arch-install-scripts
+
+      # 生成 .SRCINFO
+      - name: Generate .SRCINFO
+        run: |
+          makepkg --printsrcinfo > .SRCINFO
+
+      # 测试构建：构建失败直接退出
+      - name: Build package for validation
+        run: |
+          echo "Start building AUR package..."
+          makepkg -fs --noconfirm
+        continue-on-error: false   # 构建失败立即停止整个 workflow
+
+      # 设置 SSH
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.AUR_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
+
+      # 4️⃣ 提交到 AUR 仓库
+      - name: Push to AUR
+        run: |
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "GitHub Actions"
+
+          AUR_REPO=ssh://aur@aur.archlinux.org/linuxqq-nt.git
+
+          git clone "$AUR_REPO" aur-pkg
+
+          cp PKGBUILD .SRCINFO aur-pkg/
+
+          cd aur-pkg
+          git add PKGBUILD .SRCINFO
+          git commit -m "Update: $(date -u +"%Y-%m-%d")" || echo "No changes to commit"
+          git push || echo "Nothing to push"
