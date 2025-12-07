@@ -1,0 +1,14 @@
+packages:
+  qq:
+    name: qq
+    source: qq
+    source_url: "https://im.qq.com/linuxqq/index.shtml"
+    fetch_url: "https://cdn-go.cn/qq-web/im.qq.com_new/latest/rainbow/linuxConfig.js"
+    upstream: "Tencent/QQ"
+    parser: QQParser
+    pkgbuild: "packages/linuxqq-nt/PKGBUILD"
+    arch:
+      - x86_64
+      - aarch64
+      - loong64
+  
