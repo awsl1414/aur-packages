@@ -4,6 +4,7 @@
 
 _pkgname=linuxqq
 pkgname=linuxqq-nt
+install=linuxqq-nt.install
 pkgver=3.2.22_251203
 pkgrel=1
 epoch=5
