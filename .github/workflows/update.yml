@@ -10,7 +10,7 @@ jobs:
       image: archlinux:latest
     defaults:
       run:
-        # 默认工作目录设为仓库根
+        # 默认工作目录设为仓库根（用于构建步骤）
         working-directory: ${{ github.workspace }}
     steps:
       - name: Checkout repository
@@ -29,23 +29,25 @@ jobs:
           python-version: '3.13'
           enable-cache: true  # 启用 uv 缓存，加速依赖安装
 
-      # 使用 uv 安装 Python 依赖
+      # 使用 uv 安装 Python 依赖（切换到 scripts 目录）
       - name: Setup Python dependencies
+        working-directory: scripts  # 关键修复：指定项目目录
         run: |
           if [ -f "pyproject.toml" ]; then
             echo "Found pyproject.toml, syncing dependencies..."
-            ls -la  # 调试：列出根目录文件
+            ls -la  # 调试：列出 scripts 目录文件
             uv sync
           else
-            echo "Error: pyproject.toml not found in ${{ github.workspace }}!"
-            echo "Available files:"
+            echo "Error: pyproject.toml not found in scripts/!"
+            echo "Available files in scripts/:"
             ls -la
-            echo "This workflow requires pyproject.toml for Python dependency management."
+            echo "This workflow requires pyproject.toml in scripts/ for Python dependency management."
             exit 1
           fi
 
-      # 运行更新脚本
+      # 运行更新脚本（也在 scripts 目录，确保 main.py 正确执行）
       - name: Run main update script
+        working-directory: scripts  # 关键修复：统一目录
         run: |
           uv run main.py
 
@@ -74,7 +76,7 @@ jobs:
           mkdir -p /home/builduser/build /home/builduser/pkgdest /home/builduser/srcdest
           chown -R builduser:builduser /home/builduser
 
-      # 构建 + 推送所有包
+      # 构建 + 推送所有包（在根目录循环 packages/*，main.py 更新后这里构建）
       - name: Build & Push AUR packages
         run: |
           set -e
