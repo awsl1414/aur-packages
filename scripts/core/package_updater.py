@@ -22,11 +22,11 @@ class PackageUpdater:
         self.parsers = {
             ParserEnum.QQ.value: QQParser(),
         }
-        # 获取项目根目录
+        # 获取项目根目录（这里的项目根目录指更新脚本的根目录）
         # 当前脚本位于 scripts/core/，所以需要向上两级到达项目根目录
-        self.project_root = Path(__file__).parent.parent.parent
+        self.project_root = Path(__file__).parent.parent
         # PKGBUILD目录相对于项目根目录
-        self.pkgbuild_root = self.project_root
+        self.pkgbuild_root = self.project_root.parent
 
     def _get_pkgbuild_path(self, pkgbuild_relative_path: str) -> Path:
         """
