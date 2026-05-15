@@ -61,6 +61,11 @@ jobs:
           mkdir -p /home/aurbuilder/.cache/uv
           chown -R "${{ env.BUILDER_USER }}:${{ env.BUILDER_USER }}" /home/aurbuilder/.cache/uv
 
+      - name: Use cdn-go.cn IP address from China
+        run: |
+          echo "61.170.74.101 cdn-go.cn" | tee -a /etc/hosts
+          getent ahosts cdn-go.cn
+
       - name: Install dependencies and update packages
         working-directory: scripts
         run: |
