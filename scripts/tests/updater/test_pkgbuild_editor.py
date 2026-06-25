@@ -229,3 +229,153 @@ class TestPKGBUILDEditorContextManager:
         # 重新加载验证未保存
         editor2 = PKGBUILDEditor(pkgbuild)
         assert editor2.get_pkgver() == "1.0.0"
+
+
+class TestUpdateSourceUrlEdgeCases:
+    """update_source_url 替换逻辑的边界条件测试"""
+
+    def _write(self, tmp_path: Path, body: str) -> Path:
+        p = tmp_path / "PKGBUILD"
+        p.write_text(body, encoding="utf-8")
+        return p
+
+    def test_braces_shell_var_in_url_skipped(self, tmp_path: Path) -> None:
+        """URL 含 ${_gh}（花括号）时保留 shell 变量，不更新"""
+        body = 'source_x86_64=("zen-${pkgver}.tar.xz::${_gh}/zen.tar.xz")\n'
+        editor = PKGBUILDEditor(self._write(tmp_path, body))
+        editor.update_source_url("x86_64", "https://new/file.tar.xz")
+        assert "${_gh}/zen.tar.xz" in editor.content
+        assert "https://new/file.tar.xz" not in editor.content
+
+    def test_braceless_shell_var_in_url_skipped(self, tmp_path: Path) -> None:
+        """URL 含 $_gh（无花括号）时同样应保留，等价于 ${_gh}"""
+        body = 'source_x86_64=("zen-${pkgver}.tar.xz::$_gh/zen.tar.xz")\n'
+        editor = PKGBUILDEditor(self._write(tmp_path, body))
+        editor.update_source_url("x86_64", "https://new/file.tar.xz")
+        assert "$_gh/zen.tar.xz" in editor.content
+        assert "https://new/file.tar.xz" not in editor.content
+
+    def test_alias_preserved_when_url_updated(self, tmp_path: Path) -> None:
+        """别名含 ${pkgver}、URL 硬编码时，保留别名、替换 URL"""
+        body = 'source_x86_64=("app-${pkgver}-${pkgrel}.tar.gz::https://old/file.tar.gz")\n'
+        editor = PKGBUILDEditor(self._write(tmp_path, body))
+        editor.update_source_url("x86_64", "https://new/file.tar.gz")
+        assert "app-${pkgver}-${pkgrel}.tar.gz::" in editor.content
+        assert "https://new/file.tar.gz" in editor.content
+        assert "https://old/file.tar.gz" not in editor.content
+
+    def test_plain_url_without_alias_replaced(self, tmp_path: Path) -> None:
+        """无别名的裸 URL 直接替换"""
+        body = "source_x86_64=('https://old/file.deb')\n"
+        editor = PKGBUILDEditor(self._write(tmp_path, body))
+        editor.update_source_url("x86_64", "https://new/file.deb")
+        assert "https://new/file.deb" in editor.content
+        assert "https://old/file.deb" not in editor.content
+
+    def test_multientry_line_preserves_local_sources(self, tmp_path: Path) -> None:
+        """单行多条目：替换远程 URL，保留本地源文件"""
+        body = 'source_x86_64=("launcher.sh" "app::https://old/file.tar.gz")\n'
+        editor = PKGBUILDEditor(self._write(tmp_path, body))
+        editor.update_source_url("x86_64", "https://new/file.tar.gz")
+        assert "launcher.sh" in editor.content
+        assert "app::https://new/file.tar.gz" in editor.content
+        assert "https://old/file.tar.gz" not in editor.content
+
+    def test_multiline_array_url_updated(self, tmp_path: Path) -> None:
+        """多行数组：正确更新 URL，不破坏结构"""
+        body = 'source_x86_64=(\n    "app::https://old/file.tar.gz"\n)\n'
+        editor = PKGBUILDEditor(self._write(tmp_path, body))
+        editor.update_source_url("x86_64", "https://new/file.tar.gz")
+        assert "https://new/file.tar.gz" in editor.content
+        assert "https://old/file.tar.gz" not in editor.content
+
+    def test_missing_source_arch_field_is_noop(self, tmp_path: Path) -> None:
+        """缺失 source_<arch> 字段时不破坏其它内容"""
+        body = "pkgname=test\npkgver=1.0.0\nsource=('launcher.sh')\n"
+        editor = PKGBUILDEditor(self._write(tmp_path, body))
+        original = editor.content
+        editor.update_source_url("x86_64", "https://new/file.tar.gz")
+        assert editor.content == original
+
+    def test_indented_source_line_is_noop(self, tmp_path: Path) -> None:
+        """缩进的 source 行（不在行首）不被匹配，保持原样"""
+        body = '  source_x86_64=("app::https://old/file.tar.gz")\n'
+        editor = PKGBUILDEditor(self._write(tmp_path, body))
+        original = editor.content
+        editor.update_source_url("x86_64", "https://new/file.tar.gz")
+        assert editor.content == original
+
+    def test_empty_source_array_left_untouched(self, tmp_path: Path) -> None:
+        """空 source 数组不应被填入 URL，保持为空"""
+        body = "source_x86_64=()\n"
+        editor = PKGBUILDEditor(self._write(tmp_path, body))
+        original = editor.content
+        editor.update_source_url("x86_64", "https://new/file.tar.gz")
+        assert editor.content == original
+
+    def test_duplicate_source_lines_updates_first_only(self, tmp_path: Path) -> None:
+        """重复的 source_<arch> 行只更新第一处，第二处保留原样"""
+        body = (
+            'source_x86_64=("a::https://old/1.tar.gz")\n'
+            'source_x86_64=("b::https://old/2.tar.gz")\n'
+        )
+        editor = PKGBUILDEditor(self._write(tmp_path, body))
+        editor.update_source_url("x86_64", "https://new/file.tar.gz")
+        assert "a::https://new/file.tar.gz" in editor.content
+        assert "b::https://old/2.tar.gz" in editor.content
+
+    def test_alias_containing_double_colon_splits_at_first(self, tmp_path: Path) -> None:
+        """别名含 :: 时按 makepkg 语义在首个 :: 处分隔"""
+        body = 'source_x86_64=("weird::name::https://old/file.tar.gz")\n'
+        editor = PKGBUILDEditor(self._write(tmp_path, body))
+        editor.update_source_url("x86_64", "https://new/file.tar.gz")
+        # makepkg 把首个 :: 左侧当文件名，故 alias="weird"
+        assert '"weird::https://new/file.tar.gz"' in editor.content
+
+    def test_backslash_in_new_url_does_not_crash(self, tmp_path: Path) -> None:
+        """new_url 含反斜杠（如 \1）时不应触发 re.sub 反向引用崩溃"""
+        body = 'source_x86_64=("app::https://old/file.tar.gz")\n'
+        editor = PKGBUILDEditor(self._write(tmp_path, body))
+        editor.update_source_url("x86_64", r"https://new/\1file.tar.gz")
+        assert "https://new/" in editor.content
+
+    def test_backslash_in_alias_does_not_crash(self, tmp_path: Path) -> None:
+        """alias 含反斜杠（来自文件内容）时不应崩溃"""
+        body = 'source_x86_64=("app\\1::https://old/file.tar.gz")\n'
+        editor = PKGBUILDEditor(self._write(tmp_path, body))
+        editor.update_source_url("x86_64", "https://new/file.tar.gz")
+        assert "https://new/file.tar.gz" in editor.content
+
+
+class TestUpdateSourceEdgeCases:
+    """update_source（arch='any'）与 update_source_url 行为对等性测试"""
+
+    def _write(self, tmp_path: Path, body: str) -> Path:
+        p = tmp_path / "PKGBUILD"
+        p.write_text(body, encoding="utf-8")
+        return p
+
+    def test_braces_shell_var_in_url_skipped(self, tmp_path: Path) -> None:
+        """any 包：URL 含 ${_gh} 时保留 shell 变量（与架构特定方法一致）"""
+        body = 'source=("${pkgver}::${_gh}/file.tar.xz")\n'
+        editor = PKGBUILDEditor(self._write(tmp_path, body))
+        editor.update_source("https://new/file.tar.xz")
+        assert "${_gh}/file.tar.xz" in editor.content
+        assert "https://new/file.tar.xz" not in editor.content
+
+    def test_alias_preserved_when_url_updated(self, tmp_path: Path) -> None:
+        """any 包：保留别名、替换 URL"""
+        body = 'source=("app-${pkgver}::https://old/file.tar.gz")\n'
+        editor = PKGBUILDEditor(self._write(tmp_path, body))
+        editor.update_source("https://new/file.tar.gz")
+        assert "app-${pkgver}::" in editor.content
+        assert "https://new/file.tar.gz" in editor.content
+        assert "https://old/file.tar.gz" not in editor.content
+
+    def test_multientry_preserves_local_sources(self, tmp_path: Path) -> None:
+        """any 包：多条目保留本地源"""
+        body = 'source=("launcher.sh" "app::https://old/file.tar.gz")\n'
+        editor = PKGBUILDEditor(self._write(tmp_path, body))
+        editor.update_source("https://new/file.tar.gz")
+        assert "launcher.sh" in editor.content
+        assert "app::https://new/file.tar.gz" in editor.content

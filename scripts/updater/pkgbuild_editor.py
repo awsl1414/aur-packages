@@ -5,6 +5,13 @@ from pathlib import Path
 
 from constants.constants import HashAlgorithmEnum
 
+# shell 变量引用：匹配 ${VAR} 或 $VAR / $_VAR（无花括号形式）
+_SHELL_VAR_RE = re.compile(r"\$\{|\$[A-Za-z_]")
+# 远程 URL 协议头，如 https://、git+https://
+_REMOTE_PROTO_RE = re.compile(r"^[a-z][a-z0-9+.\-]*://", re.IGNORECASE)
+# source 数组内的引号条目（双引号或单引号）
+_SOURCE_ENTRY_RE = re.compile(r'"([^"]*)"|\'([^\']*)\'')
+
 
 class PKGBUILDEditor:
     """PKGBUILD 文件编辑器，支持上下文管理器自动保存"""
@@ -75,43 +82,72 @@ class PKGBUILDEditor:
         self.content = re.sub(pattern, replacement, self.content, flags=re.MULTILINE)
 
     def update_source_url(self, arch: str, new_url: str) -> None:
-        """更新特定架构的 source URL，保留已有的 :: 别名"""
-        escaped_arch = re.escape(arch)
-        # Capture both alias (group 1) and existing URL (group 2)
-        pattern = f"^source_{escaped_arch}=\\(['\"]([^'\"]*?)::([^'\"]*?)['\"]\\)$"
-        match = re.search(pattern, self.content, flags=re.MULTILINE)
-
-        if match:
-            alias = match.group(1)
-            existing_url = match.group(2)
-            # Preserve shell variable references (e.g. ${_gh}/...)
-            if "${" in existing_url:
-                return
-            replacement = f'source_{arch}=("{alias}::{new_url}")'
-        else:
-            replacement = f"source_{arch}=('{new_url}')"
-
-        self.content = re.sub(
-            f"^source_{escaped_arch}=\\(.*\\)$",
-            replacement,
-            self.content,
-            flags=re.MULTILINE,
-        )
+        """更新特定架构的 source URL，保留别名与本地源条目；URL 含 shell 变量时跳过"""
+        self._update_source_field(re.escape(f"source_{arch}"), new_url)
 
     def update_source(self, new_url: str) -> None:
-        """更新非架构特定的 source URL（用于 arch=('any') 包），保留已有的 :: 别名"""
-        # 匹配单引号或双引号包裹的 :: 别名格式
-        pattern = r"""^source=\((?:['"]([^'"]*)::[^'"]*['"]|.*)\)$"""
-        match = re.search(pattern, self.content, flags=re.MULTILINE)
-        if match and match.group(1):
-            replacement = f'source=("{match.group(1)}::{new_url}")'
+        """更新非架构特定 source URL（用于 arch=('any') 包），保留别名与本地源条目；URL 含 shell 变量时跳过"""
+        self._update_source_field(re.escape("source"), new_url)
+
+    @staticmethod
+    def _has_shell_var(text: str) -> bool:
+        """文本是否包含 shell 变量引用（${VAR} 或 $VAR/$_VAR）"""
+        return _SHELL_VAR_RE.search(text) is not None
+
+    @staticmethod
+    def _is_remote_entry(value: str) -> bool:
+        """source 条目是否为远程 URL（带 :: 别名或以协议头开头）"""
+        return "::" in value or bool(_REMOTE_PROTO_RE.match(value))
+
+    def _update_source_field(self, field_pattern: str, new_url: str) -> None:
+        """更新 source / source_<arch> 字段的远程 URL。
+
+        - 支持单行/多行、单条目/多条目数组；本地源条目（如 launcher.sh）原样保留。
+        - 仅替换第一个远程条目；其 URL 部分含 shell 变量引用时整段保留。
+        - 别名中的 shell 变量（如 ${pkgver}，用于文件名缓存破除）始终保留。
+        - re.sub 用函数返回替换文本，避免 new_url/alias 中的反斜杠被当作反向引用。
+        """
+        block_re = re.compile(
+            rf"^({field_pattern})=\((.*?)\)\s*$",
+            re.MULTILINE | re.DOTALL,
+        )
+        match = block_re.search(self.content)
+        if not match:
+            return  # 字段缺失，保持原样
+
+        field = match.group(1)
+        inner = match.group(2)
+        entries = [
+            em.group(1) if em.group(1) is not None else em.group(2)
+            for em in _SOURCE_ENTRY_RE.finditer(inner)
+        ]
+        if not entries:
+            return  # 空数组，保持原样
+
+        remote_idx = next(
+            (i for i, entry in enumerate(entries) if self._is_remote_entry(entry)),
+            None,
+        )
+        if remote_idx is None:
+            return  # 无远程条目，保持原样
+
+        target = entries[remote_idx]
+        if "::" in target:
+            # 首个 :: 分隔别名与 URL，与 makepkg 语义一致
+            alias, _, url = target.partition("::")
+            if self._has_shell_var(url):
+                return  # URL 含 shell 变量引用，保留模板
+            entries[remote_idx] = f"{alias}::{new_url}"
         else:
-            replacement = f"source=('{new_url}')"
-        self.content = re.sub(
-            r"^source=\(.*\)$",
-            replacement,
-            self.content,
-            flags=re.MULTILINE,
+            if self._has_shell_var(target):
+                return
+            entries[remote_idx] = new_url
+
+        new_inner = " ".join(f'"{entry}"' for entry in entries)
+        new_block = f"{field}=({new_inner})"
+        # count=1：仅更新第一个匹配块；lambda 返回值不被解析为反向引用模板
+        self.content = block_re.sub(
+            lambda _m: new_block, self.content, count=1
         )
 
     def update_checksum(
