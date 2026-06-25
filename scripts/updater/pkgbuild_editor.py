@@ -77,13 +77,20 @@ class PKGBUILDEditor:
     def update_source_url(self, arch: str, new_url: str) -> None:
         """更新特定架构的 source URL，保留已有的 :: 别名"""
         escaped_arch = re.escape(arch)
-        # 匹配单引号或双引号包裹的 :: 别名格式
-        pattern = f"""^source_{escaped_arch}=\\((?:['"]([^'"]*)::[^'"]*['"]|.*)\\)$"""
+        # Capture both alias (group 1) and existing URL (group 2)
+        pattern = f"^source_{escaped_arch}=\\(['\"]([^'\"]*?)::([^'\"]*?)['\"]\\)$"
         match = re.search(pattern, self.content, flags=re.MULTILINE)
-        if match and match.group(1):
-            replacement = f'source_{arch}=("{match.group(1)}::{new_url}")'
+
+        if match:
+            alias = match.group(1)
+            existing_url = match.group(2)
+            # Preserve shell variable references (e.g. ${_gh}/...)
+            if "${" in existing_url:
+                return
+            replacement = f'source_{arch}=("{alias}::{new_url}")'
         else:
             replacement = f"source_{arch}=('{new_url}')"
+
         self.content = re.sub(
             f"^source_{escaped_arch}=\\(.*\\)$",
             replacement,
