@@ -44,3 +44,10 @@ htmlcov/
 
 # macOS
 .DS_Store
+
+# graphify 知识图谱产物
+# 保留 graph.json 与 GRAPH_REPORT.md 作为分析快照；其余均为可重新生成的
+# 机器特定状态 / 中间临时文件，不应提交（cache/、cost.json、.graphify_* 等）
+/graphify-out/*
+!/graphify-out/graph.json
+!/graphify-out/GRAPH_REPORT.md

@@ -68,3 +68,13 @@ uv run ty check
 - Python 版本要求 >= 3.13
 - **下载器依赖 aria2c**，运行前需确保系统已安装 aria2（`sudo pacman -S aria2`）
 - PKGBUILD 文件路径相对于项目根目录（`aur-packages/`），而非 `scripts/` 目录
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
