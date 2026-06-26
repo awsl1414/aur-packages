@@ -15,15 +15,22 @@ dependencies = [
     "ruff>=0.14.10",
 ]
 
-
-testpaths = ["tests"]
-
 [dependency-groups]
 dev = []
+
+# 工具型项目（不构建/分发），声明非包模式，避免 uv 尝试构建
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["scripts/tests"]
+# 让测试里的 from core.xxx / from fetcher.xxx 等绝对导入能解析
+pythonpath = ["scripts"]
 
 [tool.ty]
 # Ty 配置 - Astral 开发的快速 Python 类型检查器
 # https://docs.astral.sh/ty/
+# 源代码位于 scripts/，运行命令：uv run ty check scripts/
 
 # 源代码配置
 [tool.ty.src]

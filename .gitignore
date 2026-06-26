@@ -17,7 +17,7 @@ pkg/
 src/
 
 # Downloaded package files
-scripts/downloads/
+/downloads/
 
 # aria2c control files
 *.aria2

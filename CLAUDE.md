@@ -8,24 +8,24 @@
 ## 开发命令
 
 ```bash
-cd scripts
+# 以下命令均在仓库根目录执行（uv 项目根 = 仓库根）
 
 # 运行程序（使用 uv）
-uv run main.py                    # 更新所有包
-uv run main.py --package qq       # 更新指定包
-uv run main.py --list             # 列出所有可用包
+uv run scripts/main.py                    # 更新所有包
+uv run scripts/main.py --package qq       # 更新指定包
+uv run scripts/main.py --list             # 列出所有可用包
 
 # 运行测试
-uv run pytest                     # 运行所有测试
-uv run pytest tests/fetcher/test_fetcher.py  # 运行单个测试文件
+uv run pytest                                    # 运行所有测试
+uv run pytest scripts/tests/fetcher/test_fetcher.py  # 运行单个测试文件
 
 # 依赖管理
-uv sync                           # 同步依赖
-uv add <package>                  # 添加新依赖
-uv remove <package>               # 移除依赖
+uv sync                                          # 同步依赖
+uv add <package>                                 # 添加新依赖
+uv remove <package>                              # 移除依赖
 
 # 类型检查
-uv run ty check
+uv run ty check scripts/
 ```
 
 **重要**: 项目统一使用 `uv` 管理和运行，禁止显式使用 `python` 命令（特殊情况除外）。

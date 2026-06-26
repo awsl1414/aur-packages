@@ -42,5 +42,5 @@ docs: update packaging guide
 
 1. 在 `packages/` 目录中创建以包名命名的子目录
 2. 编写 `PKGBUILD` 文件，遵守 [Arch Wiki - Creating packages](https://wiki.archlinux.org/title/Creating_packages) 中的规范
-3. 在 `scripts/config.yaml` 中添加包配置
+3. 在 `config.yaml`（仓库根）中添加包配置
 4. 在 `scripts/parsers/` 中创建对应的版本解析器

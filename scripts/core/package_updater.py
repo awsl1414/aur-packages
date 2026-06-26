@@ -68,11 +68,12 @@ class PackageUpdater:
             show_progress=download_settings.show_progress,
         )
 
-        # 获取项目根目录（这里的项目根目录指更新脚本的根目录）
-        # 当前脚本位于 scripts/core/，所以需要向上两级到达项目根目录
-        self.project_root = Path(__file__).parent.parent
-        # PKGBUILD目录相对于项目根目录
-        self.pkgbuild_root = self.project_root.parent
+        # 项目根目录指仓库根目录（aur-packages/），config.yaml 中的
+        # packages/xxx/PKGBUILD 路径即相对于此处。当前脚本位于 scripts/core/，
+        # 需要向上三级到达仓库根目录
+        self.project_root = Path(__file__).parent.parent.parent
+        # PKGBUILD 目录相对于项目根目录
+        self.pkgbuild_root = self.project_root
 
     async def close(self) -> None:
         """释放资源"""
@@ -82,7 +83,8 @@ class PackageUpdater:
         """
         获取PKGBUILD文件的完整路径
 
-        注意：PKGBUILD目录需要从项目根目录的上级目录开始
+        相对路径以仓库根目录（self.pkgbuild_root）为基准解析，
+        与 config.yaml 中 packages/xxx/PKGBUILD 的写法一致。
 
         Args:
             pkgbuild_relative_path: PKGBUILD的相对路径

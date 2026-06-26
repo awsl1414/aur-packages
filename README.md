@@ -17,7 +17,7 @@
 
 ```bash
 git clone https://github.com/awsl1414/aur-packages.git
-cd aur-packages/scripts
+cd aur-packages
 
 # 安装系统依赖
 sudo pacman -S aria2   # 或 sudo apt install aria2
@@ -26,10 +26,10 @@ sudo pacman -S aria2   # 或 sudo apt install aria2
 pip install uv
 uv sync
 
-# 运行
-uv run main.py              # 更新所有包
-uv run main.py --package qq # 更新指定包
-uv run main.py --list       # 列出所有包
+# 运行（在仓库根目录执行）
+uv run scripts/main.py              # 更新所有包
+uv run scripts/main.py --package qq # 更新指定包
+uv run scripts/main.py --list       # 列出所有包
 ```
 
 ## 支持的包
@@ -46,9 +46,9 @@ uv run main.py --list       # 列出所有包
 ## 开发
 
 ```bash
-uv run pytest    # 运行测试
-uv run ty check  # 类型检查
-uv sync          # 同步依赖
+uv run pytest              # 运行测试
+uv run ty check scripts/   # 类型检查
+uv sync                    # 同步依赖
 ```
 
 ## 技术栈

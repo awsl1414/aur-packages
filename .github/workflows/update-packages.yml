@@ -49,14 +49,13 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: |
-            scripts/pyproject.toml
-            scripts/uv.lock
+            pyproject.toml
+            uv.lock
 
       - name: Sync dependencies and update packages
-        working-directory: scripts
         run: |
           uv sync
-          uv run main.py --all
+          uv run scripts/main.py --all
 
       - name: Detect changed packages
         id: detect

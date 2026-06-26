@@ -82,9 +82,9 @@
 项目使用 **ty**（Astral 开发的快速 Python 类型检查器）进行静态类型检查：
 
 ```bash
-uv run ty check              # 运行类型检查
-uv run ty check scripts/core/ # 检查特定目录
-uv run ty check -v            # 详细输出
+uv run ty check scripts/       # 运行类型检查（源码位于 scripts/）
+uv run ty check scripts/core/  # 检查特定目录
+uv run ty check -v             # 详细输出
 ```
 
 ## 类型存根
