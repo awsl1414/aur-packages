@@ -29,31 +29,38 @@ class TraeParser(BaseParser):
     def __init__(self, region: TraeRegion = TraeRegion.CN) -> None:
         self._region = region
 
-    def parse_version(self, response_data: str | Any) -> str | None:
+    def _parse_linux_manifest(self, response_data: str | Any) -> dict[str, Any] | None:
+        """解析响应，返回 data.data.manifest.linux 字典；非法输入或结构缺失返回 None"""
         if not isinstance(response_data, str):
             return None
-
         try:
-            data = json.loads(response_data)
-            return data["data"]["manifest"]["linux"]["version"]
+            return json.loads(response_data)["data"]["manifest"]["linux"]
         except (KeyError, TypeError, json.JSONDecodeError):
             return None
 
-    def parse_url(self, arch: ArchEnum | str, response_data: str | Any) -> str | None:
-        if not isinstance(response_data, str):
+    def parse_version(self, response_data: str | Any) -> str | None:
+        linux = self._parse_linux_manifest(response_data)
+        if linux is None:
+            return None
+        try:
+            return linux["version"]
+        except (KeyError, TypeError):
             return None
 
-        arch_value: str = arch.value if isinstance(arch, ArchEnum) else arch
+    def parse_url(self, arch: ArchEnum | str, response_data: str | Any) -> str | None:
+        linux = self._parse_linux_manifest(response_data)
+        if linux is None:
+            return None
+
+        arch_value = self._arch_value(arch)
         url_key = ARCH_KEY_MAP.get(arch_value)
         if not url_key:
             return None
 
         try:
-            data = json.loads(response_data)
-            downloads = data["data"]["manifest"]["linux"]["download"]
-            for entry in downloads:
+            for entry in linux["download"]:
                 if entry.get("region") == self._region.value:
                     return entry[url_key]
             return None
-        except (KeyError, TypeError, IndexError, json.JSONDecodeError):
+        except (KeyError, TypeError, IndexError):
             return None

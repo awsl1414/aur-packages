@@ -1,7 +1,6 @@
 """HTTP 客户端模块"""
 
 import logging
-from typing import Any
 
 from httpx import AsyncClient, HTTPError
 
@@ -25,18 +24,6 @@ class Fetcher:
             merged_headers.update(headers)
 
         self.client = AsyncClient(timeout=timeout, headers=merged_headers)
-
-    async def fetch_json(
-        self, url: str, headers: dict[str, str] | None = None
-    ) -> Any | None:
-        """获取 JSON 数据"""
-        try:
-            response = await self.client.get(url, headers=headers)
-            response.raise_for_status()
-            return response.json()
-        except HTTPError as e:
-            logger.error("从 %s 获取 JSON 失败: %s", url, e)
-            return None
 
     async def fetch_text(
         self, url: str, headers: dict[str, str] | None = None

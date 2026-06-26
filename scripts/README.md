@@ -6,7 +6,6 @@ AUR 包自动更新工具的核心代码目录。完整项目文档见根目录 
 
 ```
 scripts/
-├── cli/            # 命令行接口（argparse）
 ├── core/           # 核心协调器（PackageUpdater：Fetch → Parse → Update）
 ├── constants/      # 枚举定义（ArchEnum, ParserEnum, HashAlgorithmEnum）
 ├── fetcher/        # HTTP 客户端（httpx，获取版本信息）
@@ -16,7 +15,7 @@ scripts/
 ├── utils/          # 工具函数（aria2c 下载器、哈希、URL/版本工具）
 ├── tests/          # pytest 测试
 ├── config.yaml     # 全局配置（下载设置 + 包配置）
-└── main.py         # 程序入口
+└── main.py         # 程序入口（argparse 命令行接口）
 ```
 
 ## 前置依赖

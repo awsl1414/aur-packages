@@ -24,5 +24,5 @@ class NavicatPremiumCSParser(BaseParser):
 
     def parse_url(self, arch: ArchEnum | str, response_data: str | Any) -> str | None:
         """从配置注入的 URL 映射中获取下载链接"""
-        arch_value: str = arch.value if isinstance(arch, ArchEnum) else arch
+        arch_value = self._arch_value(arch)
         return self._urls.get(arch_value)

@@ -5,7 +5,7 @@ import logging
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
-from constants.constants import ArchEnum
+from constants.constants import ArchEnum, HashAlgorithmEnum
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ class Settings(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    hash_algorithm: str = "b2"
+    hash_algorithm: str = HashAlgorithmEnum.B2.value
     download: DownloadSettings = Field(default_factory=DownloadSettings)
 
 

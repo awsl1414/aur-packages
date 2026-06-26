@@ -73,12 +73,13 @@ class TestPKGBUILDEditorGetters:
 
     def test_get_checksum(self, pkgbuild) -> None:
         editor = PKGBUILDEditor(pkgbuild)
-        assert editor.get_checksum("x86_64") == "aaa111"
-        assert editor.get_checksum("aarch64") == "bbb222"
+        sha512 = HashAlgorithmEnum.SHA512.value
+        assert editor.get_checksum(arch="x86_64", hash_algorithm=sha512) == "aaa111"
+        assert editor.get_checksum(arch="aarch64", hash_algorithm=sha512) == "bbb222"
 
     def test_get_checksum_no_arch(self, pkgbuild) -> None:
         editor = PKGBUILDEditor(pkgbuild)
-        assert editor.get_checksum() == "SKIP"
+        assert editor.get_checksum(hash_algorithm=HashAlgorithmEnum.SHA512.value) == "SKIP"
 
     def test_get_checksum_b2(self, tmp_path: Path) -> None:
         """获取 b2sums 校验和"""
@@ -86,8 +87,8 @@ class TestPKGBUILDEditorGetters:
         p.write_text(PKGBUILD_B2, encoding="utf-8")
         editor = PKGBUILDEditor(p)
         b2 = HashAlgorithmEnum.B2.value
-        assert editor.get_checksum("x86_64", b2) == "eee333"
-        assert editor.get_checksum("aarch64", b2) == "fff444"
+        assert editor.get_checksum(arch="x86_64", hash_algorithm=b2) == "eee333"
+        assert editor.get_checksum(arch="aarch64", hash_algorithm=b2) == "fff444"
 
     def test_get_checksum_b2_no_arch(self, tmp_path: Path) -> None:
         """获取 b2sums 无架构校验和"""
@@ -101,7 +102,7 @@ class TestPKGBUILDEditorGetters:
     def test_get_checksum_algorithm_not_found(self, pkgbuild) -> None:
         """PKGBUILD 中不存在该算法的校验和时返回空字符串"""
         editor = PKGBUILDEditor(pkgbuild)
-        assert editor.get_checksum("x86_64", HashAlgorithmEnum.B2.value) == ""
+        assert editor.get_checksum(arch="x86_64", hash_algorithm=HashAlgorithmEnum.B2.value) == ""
 
 
 class TestPKGBUILDEditorUpdate:
@@ -115,28 +116,27 @@ class TestPKGBUILDEditorUpdate:
         editor.update_pkgrel(3)
         assert editor.get_pkgrel() == 3
 
-    def test_update_arch_checksum(self, pkgbuild) -> None:
+    def test_update_checksum_arch(self, pkgbuild) -> None:
         editor = PKGBUILDEditor(pkgbuild)
-        editor.update_arch_checksum("x86_64", "newhash123")
-        assert editor.get_checksum("x86_64") == "newhash123"
+        sha512 = HashAlgorithmEnum.SHA512.value
+        editor.update_checksum("newhash123", sha512, arch="x86_64")
+        assert editor.get_checksum(arch="x86_64", hash_algorithm=sha512) == "newhash123"
 
-    def test_update_arch_checksum_b2(self, tmp_path: Path) -> None:
+    def test_update_checksum_arch_b2(self, tmp_path: Path) -> None:
         """更新 b2sums 架构校验和"""
         p = tmp_path / "PKGBUILD"
         p.write_text(PKGBUILD_B2, encoding="utf-8")
         editor = PKGBUILDEditor(p)
         b2 = HashAlgorithmEnum.B2.value
-        editor.update_arch_checksum("x86_64", "new_b2_hash", b2)
-        assert editor.get_checksum("x86_64", b2) == "new_b2_hash"
+        editor.update_checksum("new_b2_hash", b2, arch="x86_64")
+        assert editor.get_checksum(arch="x86_64", hash_algorithm=b2) == "new_b2_hash"
 
-    def test_update_source_url(self, pkgbuild) -> None:
+    def test_update_source_arch(self, pkgbuild) -> None:
         editor = PKGBUILDEditor(pkgbuild)
-        editor.update_source_url(
-            "x86_64", "https://example.com/test-2.0.0-x86_64.tar.gz"
-        )
+        editor.update_source("https://example.com/test-2.0.0-x86_64.tar.gz", arch="x86_64")
         assert "test-2.0.0-x86_64" in editor.content
 
-    def test_save_and_reload(self, pkgbuild) -> None:
+    def test_save_and_reopen(self, pkgbuild) -> None:
         editor = PKGBUILDEditor(pkgbuild)
         editor.update_pkgver("3.0.0")
         editor.save()
@@ -200,7 +200,7 @@ class TestPKGBUILDEditorEdgeCases:
         p = tmp_path / "PKGBUILD"
         p.write_text(PKGBUILD_ALIAS, encoding="utf-8")
         editor = PKGBUILDEditor(p)
-        editor.update_source_url("x86_64", "https://example.com/test-v2.tar.gz")
+        editor.update_source("https://example.com/test-v2.tar.gz", arch="x86_64")
         assert "test-${pkgver}-${pkgrel}.tar.gz::" in editor.content
         assert "test-v2.tar.gz" in editor.content
 
@@ -231,8 +231,8 @@ class TestPKGBUILDEditorContextManager:
         assert editor2.get_pkgver() == "1.0.0"
 
 
-class TestUpdateSourceUrlEdgeCases:
-    """update_source_url 替换逻辑的边界条件测试"""
+class TestUpdateSourceArchEdgeCases:
+    """update_source（arch 特定）替换逻辑的边界条件测试"""
 
     def _write(self, tmp_path: Path, body: str) -> Path:
         p = tmp_path / "PKGBUILD"
@@ -243,7 +243,7 @@ class TestUpdateSourceUrlEdgeCases:
         """URL 含 ${_gh}（花括号）时保留 shell 变量，不更新"""
         body = 'source_x86_64=("zen-${pkgver}.tar.xz::${_gh}/zen.tar.xz")\n'
         editor = PKGBUILDEditor(self._write(tmp_path, body))
-        editor.update_source_url("x86_64", "https://new/file.tar.xz")
+        editor.update_source("https://new/file.tar.xz", arch="x86_64")
         assert "${_gh}/zen.tar.xz" in editor.content
         assert "https://new/file.tar.xz" not in editor.content
 
@@ -251,7 +251,7 @@ class TestUpdateSourceUrlEdgeCases:
         """URL 含 $_gh（无花括号）时同样应保留，等价于 ${_gh}"""
         body = 'source_x86_64=("zen-${pkgver}.tar.xz::$_gh/zen.tar.xz")\n'
         editor = PKGBUILDEditor(self._write(tmp_path, body))
-        editor.update_source_url("x86_64", "https://new/file.tar.xz")
+        editor.update_source("https://new/file.tar.xz", arch="x86_64")
         assert "$_gh/zen.tar.xz" in editor.content
         assert "https://new/file.tar.xz" not in editor.content
 
@@ -259,7 +259,7 @@ class TestUpdateSourceUrlEdgeCases:
         """别名含 ${pkgver}、URL 硬编码时，保留别名、替换 URL"""
         body = 'source_x86_64=("app-${pkgver}-${pkgrel}.tar.gz::https://old/file.tar.gz")\n'
         editor = PKGBUILDEditor(self._write(tmp_path, body))
-        editor.update_source_url("x86_64", "https://new/file.tar.gz")
+        editor.update_source("https://new/file.tar.gz", arch="x86_64")
         assert "app-${pkgver}-${pkgrel}.tar.gz::" in editor.content
         assert "https://new/file.tar.gz" in editor.content
         assert "https://old/file.tar.gz" not in editor.content
@@ -268,7 +268,7 @@ class TestUpdateSourceUrlEdgeCases:
         """无别名的裸 URL 直接替换"""
         body = "source_x86_64=('https://old/file.deb')\n"
         editor = PKGBUILDEditor(self._write(tmp_path, body))
-        editor.update_source_url("x86_64", "https://new/file.deb")
+        editor.update_source("https://new/file.deb", arch="x86_64")
         assert "https://new/file.deb" in editor.content
         assert "https://old/file.deb" not in editor.content
 
@@ -276,7 +276,7 @@ class TestUpdateSourceUrlEdgeCases:
         """单行多条目：替换远程 URL，保留本地源文件"""
         body = 'source_x86_64=("launcher.sh" "app::https://old/file.tar.gz")\n'
         editor = PKGBUILDEditor(self._write(tmp_path, body))
-        editor.update_source_url("x86_64", "https://new/file.tar.gz")
+        editor.update_source("https://new/file.tar.gz", arch="x86_64")
         assert "launcher.sh" in editor.content
         assert "app::https://new/file.tar.gz" in editor.content
         assert "https://old/file.tar.gz" not in editor.content
@@ -285,7 +285,7 @@ class TestUpdateSourceUrlEdgeCases:
         """多行数组：正确更新 URL，不破坏结构"""
         body = 'source_x86_64=(\n    "app::https://old/file.tar.gz"\n)\n'
         editor = PKGBUILDEditor(self._write(tmp_path, body))
-        editor.update_source_url("x86_64", "https://new/file.tar.gz")
+        editor.update_source("https://new/file.tar.gz", arch="x86_64")
         assert "https://new/file.tar.gz" in editor.content
         assert "https://old/file.tar.gz" not in editor.content
 
@@ -294,7 +294,7 @@ class TestUpdateSourceUrlEdgeCases:
         body = "pkgname=test\npkgver=1.0.0\nsource=('launcher.sh')\n"
         editor = PKGBUILDEditor(self._write(tmp_path, body))
         original = editor.content
-        editor.update_source_url("x86_64", "https://new/file.tar.gz")
+        editor.update_source("https://new/file.tar.gz", arch="x86_64")
         assert editor.content == original
 
     def test_indented_source_line_is_noop(self, tmp_path: Path) -> None:
@@ -302,7 +302,7 @@ class TestUpdateSourceUrlEdgeCases:
         body = '  source_x86_64=("app::https://old/file.tar.gz")\n'
         editor = PKGBUILDEditor(self._write(tmp_path, body))
         original = editor.content
-        editor.update_source_url("x86_64", "https://new/file.tar.gz")
+        editor.update_source("https://new/file.tar.gz", arch="x86_64")
         assert editor.content == original
 
     def test_empty_source_array_left_untouched(self, tmp_path: Path) -> None:
@@ -310,7 +310,7 @@ class TestUpdateSourceUrlEdgeCases:
         body = "source_x86_64=()\n"
         editor = PKGBUILDEditor(self._write(tmp_path, body))
         original = editor.content
-        editor.update_source_url("x86_64", "https://new/file.tar.gz")
+        editor.update_source("https://new/file.tar.gz", arch="x86_64")
         assert editor.content == original
 
     def test_duplicate_source_lines_updates_first_only(self, tmp_path: Path) -> None:
@@ -320,7 +320,7 @@ class TestUpdateSourceUrlEdgeCases:
             'source_x86_64=("b::https://old/2.tar.gz")\n'
         )
         editor = PKGBUILDEditor(self._write(tmp_path, body))
-        editor.update_source_url("x86_64", "https://new/file.tar.gz")
+        editor.update_source("https://new/file.tar.gz", arch="x86_64")
         assert "a::https://new/file.tar.gz" in editor.content
         assert "b::https://old/2.tar.gz" in editor.content
 
@@ -328,7 +328,7 @@ class TestUpdateSourceUrlEdgeCases:
         """别名含 :: 时按 makepkg 语义在首个 :: 处分隔"""
         body = 'source_x86_64=("weird::name::https://old/file.tar.gz")\n'
         editor = PKGBUILDEditor(self._write(tmp_path, body))
-        editor.update_source_url("x86_64", "https://new/file.tar.gz")
+        editor.update_source("https://new/file.tar.gz", arch="x86_64")
         # makepkg 把首个 :: 左侧当文件名，故 alias="weird"
         assert '"weird::https://new/file.tar.gz"' in editor.content
 
@@ -336,19 +336,19 @@ class TestUpdateSourceUrlEdgeCases:
         """new_url 含反斜杠（如 \1）时不应触发 re.sub 反向引用崩溃"""
         body = 'source_x86_64=("app::https://old/file.tar.gz")\n'
         editor = PKGBUILDEditor(self._write(tmp_path, body))
-        editor.update_source_url("x86_64", r"https://new/\1file.tar.gz")
+        editor.update_source(r"https://new/\1file.tar.gz", arch="x86_64")
         assert "https://new/" in editor.content
 
     def test_backslash_in_alias_does_not_crash(self, tmp_path: Path) -> None:
         """alias 含反斜杠（来自文件内容）时不应崩溃"""
         body = 'source_x86_64=("app\\1::https://old/file.tar.gz")\n'
         editor = PKGBUILDEditor(self._write(tmp_path, body))
-        editor.update_source_url("x86_64", "https://new/file.tar.gz")
+        editor.update_source("https://new/file.tar.gz", arch="x86_64")
         assert "https://new/file.tar.gz" in editor.content
 
 
 class TestUpdateSourceEdgeCases:
-    """update_source（arch='any'）与 update_source_url 行为对等性测试"""
+    """update_source（arch=None，arch='any' 包）行为测试"""
 
     def _write(self, tmp_path: Path, body: str) -> Path:
         p = tmp_path / "PKGBUILD"

@@ -22,12 +22,12 @@ _HASH_BUILDERS: dict[str, Callable[[], _Hash]] = {
 
 
 def calculate_file_hash(
-    file_path: str | Path, hash_algorithm: str = HashAlgorithmEnum.SHA512.value
+    file_path: str | Path, hash_algorithm: str = HashAlgorithmEnum.B2.value
 ) -> str:
     """
     计算文件哈希值
 
-    支持 SHA256 和 SHA512 算法，分块读取大文件避免内存占用过高
+    支持 BLAKE2b(b2)、SHA512、SHA256 算法，分块读取大文件避免内存占用过高
     """
     file_path = Path(file_path)
 
@@ -46,47 +46,3 @@ def calculate_file_hash(
             hash_func.update(chunk)
 
     return hash_func.hexdigest()
-
-
-def calculate_multiple_hashes(
-    file_path: str | Path, algorithms: list[str] | None = None
-) -> dict[str, str]:
-    """一次性计算文件的多种哈希值，只读取文件一次"""
-    file_path = Path(file_path)
-
-    if algorithms is None:
-        algorithms = [HashAlgorithmEnum.SHA256.value, HashAlgorithmEnum.SHA512.value]
-
-    hashers: list[_Hash] = [_HASH_BUILDERS[alg.lower()]() for alg in algorithms]
-
-    with file_path.open("rb") as f:
-        for chunk in iter(lambda: f.read(4096), b""):
-            for hasher in hashers:
-                hasher.update(chunk)
-
-    return {alg: hasher.hexdigest() for alg, hasher in zip(algorithms, hashers)}
-
-
-def verify_file_hash(
-    file_path: str | Path,
-    expected_hash: str,
-    hash_algorithm: str = HashAlgorithmEnum.SHA512.value,
-) -> bool:
-    """验证文件哈希值是否匹配预期值"""
-    try:
-        actual_hash = calculate_file_hash(file_path, hash_algorithm)
-        return actual_hash.lower() == expected_hash.lower()
-    except (FileNotFoundError, ValueError):
-        return False
-
-
-def format_checksum_for_pkgbuild(
-    checksum: str,
-    arch: str | None = None,
-    hash_algorithm: str = HashAlgorithmEnum.SHA512.value,
-) -> str:
-    """格式化校验和为 PKGBUILD 语法"""
-    algo_name = hash_algorithm.lower()
-    if arch:
-        return f"{algo_name}sums_{arch}=('{checksum}')"
-    return f"{algo_name}sums=('{checksum}')"

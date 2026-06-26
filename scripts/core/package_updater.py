@@ -136,7 +136,7 @@ class PackageUpdater:
         package_name: str,
         new_version: str,
         arch_urls: dict[str, str],
-        hash_algorithm: str = HashAlgorithmEnum.SHA512.value,
+        hash_algorithm: str = HashAlgorithmEnum.B2.value,
         verify_only: bool = False,
     ) -> tuple[dict[str, str], bool]:
         """
@@ -286,7 +286,7 @@ class PackageUpdater:
         parser: BaseParser,
         supported_archs: list[ArchEnum],
         response_data: str,
-        hash_algorithm: str = HashAlgorithmEnum.SHA512.value,
+        hash_algorithm: str = HashAlgorithmEnum.B2.value,
     ) -> bool:
         """
         处理版本不更新的情况（当前版本 >= 新版本）
@@ -324,13 +324,13 @@ class PackageUpdater:
         )
         editor = PKGBUILDEditor(pkgbuild_path)
 
-        is_any_arch = len(supported_archs) == 1 and supported_archs[0] == ArchEnum.ANY
-
         current_checksums = {}
         for arch in supported_archs:
-            # any 架构使用非架构特定的 b2sums=()
-            arch_key = None if is_any_arch else arch.value
-            current_checksum = editor.get_checksum(arch_key, hash_algorithm)
+            # ANY 架构使用非架构特定字段 sums=()，其余使用 sums_<arch>=()
+            field_arch = None if arch == ArchEnum.ANY else arch.value
+            current_checksum = editor.get_checksum(
+                arch=field_arch, hash_algorithm=hash_algorithm
+            )
             if current_checksum:
                 current_checksums[arch.value] = current_checksum
             else:
@@ -371,11 +371,9 @@ class PackageUpdater:
         editor.update_pkgrel(new_pkgrel)
 
         # 更新校验和（不更新 source URL，因为版本未变）
-        for arch, checksum in new_checksums.items():
-            if is_any_arch:
-                editor.update_checksum(checksum, hash_algorithm)
-            else:
-                editor.update_arch_checksum(arch, checksum, hash_algorithm)
+        for arch_value, checksum in new_checksums.items():
+            field_arch = None if arch_value == ArchEnum.ANY.value else arch_value
+            editor.update_checksum(checksum, hash_algorithm, arch=field_arch)
 
         editor.save()
         logger.info("  包 %s 的 pkgrel 已更新（版本未变但哈希已变）", package_name)
@@ -391,7 +389,7 @@ class PackageUpdater:
         supported_archs: list[ArchEnum],
         response_data: str,
         package_config: PackageConfig,
-        hash_algorithm: str = HashAlgorithmEnum.SHA512.value,
+        hash_algorithm: str = HashAlgorithmEnum.B2.value,
     ) -> bool:
         """处理版本更新流程"""
         logger.info("  3. 下载文件并计算校验和...")
@@ -413,20 +411,14 @@ class PackageUpdater:
         editor.update_pkgver(new_version)
         editor.update_pkgrel(1)  # 重置 pkgrel 为 1
 
-        # 更新 source 和校验和
-        is_any_arch = len(supported_archs) == 1 and supported_archs[0] == ArchEnum.ANY
-        if is_any_arch:
-            # 非架构特定包（arch=('any')）：使用 source=() 和 b2sums=()
-            for arch, url in arch_urls.items():
-                if package_config.update_source_url:
-                    editor.update_source(url)
-                editor.update_checksum(checksums[arch], hash_algorithm)
-        else:
-            # 架构特定包：使用 source_<arch>=() 和 b2sums_<arch>=()
-            for arch, url in arch_urls.items():
-                if package_config.update_source_url:
-                    editor.update_source_url(arch, url)
-                editor.update_arch_checksum(arch, checksums[arch], hash_algorithm)
+        # 更新 source 和校验和；ANY 架构用非架构特定字段，其余用架构特定字段
+        for arch_value, url in arch_urls.items():
+            field_arch = None if arch_value == ArchEnum.ANY.value else arch_value
+            if package_config.update_source_url:
+                editor.update_source(url, arch=field_arch)
+            editor.update_checksum(
+                checksums[arch_value], hash_algorithm, arch=field_arch
+            )
 
         editor.save()
         logger.info("  5. PKGBUILD 已更新")
@@ -490,16 +482,7 @@ class PackageUpdater:
             logger.info("\n没有可更新的包")
             return 0, 0
 
-        total_count = len(valid_packages)
-        tasks = [
-            self.update_package(name, config) for name, config in valid_packages.items()
-        ]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        success_count = sum(1 for r in results if r is True)
-
-        logger.info("")
-        logger.info("更新完成: %d/%d 个包更新成功", success_count, total_count)
-        return success_count, total_count
+        return await self._run_updates(valid_packages)
 
     def _is_package_updatable(
         self, package_name: str, package_config: PackageConfig
@@ -521,6 +504,20 @@ class PackageUpdater:
             return False, f"包 '{package_name}' PKGBUILD 文件不存在"
 
         return True, None
+
+    async def _run_updates(
+        self, valid_packages: dict[str, PackageConfig]
+    ) -> tuple[int, int]:
+        """并行更新 valid_packages 中的包，返回 (成功数, 总数)"""
+        tasks = [
+            self.update_package(name, config)
+            for name, config in valid_packages.items()
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        success_count = sum(1 for r in results if r is True)
+        logger.info("")
+        logger.info("更新完成: %d/%d 个包更新成功", success_count, len(valid_packages))
+        return success_count, len(valid_packages)
 
     async def update_packages(self, package_names: list[str]) -> tuple[int, int]:
         """
@@ -568,17 +565,7 @@ class PackageUpdater:
         # 并行更新包
         logger.info("开始更新 %d 个包...", len(valid_packages))
 
-        total_count = len(valid_packages)
-        tasks = [
-            self.update_package(name, config) for name, config in valid_packages.items()
-        ]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        success_count = sum(1 for r in results if r is True)
-
-        logger.info("")
-        logger.info("更新完成: %d/%d 个包更新成功", success_count, total_count)
-
-        return success_count, total_count
+        return await self._run_updates(valid_packages)
 
     def list_available_packages(self) -> None:
         """列出所有可用的包"""

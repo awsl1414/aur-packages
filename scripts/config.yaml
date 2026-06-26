@@ -22,7 +22,6 @@ packages:
   qq:
     name: qq
     source: qq
-    source_url: "https://im.qq.com/linuxqq/index.shtml"
     fetch_url: "https://cdn-go.cn/qq-web/im.qq.com_new/latest/rainbow/linuxConfig.js"
     upstream: "Tencent/QQ"
     parser: QQParser
@@ -37,7 +36,6 @@ packages:
   navicat:
     name: navicat-premium-zh-cn
     source: navicat-premium-cs
-    source_url: "https://www.navicat.com.cn/products/navicat-premium"
     fetch_url: "https://www.navicat.com.cn/products/navicat-premium-release-note#L"
     upstream: "PremiumSoft CyberTech Ltd./Navicat Premium"
     parser: NavicatPremiumCSParser
@@ -54,7 +52,6 @@ packages:
   trae:
     name: trae
     source: trae
-    source_url: "https://www.trae.cn/"
     fetch_url: "https://icube-normal.trae.ai/icube/api/v1/native/version/trae/latest"
     upstream: "ByteDance/Trae"
     parser: TraeParser
@@ -68,7 +65,6 @@ packages:
   trae-sg:
     name: trae-sg
     source: trae
-    source_url: "https://www.trae.cn/"
     fetch_url: "https://icube-normal.trae.ai/icube/api/v1/native/version/trae/latest"
     upstream: "ByteDance/Trae"
     parser: TraeParser_SG
@@ -82,7 +78,6 @@ packages:
   trae-us:
     name: trae-us
     source: trae
-    source_url: "https://www.trae.cn/"
     fetch_url: "https://icube-normal.trae.ai/icube/api/v1/native/version/trae/latest"
     upstream: "ByteDance/Trae"
     parser: TraeParser_US
@@ -99,7 +94,6 @@ packages:
   trae-cn:
     name: trae-cn
     source: trae
-    source_url: "https://www.trae.cn/"
     fetch_url: "https://api.trae.cn/icube/api/v1/native/version/trae/cn/latest"
     upstream: "ByteDance/Trae"
     parser: TraeParser_CN
@@ -113,7 +107,6 @@ packages:
   zen-browser:
     name: zen-browser
     source: zen-browser
-    source_url: "https://zen-browser.app/"
     fetch_url: "https://api.github.com/repos/zen-browser/desktop/releases/tags/twilight-1"
     upstream: "zen-browser/desktop"
     parser: ZenParser
@@ -127,7 +120,6 @@ packages:
   bt-dualboot-ng:
     name: bt-dualboot-ng
     source: bt-dualboot-ng
-    source_url: "https://github.com/awsl1414/bt-dualboot"
     fetch_url: "https://pypi.org/pypi/bt-dualboot-ng/json"
     upstream: "awsl1414/bt-dualboot"
     parser: PyPIParser

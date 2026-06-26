@@ -68,7 +68,7 @@ class ZenParser(BaseParser):
         except json.JSONDecodeError:
             return None
 
-        arch_value: str = arch.value if isinstance(arch, ArchEnum) else arch
+        arch_value = self._arch_value(arch)
         target_asset_name: str | None = ARCH_ASSET_MAP.get(arch_value)
         if not target_asset_name:
             return None

@@ -64,7 +64,7 @@ uv run ty check
 - **修改 `packages/` 中的本地源文件（如 `.sh`、`.desktop`、`.install`）后，必须同步更新 PKGBUILD 中对应的校验和（如 `b2sums`、`sha512sums`）**。本地文件被列入 `source=()` 数组，makepkg 会校验其哈希，修改内容但不更新哈希会导致构建失败
 - **包运行时/构建问题参见 @docs/troubleshooting.md**，包含已知的捆绑库冲突、缓存问题等及其解决方案
 - **项目使用 uv 统一管理运行环境，禁止显式使用 `python` 命令**
-- 项目使用绝对导入（`from cli.cli import update_main`），而不是相对导入
+- 项目使用绝对导入（`from core.package_updater import PackageUpdater`），而不是相对导入
 - Python 版本要求 >= 3.13
 - **下载器依赖 aria2c**，运行前需确保系统已安装 aria2（`sudo pacman -S aria2`）
 - PKGBUILD 文件路径相对于项目根目录（`aur-packages/`），而非 `scripts/` 目录

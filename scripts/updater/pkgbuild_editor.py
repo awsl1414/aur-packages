@@ -40,54 +40,68 @@ class PKGBUILDEditor:
         with open(self.pkgbuild_path, "w", encoding="utf-8") as f:
             f.write(self.content)
 
+    def _update_scalar_field(self, field: str, value: str) -> None:
+        """替换 ^field=.*$ 整行为 field=value（MULTILINE）。字段不存在时无操作。
+
+        用 lambda 返回替换文本，避免 value 中的反斜杠被当作反向引用（与
+        _update_source_field 的安全姿态一致）。
+        """
+        self.content = re.sub(
+            rf"^{re.escape(field)}=.*$",
+            lambda _m: f"{field}={value}",
+            self.content,
+            flags=re.MULTILINE,
+        )
+
+    def _get_scalar_field(self, field: str) -> str | None:
+        """返回 ^field=(.*)$ 的捕获值；字段不存在返回 None。"""
+        match = re.search(
+            rf"^{re.escape(field)}=(.*)$", self.content, flags=re.MULTILINE
+        )
+        return match.group(1) if match else None
+
+    def _get_scalar_field_as_int(
+        self, field: str, default: int | None
+    ) -> int | None:
+        """取标量并按 int 解析；缺失或解析失败返回 default。"""
+        raw = self._get_scalar_field(field)
+        if raw is None:
+            return default
+        try:
+            return int(raw)
+        except ValueError:
+            return default
+
     def update_pkgver(self, new_version: str) -> None:
         """更新 pkgver 字段"""
-        pattern = r"^pkgver=.*$"
-        replacement = f"pkgver={new_version}"
-        self.content = re.sub(pattern, replacement, self.content, flags=re.MULTILINE)
+        self._update_scalar_field("pkgver", new_version)
 
     def update_pkgrel(self, new_pkgrel: int = 1) -> None:
         """更新 pkgrel 字段"""
-        pattern = r"^pkgrel=.*$"
-        replacement = f"pkgrel={new_pkgrel}"
-        self.content = re.sub(pattern, replacement, self.content, flags=re.MULTILINE)
+        self._update_scalar_field("pkgrel", str(new_pkgrel))
 
     def update_epoch(self, new_epoch: int | None = None) -> None:
         """更新或添加 epoch 字段"""
         if new_epoch is None:
             return
-
-        if re.search(r"^epoch=.*$", self.content, flags=re.MULTILINE):
-            pattern = r"^epoch=.*$"
-            replacement = f"epoch={new_epoch}"
-            self.content = re.sub(
-                pattern, replacement, self.content, flags=re.MULTILINE
-            )
+        if self._get_scalar_field("epoch") is not None:
+            self._update_scalar_field("epoch", str(new_epoch))
         else:
-            pattern = r"^(pkgver=.*)$"
-            replacement = f"epoch={new_epoch}\n\1"
+            # pkgver 之前插入 epoch 行
             self.content = re.sub(
-                pattern, replacement, self.content, flags=re.MULTILINE
+                r"^(pkgver=.*)$",
+                f"epoch={new_epoch}\n\\1",
+                self.content,
+                flags=re.MULTILINE,
             )
 
-    def update_arch_checksum(
-        self,
-        arch: str,
-        new_checksum: str,
-        hash_algorithm: str = HashAlgorithmEnum.SHA512.value,
-    ) -> None:
-        """更新特定架构的校验和字段"""
-        pattern = f"^{hash_algorithm}sums_{arch}=\\(.*\\)$"
-        replacement = f"{hash_algorithm}sums_{arch}=('{new_checksum}')"
-        self.content = re.sub(pattern, replacement, self.content, flags=re.MULTILINE)
+    def update_source(self, new_url: str, *, arch: str | None = None) -> None:
+        """更新 source URL，保留别名与本地源条目；URL 含 shell 变量时跳过。
 
-    def update_source_url(self, arch: str, new_url: str) -> None:
-        """更新特定架构的 source URL，保留别名与本地源条目；URL 含 shell 变量时跳过"""
-        self._update_source_field(re.escape(f"source_{arch}"), new_url)
-
-    def update_source(self, new_url: str) -> None:
-        """更新非架构特定 source URL（用于 arch=('any') 包），保留别名与本地源条目；URL 含 shell 变量时跳过"""
-        self._update_source_field(re.escape("source"), new_url)
+        arch=None 更新非架构特定 source=()（arch=('any') 包），否则更新 source_<arch>=()。
+        """
+        field = "source" if arch is None else f"source_{arch}"
+        self._update_source_field(re.escape(field), new_url)
 
     @staticmethod
     def _has_shell_var(text: str) -> bool:
@@ -153,44 +167,44 @@ class PKGBUILDEditor:
     def update_checksum(
         self,
         new_checksum: str,
-        hash_algorithm: str = HashAlgorithmEnum.SHA512.value,
+        hash_algorithm: str = HashAlgorithmEnum.B2.value,
+        *,
+        arch: str | None = None,
     ) -> None:
-        """更新非架构特定的校验和字段（用于 arch=('any') 包）"""
-        pattern = f"^{hash_algorithm}sums=\\(.*\\)$"
-        replacement = f"{hash_algorithm}sums=('{new_checksum}')"
-        self.content = re.sub(pattern, replacement, self.content, flags=re.MULTILINE)
+        """更新校验和字段。
+
+        arch=None 更新非架构特定 sums=()（arch=('any') 包），否则更新 sums_<arch>=()。
+        """
+        field = (
+            f"{hash_algorithm}sums_{arch}"
+            if arch is not None
+            else f"{hash_algorithm}sums"
+        )
+        self._update_scalar_field(field, f"('{new_checksum}')")
 
     def get_pkgver(self) -> str:
         """获取当前 pkgver 值"""
-        match = re.search(r"^pkgver=(.*)$", self.content, flags=re.MULTILINE)
-        return match.group(1) if match else ""
+        return self._get_scalar_field("pkgver") or ""
 
     def get_pkgrel(self) -> int:
         """获取当前 pkgrel 值"""
-        match = re.search(r"^pkgrel=(.*)$", self.content, flags=re.MULTILINE)
-        if not match:
-            return 1
-        try:
-            return int(match.group(1))
-        except ValueError:
-            return 1
+        value = self._get_scalar_field_as_int("pkgrel", 1)
+        return value if value is not None else 1
 
     def get_epoch(self) -> int | None:
         """获取当前 epoch 值"""
-        match = re.search(r"^epoch=(.*)$", self.content, flags=re.MULTILINE)
-        if not match:
-            return None
-        try:
-            return int(match.group(1))
-        except ValueError:
-            return None
+        return self._get_scalar_field_as_int("epoch", None)
 
     def get_checksum(
         self,
+        *,
         arch: str | None = None,
-        hash_algorithm: str = HashAlgorithmEnum.SHA512.value,
+        hash_algorithm: str = HashAlgorithmEnum.B2.value,
     ) -> str:
-        """获取当前校验和值"""
+        """获取当前校验和值。
+
+        arch=None 读取非架构特定 sums=()（arch=('any') 包），否则读取 sums_<arch>=()。
+        """
         if arch:
             pattern = f"^{hash_algorithm}sums_{arch}=\\((?:'([^']*)'.*)?\\)$"
         else:
@@ -202,7 +216,3 @@ class PKGBUILDEditor:
     def save(self) -> None:
         """保存所有更改到文件"""
         self._save_content()
-
-    def reload(self) -> None:
-        """重新加载文件内容，放弃未保存的更改"""
-        self._load_content()

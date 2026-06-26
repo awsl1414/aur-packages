@@ -94,5 +94,5 @@ class QQParser(BaseParser):
         if not result:
             return None
 
-        arch_value: str = arch.value if isinstance(arch, ArchEnum) else arch
+        arch_value = self._arch_value(arch)
         return self._get_deb_url(result, arch_value)
