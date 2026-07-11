@@ -120,13 +120,34 @@ class PackageUpdater:
             return False
         return True
 
-    def _fetch_arch_urls(
+    def _fetch_source_urls(
         self, parser: BaseParser, supported_archs: list[ArchEnum], response_data: str
     ) -> dict[str, str]:
-        """获取所有架构的下载 URL"""
+        """获取所有架构的原始下载 URL（用于写入 PKGBUILD 的 source 字段）。
+
+        走 parse_url 通道：QQ 等需要签名的包返回的是未签名的原始链接，
+        由 PKGBUILD 的 DLAGENTS 在构建时调用专用脚本完成签名。
+        """
         arch_urls = {}
         for arch in supported_archs:
             url = parser.parse_url(arch, response_data)
+            if url:
+                arch_urls[arch.value] = url
+            else:
+                logger.warning("无法获取 %s 架构的原始下载URL", arch.value)
+        return arch_urls
+
+    def _fetch_arch_urls(
+        self, parser: BaseParser, supported_archs: list[ArchEnum], response_data: str
+    ) -> dict[str, str]:
+        """获取所有架构的可下载 URL（用于实际下载）。
+
+        走 resolve_url 通道：QQ 等需要签名的包在此步骤对 URL 签名，
+        其它包默认与 parse_url 一致。
+        """
+        arch_urls = {}
+        for arch in supported_archs:
+            url = parser.resolve_url(arch, response_data)
             if url:
                 arch_urls[arch.value] = url
             else:
@@ -256,6 +277,7 @@ class PackageUpdater:
                     new_version,
                     current_version,
                     version_comparison,
+                    editor,
                     parser,
                     supported_archs,
                     response_data,
@@ -266,7 +288,6 @@ class PackageUpdater:
             return await self._handle_version_update(
                 package_name,
                 new_version,
-                current_version,
                 editor,
                 parser,
                 supported_archs,
@@ -285,6 +306,7 @@ class PackageUpdater:
         new_version: str,
         current_version: str,
         version_comparison: int,
+        editor: PKGBUILDEditor,
         parser: BaseParser,
         supported_archs: list[ArchEnum],
         response_data: str,
@@ -293,9 +315,16 @@ class PackageUpdater:
         """
         处理版本不更新的情况（当前版本 >= 新版本）
 
+        复用 update_package 已创建的 editor，避免重复加载 PKGBUILD。
         两种场景：
-        1. 当前版本 > 新版本：版本降级，仅验证哈希
-        2. 当前版本 = 新版本：版本相同，检查哈希变化并更新 pkgrel
+        1. 当前版本 > 新版本（version_comparison < 0）：版本降级，下载并验证
+           远端哈希，不写 PKGBUILD。返回 True 仅在验证成功时。
+        2. 当前版本 = 新版本（version_comparison == 0）：比较本地/远端哈希，
+           若发生变化则自增 pkgrel 并写入新校验和，PKGBUILD 仍会被更新。
+
+        Args:
+            editor: update_package 已创建好的 PKGBUILDEditor，函数结束时不会
+                自动 save——只在哈希发生变化时由本方法显式 save。
         """
         if version_comparison < 0:
             # 当前版本 > 新版本：版本降级
@@ -310,9 +339,14 @@ class PackageUpdater:
                 logger.error("  错误: 无法获取任何架构的下载URL")
                 return False
 
+            # verify_only=True 时 _download_and_verify 即便全部失败也返回 True，
+            # 这里必须自行校验 checksums 是否为空，否则会误报"验证完成"。
             checksums, _ = await self._download_and_verify(
                 package_name, new_version, arch_urls, hash_algorithm, verify_only=True
             )
+            if not checksums:
+                logger.error("  错误: 降级校验失败，所有架构均未成功下载")
+                return False
 
             logger.info("  包 %s 验证完成（未更新 PKGBUILD）", package_name)
             return True
@@ -320,12 +354,7 @@ class PackageUpdater:
         # 当前版本 = 新版本：检查哈希变化
         logger.info("  版本未变化，检查文件哈希是否变化...")
 
-        # 获取当前 PKGBUILD 中的哈希值
-        pkgbuild_path = self._get_pkgbuild_path(
-            self.config.packages[package_name].pkgbuild
-        )
-        editor = PKGBUILDEditor(pkgbuild_path)
-
+        # 复用 update_package 传入的 editor，直接读取当前 PKGBUILD 的哈希
         current_checksums = {}
         for arch in supported_archs:
             # ANY 架构使用非架构特定字段 sums=()，其余使用 sums_<arch>=()
@@ -385,7 +414,6 @@ class PackageUpdater:
         self,
         package_name: str,
         new_version: str,
-        current_version: str,
         editor: PKGBUILDEditor,
         parser: BaseParser,
         supported_archs: list[ArchEnum],
@@ -393,17 +421,35 @@ class PackageUpdater:
         package_config: PackageConfig,
         hash_algorithm: str = HashAlgorithmEnum.B2.value,
     ) -> bool:
-        """处理版本更新流程"""
+        """
+        处理版本更新流程（new_version > current_version）。
+
+        步骤：
+        1. 收集 download_urls（resolve_url 通道，QQ 走签名）用于实际下载
+        2. 若 update_source_url=True，额外收集 source_urls（parse_url 通道）
+           用于写入 PKGBUILD 的 source 字段
+        3. 并行下载并计算每个架构的校验和
+        4. 更新 PKGBUILD：pkgver、pkgrel=1、source、checksum
+        5. save 写入磁盘
+        """
         logger.info("  3. 下载文件并计算校验和...")
         logger.info("  支持的架构: %s", [arch.value for arch in supported_archs])
 
-        arch_urls = self._fetch_arch_urls(parser, supported_archs, response_data)
-        if not arch_urls:
+        # 用于实际下载的 URL（QQ 走签名通道）
+        download_urls = self._fetch_arch_urls(parser, supported_archs, response_data)
+        if not download_urls:
             logger.error("  错误: 无法获取任何架构的下载URL")
             return False
 
+        # 用于写入 PKGBUILD source 字段的 URL（QQ 写未签名原始链接）
+        source_urls: dict[str, str] = {}
+        if package_config.update_source_url:
+            source_urls = self._fetch_source_urls(
+                parser, supported_archs, response_data
+            )
+
         checksums, success = await self._download_and_verify(
-            package_name, new_version, arch_urls, hash_algorithm
+            package_name, new_version, download_urls, hash_algorithm
         )
         if not success:
             return False
@@ -414,13 +460,13 @@ class PackageUpdater:
         editor.update_pkgrel(1)  # 重置 pkgrel 为 1
 
         # 更新 source 和校验和；ANY 架构用非架构特定字段，其余用架构特定字段
-        for arch_value, url in arch_urls.items():
+        for arch_value, checksum in checksums.items():
             field_arch = None if arch_value == ArchEnum.ANY.value else arch_value
             if package_config.update_source_url:
-                editor.update_source(url, arch=field_arch)
-            editor.update_checksum(
-                checksums[arch_value], hash_algorithm, arch=field_arch
-            )
+                # 优先使用 parse_url 的原始 URL；缺失时降级为已签名的下载 URL
+                source_url = source_urls.get(arch_value, download_urls[arch_value])
+                editor.update_source(source_url, arch=field_arch)
+            editor.update_checksum(checksum, hash_algorithm, arch=field_arch)
 
         editor.save()
         logger.info("  5. PKGBUILD 已更新")

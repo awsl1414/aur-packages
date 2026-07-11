@@ -22,7 +22,7 @@ packages:
   qq:
     name: qq
     source: qq
-    fetch_url: "https://cdn-go.cn/qq-web/im.qq.com_new/latest/rainbow/linuxConfig.js"
+    fetch_url: "https://qq-web.cdn-go.cn/im.qq.com_new/latest/rainbow/pcConfig.json"
     upstream: "Tencent/QQ"
     parser: QQParser
     pkgbuild: "packages/linuxqq-nt/PKGBUILD"

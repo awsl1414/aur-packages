@@ -248,6 +248,55 @@ source_aarch64=("${pkgname}-${CARCH}-${pkgver}.AppImage::https://example.com/app
 
 `${CARCH}` 在 `prepare()` / `package()` 等函数中使用是安全的——函数体不会被 `makepkg --printsrcinfo` 展开。
 
+## DLAGENTS 自定义下载代理 [推荐实践]
+
+`DLAGENTS` 用于自定义 makepkg 下载源码时调用的命令。常见用途：
+
+- 替换默认的 curl/wget 为 aria2c 等支持多线程的下载器
+- 走镜像站（替换默认 URL）
+- URL 需要额外处理才能下载（如 QQ Linux 需先获取 cookie 再换取带 sign 的临时链接）
+
+### 格式与变量
+
+```bash
+DLAGENTS=('protocol::command [options]')
+```
+
+`makepkg.conf(5)` 仅定义两个替换变量：
+
+- `%u` - 替换为下载 URL
+- `%o` - 替换为临时输出文件名（`<filename>.part`），脚本应写入此路径
+
+> **注意**：`%d`、`%s` 等变量在 makepkg 7.x 中**不会被替换**，会作为字面值传给命令。常见误用 `%d` 引用脚本所在目录——`source=` 中的本地文件始终位于 PKGBUILD 同目录（`$startdir`），直接用相对路径即可。
+
+### 常见陷阱
+
+1. **命令必须使用绝对路径**（如 `/usr/bin/bash` 而非 `bash`）。makepkg 在解析 DLAGENTS 时不会查找 `$PATH`，使用相对名称会触发 `下载程序 xxx 没有安装` 错误。
+
+2. **工作目录 = `$SRCDEST`**。makepkg 调用 DLAGENT 时 `pushd` 到 `$SRCDEST`（默认等于 `$startdir`）。引用 PKGBUILD 同目录下的脚本可直接用相对路径；若用户将 `SRCDEST` 指向其他目录，脚本应通过 `${BASH_SOURCE[0]}` 反查自身路径，或在 DLAGENTS 中使用绝对路径。
+
+3. **不要在 DLAGENT 中嵌套 `${}` 变量**。`source_<arch>` 数组中不能使用 `${CARCH}`，DLAGENTS 同样在 `.SRCINFO` 展开时会被替换；硬编码所需的 URL、路径或脚本名。
+
+### 示例：URL 签名（linuxqq-nt）
+
+QQ 的 deb 包下载需先请求 `im.qq.com/index/` 获取 `tgw_l7_route` cookie，再调用 `GetSign` RPC 换取带 sign 的临时链接——直接请求 `qqdl.gtimg.cn` 上的原始 URL 会被拒绝。处理方式：编写专用脚本封装签名流程，DLAGENT 在下载前调用该脚本。
+
+```bash
+source=("${_pkgname}.sh" "linuxqq-get-url.sh")
+source_x86_64=('https://qqdl.gtimg.cn/.../QQ_xxx_amd64_01.deb')
+# ... 其他架构 ...
+
+# 脚本约定两种调用模式：
+#   1. 独立调用：linuxqq-get-url.sh <arch>            输出带 sign 的 URL
+#   2. DLAGENT：  linuxqq-get-url.sh --dlagent <url> <output>  签名并写入 <output>
+DLAGENTS=('https::/usr/bin/bash linuxqq-get-url.sh --dlagent %u %o')
+```
+
+### 参考
+
+- `man 5 makepkg.conf` - DLAGENTS 官方定义
+- [makepkg source code](https://gitlab.archlinux.org/pacman/pacman/-/tree/master/scripts/libmakepkg) - `source/file.sh` 的 `download_file()` 展示变量替换与 `.part` 重命名逻辑
+
 ## 图标安装 [推荐实践]
 
 推荐使用 XDG hicolor 图标目录，而非传统的 `/usr/share/pixmaps/`：
