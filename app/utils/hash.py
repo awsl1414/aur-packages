@@ -35,22 +35,34 @@ def get_hash_builder(algorithm: str) -> Callable[[], _Hash]:
 
 
 def calculate_file_hash(
-    file_path: str | Path, hash_algorithm: str = HashAlgorithmEnum.B2.value
+    file_path: str | Path,
+    hash_algorithm: str = HashAlgorithmEnum.B2.value,
 ) -> str:
     """计算文件哈希值。
 
-    支持 BLAKE2b(b2)、SHA512、SHA256 算法，分块读取大文件避免内存占用过高。
+    支持：
+        - blake2b (b2)
+        - sha512
+        - sha256
+
+    采用分块读取方式，适用于大文件。
+
+    Raises:
+        FileNotFoundError: 文件不存在。
+        IsADirectoryError: 指定路径不是普通文件。
     """
-    file_path: Path = Path(file_path)
+    file_path = Path(file_path)
 
     if not file_path.exists():
         raise FileNotFoundError(f"文件不存在: {file_path}")
 
-    builder: Callable[[], _Hash] = get_hash_builder(hash_algorithm)
-    hash_func: _Hash = builder()
+    if not file_path.is_file():
+        raise IsADirectoryError(f"不是普通文件: {file_path}")
+
+    hash_func = get_hash_builder(hash_algorithm)()
 
     with file_path.open("rb") as f:
-        for chunk in iter(lambda: f.read(CHUNK_SIZE), b""):
+        while chunk := f.read(CHUNK_SIZE):
             hash_func.update(chunk)
 
     return hash_func.hexdigest()
