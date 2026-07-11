@@ -1,125 +1,87 @@
-"""QQParser 单元测试"""
+"""QQParser 单元测试
+
+数据源：第三方聚合 API ``http://ip.llz.asia:8000/api/v1/packages/qq``。
+响应格式见 ``parsers/qq.py`` 模块文档字符串。
+"""
 
 import json
-from unittest.mock import MagicMock, patch
 
-import httpx
+from constants.constants import ArchEnum
+from parsers.qq import QQParser
 
-from constants.constants import DEFAULT_TIMEOUT, USER_AGENT, ArchEnum
-from parsers.qq import COOKIE_URL, QQParser, SIGN_URL
-
-# 模拟 pcConfig.json 的最新响应：Linux 段下含 x64/armDownloadUrl（dict 含 deb），
-# loongarch/mipsDownloadUrl 为裸字符串
-QQ_JSON_RESPONSE: dict = {
-    "Windows": {
-        "version": "9.9.31",
-        "updateDate": "2026-05-28",
-    },
-    "Linux": {
-        "version": "3.2.31",
-        "updateDate": "2026-07-10",
-        "x64DownloadUrl": {
-            "deb": "https://qqdl.gtimg.cn/qqfile/QQNTV2/9.9.32/release/c390e792/QQ_3.2.31_260710_amd64_01.deb",
-            "appimage": "https://qqdl.gtimg.cn/qqfile/QQNTV2/9.9.32/release/c390e792/QQ_3.2.31_260710_x86_64_01.AppImage",
-            "rpm": "https://qqdl.gtimg.cn/qqfile/QQNTV2/9.9.32/release/c390e792/QQ_3.2.31_260710_x86_64_01.rpm",
+# 完整合法的 API 响应：含 code / message / data(version + urls + hashes)
+QQ_API_RESPONSE: dict = {
+    "code": 0,
+    "message": "ok",
+    "data": {
+        "name": "qq",
+        "version": "3.2.31_260710",
+        "urls": {
+            "x86_64": "https://qqdl.gtimg.cn/qqfile/QQNTV2/9.9.32/release/c390e792/QQ_3.2.31_260710_amd64_01.deb",
+            "aarch64": "https://qqdl.gtimg.cn/qqfile/QQNTV2/9.9.32/release/c390e792/QQ_3.2.31_260710_arm64_01.deb",
+            "loong64": "https://qqdl.gtimg.cn/qqfile/QQNTV2/9.9.32/release/c390e792/QQ_3.2.31_260710_loongarch64_01.deb",
         },
-        "armDownloadUrl": {
-            "deb": "https://qqdl.gtimg.cn/qqfile/QQNTV2/9.9.32/release/c390e792/QQ_3.2.31_260710_arm64_01.deb",
-            "rpm": "https://qqdl.gtimg.cn/qqfile/QQNTV2/9.9.32/release/c390e792/QQ_3.2.31_260710_aarch64_01.rpm",
-            "appimage": "https://qqdl.gtimg.cn/qqfile/QQNTV2/9.9.32/release/c390e792/QQ_3.2.31_260710_arm64_01.AppImage",
+        "hashes": {
+            "x86_64": "234a0f338d47e952995a1d4cf1dc782e5266623f878b92af264753b8c032fd31450169e1e25c8d10d37e26848c28dbb0302732874bbfce1566f8ad2b89e0337b",
+            "aarch64": "e31096831099d3a9285443e62344d7ec451a9b991283f803e568ae61ab578b3de79ffd6d2bfbf69923a62715428a13cfcd33e2682d4d873d38add44e66ddf135",
+            "loong64": "ef51070de26b8f33fedb1f70abe3d348aef90b47405ac74f181dd696ce4288fcf657e4c13014807a1069b56a547ca4be64673cd05f9e7ddf62df2d445af8bb9d",
         },
-        "loongarchDownloadUrl": "https://qqdl.gtimg.cn/qqfile/QQNTV2/9.9.32/release/c390e792/QQ_3.2.31_260710_loongarch64_01.deb",
-        "mipsDownloadUrl": "https://qqdl.gtimg.cn/qqfile/QQNTV2/9.9.32/release/c390e792/QQ_3.2.31_260710_mips64el_01.deb",
-    },
-    "macOS": {
-        "version": "6.9.98 (Intel+Apple Silicon)",
-        "updateDate": "2026-07-10",
     },
 }
 
 
 class TestQQParseVersion:
-    def test_valid_json(self) -> None:
+    def test_valid_response(self) -> None:
         parser = QQParser()
-        response = json.dumps(QQ_JSON_RESPONSE)
+        response = json.dumps(QQ_API_RESPONSE)
         assert parser.parse_version(response) == "3.2.31_260710"
 
     def test_non_string_input(self) -> None:
         parser = QQParser()
         assert parser.parse_version(None) is None
         assert parser.parse_version(123) is None
-        assert parser.parse_version({"Linux": {"version": "1.0"}}) is None
+        assert parser.parse_version({"code": 0}) is None
 
     def test_invalid_json(self) -> None:
         parser = QQParser()
         assert parser.parse_version("not json") is None
 
-    def test_missing_linux_section(self) -> None:
+    def test_non_zero_code(self) -> None:
+        """API 返回 code != 0 时返回 None"""
         parser = QQParser()
-        assert parser.parse_version('{"Windows": {}}') is None
+        data = {"code": 1, "message": "error", "data": {"version": "1.0"}}
+        assert parser.parse_version(json.dumps(data)) is None
+
+    def test_missing_data_section(self) -> None:
+        parser = QQParser()
+        assert parser.parse_version('{"code": 0}') is None
+        assert parser.parse_version('{"code": 0, "data": "not a dict"}') is None
 
     def test_missing_version_field(self) -> None:
+        """data 段中无 version 字段时返回 None"""
         parser = QQParser()
-        data = {
-            "Linux": {
-                "x64DownloadUrl": {
-                    "deb": "https://example.com/QQ_1.0.0_123_amd64_01.deb"
-                }
-            }
-        }
+        data = {"code": 0, "data": {"urls": {}}}
         assert parser.parse_version(json.dumps(data)) is None
 
-    def test_version_mismatch(self) -> None:
-        """Linux.version 与 URL 中的版本号不一致时返回 None"""
+    def test_empty_version(self) -> None:
+        """version 为空字符串时返回 None"""
         parser = QQParser()
-        data = {
-            "Linux": {
-                "version": "3.2.30",
-                "x64DownloadUrl": {
-                    "deb": "https://example.com/QQ_3.2.31_260710_amd64_01.deb"
-                },
-            }
-        }
-        assert parser.parse_version(json.dumps(data)) is None
-
-    def test_url_missing_build_number(self) -> None:
-        """URL 中没有构建号时返回 None"""
-        parser = QQParser()
-        data = {
-            "Linux": {
-                "version": "3.2.31",
-                "x64DownloadUrl": {
-                    "deb": "https://example.com/QQ_3.2.31_amd64_01.deb"
-                },
-            }
-        }
-        assert parser.parse_version(json.dumps(data)) is None
-
-    def test_url_field_is_string(self) -> None:
-        """x64DownloadUrl 为裸字符串（非 dict）时返回 None"""
-        parser = QQParser()
-        data = {
-            "Linux": {
-                "version": "3.2.31",
-                "x64DownloadUrl": "https://example.com/QQ_3.2.31_260710_amd64_01.deb",
-            }
-        }
+        data = {"code": 0, "data": {"version": ""}}
         assert parser.parse_version(json.dumps(data)) is None
 
 
 class TestQQParseUrl:
     def test_x86_64(self) -> None:
         parser = QQParser()
-        response = json.dumps(QQ_JSON_RESPONSE)
+        response = json.dumps(QQ_API_RESPONSE)
         url = parser.parse_url(ArchEnum.X86_64, response)
         assert url is not None
         assert "amd64" in url
         assert url.endswith(".deb")
-        assert "260710" in url
 
     def test_aarch64(self) -> None:
         parser = QQParser()
-        response = json.dumps(QQ_JSON_RESPONSE)
+        response = json.dumps(QQ_API_RESPONSE)
         url = parser.parse_url(ArchEnum.AARCH64, response)
         assert url is not None
         assert "arm64" in url
@@ -127,18 +89,10 @@ class TestQQParseUrl:
 
     def test_loong64(self) -> None:
         parser = QQParser()
-        response = json.dumps(QQ_JSON_RESPONSE)
+        response = json.dumps(QQ_API_RESPONSE)
         url = parser.parse_url(ArchEnum.LOONG64, response)
         assert url is not None
         assert "loongarch64" in url
-        assert url.endswith(".deb")
-
-    def test_mips64el(self) -> None:
-        parser = QQParser()
-        response = json.dumps(QQ_JSON_RESPONSE)
-        url = parser.parse_url(ArchEnum.MIPS64EL, response)
-        assert url is not None
-        assert "mips64el" in url
         assert url.endswith(".deb")
 
     def test_non_string_input(self) -> None:
@@ -150,210 +104,154 @@ class TestQQParseUrl:
         parser = QQParser()
         assert parser.parse_url(ArchEnum.X86_64, "not json") is None
 
-    def test_missing_linux_section(self) -> None:
+    def test_non_zero_code(self) -> None:
         parser = QQParser()
-        assert parser.parse_url(ArchEnum.X86_64, '{"Windows": {}}') is None
+        data = {"code": 1, "data": {"urls": {"x86_64": "https://example.com"}}}
+        assert parser.parse_url(ArchEnum.X86_64, json.dumps(data)) is None
+
+    def test_missing_urls_field(self) -> None:
+        parser = QQParser()
+        data = {"code": 0, "data": {"version": "1.0"}}
+        assert parser.parse_url(ArchEnum.X86_64, json.dumps(data)) is None
 
     def test_unknown_arch(self) -> None:
-        """未知架构返回 None（由 _get_deb_url 的 match 默认分支返回）"""
+        """请求未在 API urls 中的架构时返回 None"""
         parser = QQParser()
-        response = json.dumps(QQ_JSON_RESPONSE)
-        # 通过字符串传入未知架构（绕过 ArchEnum 校验）
+        response = json.dumps(QQ_API_RESPONSE)
         assert parser.parse_url("riscv64", response) is None
 
+    def test_arch_value_as_string(self) -> None:
+        """直接用字符串传入架构名也能正确取到 URL"""
+        parser = QQParser()
+        response = json.dumps(QQ_API_RESPONSE)
+        url = parser.parse_url("x86_64", response)
+        assert url is not None
+        assert "amd64" in url
 
-def _make_cookie_response(cookie_value: str | None) -> MagicMock:
-    """构造模拟 im.qq.com/index/ 的 cookie 响应"""
-    resp = MagicMock()
-    resp.raise_for_status = MagicMock()
-    resp.cookies.get = MagicMock(return_value=cookie_value)
-    return resp
 
+class TestQQParseHashes:
+    def test_returns_all_arch_hashes(self) -> None:
+        parser = QQParser()
+        response = json.dumps(QQ_API_RESPONSE)
+        archs = [ArchEnum.X86_64, ArchEnum.AARCH64, ArchEnum.LOONG64]
+        result = parser.parse_hashes(response, archs)
+        assert result is not None
+        assert set(result.keys()) == {"x86_64", "aarch64", "loong64"}
+        for arch_value in ("x86_64", "aarch64", "loong64"):
+            assert result[arch_value] == QQ_API_RESPONSE["data"]["hashes"][arch_value]
 
-def _make_sign_response(
-    body: object, *, raises: bool = False
-) -> MagicMock:
-    """构造模拟 GetSign 响应"""
-    resp = MagicMock()
-    if raises:
-        resp.raise_for_status = MagicMock(side_effect=Exception("HTTP error"))
-    else:
-        resp.raise_for_status = MagicMock()
-    resp.json = MagicMock(return_value=body)
-    return resp
+    def test_partial_archs(self) -> None:
+        """只请求部分架构时只返回这部分 hash"""
+        parser = QQParser()
+        response = json.dumps(QQ_API_RESPONSE)
+        result = parser.parse_hashes(response, [ArchEnum.X86_64])
+        assert result is not None
+        assert list(result.keys()) == ["x86_64"]
+
+    def test_missing_some_arch_hash(self) -> None:
+        """API 缺少部分架构 hash 时，只返回存在的部分"""
+        parser = QQParser()
+        data = {
+            "code": 0,
+            "data": {
+                "version": "1.0",
+                "urls": {"x86_64": "https://example.com/a.deb"},
+                "hashes": {"x86_64": "abc123"},
+            },
+        }
+        response = json.dumps(data)
+        result = parser.parse_hashes(
+            response, [ArchEnum.X86_64, ArchEnum.AARCH64]
+        )
+        assert result is not None
+        assert result == {"x86_64": "abc123"}
+
+    def test_missing_hashes_field(self) -> None:
+        """data 中无 hashes 字段时返回 None（fallback 到下载）"""
+        parser = QQParser()
+        data = {"code": 0, "data": {"version": "1.0", "urls": {}}}
+        response = json.dumps(data)
+        result = parser.parse_hashes(response, [ArchEnum.X86_64])
+        assert result is None
+
+    def test_empty_hashes_when_no_arch_matched(self) -> None:
+        """所有架构 hash 都缺失时返回 None"""
+        parser = QQParser()
+        data = {
+            "code": 0,
+            "data": {"version": "1.0", "urls": {}, "hashes": {}},
+        }
+        response = json.dumps(data)
+        result = parser.parse_hashes(response, [ArchEnum.X86_64])
+        assert result is None
+
+    def test_non_string_input(self) -> None:
+        parser = QQParser()
+        assert parser.parse_hashes(None, [ArchEnum.X86_64]) is None
+        assert parser.parse_hashes(123, [ArchEnum.X86_64]) is None
+
+    def test_invalid_json(self) -> None:
+        parser = QQParser()
+        assert parser.parse_hashes("not json", [ArchEnum.X86_64]) is None
+
+    def test_non_zero_code(self) -> None:
+        parser = QQParser()
+        data = {
+            "code": 1,
+            "data": {"hashes": {"x86_64": "abc"}},
+        }
+        response = json.dumps(data)
+        assert parser.parse_hashes(response, [ArchEnum.X86_64]) is None
+
+    def test_non_string_hash_value(self) -> None:
+        """hash 值非字符串时跳过该架构"""
+        parser = QQParser()
+        data = {
+            "code": 0,
+            "data": {
+                "version": "1.0",
+                "urls": {},
+                "hashes": {"x86_64": 12345, "aarch64": "valid_hash"},
+            },
+        }
+        response = json.dumps(data)
+        result = parser.parse_hashes(
+            response, [ArchEnum.X86_64, ArchEnum.AARCH64]
+        )
+        assert result is not None
+        assert result == {"aarch64": "valid_hash"}
+
+    def test_empty_hash_string_skipped(self) -> None:
+        """空字符串 hash 被跳过"""
+        parser = QQParser()
+        data = {
+            "code": 0,
+            "data": {
+                "version": "1.0",
+                "urls": {},
+                "hashes": {"x86_64": "", "aarch64": "valid_hash"},
+            },
+        }
+        response = json.dumps(data)
+        result = parser.parse_hashes(
+            response, [ArchEnum.X86_64, ArchEnum.AARCH64]
+        )
+        assert result is not None
+        assert result == {"aarch64": "valid_hash"}
 
 
 class TestQQResolveUrl:
-    """resolve_url 测试：mock httpx.Client 验证 URL 签名流程"""
+    """QQ 现在走聚合 API，原始 URL 即可直接下载——resolve_url 应与 parse_url 一致"""
 
-    def test_returns_signed_url(self) -> None:
-        """正常流程：返回 GetSign data.url"""
-        original_url = (
-            "https://qqdl.gtimg.cn/qqfile/QQNTV2/9.9.32/release/"
-            "c390e792/QQ_3.2.31_260710_amd64_01.deb"
-        )
-        signed_url = original_url + "?sign=abc123&t=1700000000"
-
-        cookie_resp = _make_cookie_response("dd315a3e7f4613df13ad03ceb8eebf38")
-        sign_resp = _make_sign_response(
-            {"retcode": 0, "data": {"url": signed_url}}
-        )
-
-        with patch("parsers.qq.httpx.Client") as client_cls:
-            client = MagicMock()
-            client.__enter__ = MagicMock(return_value=client)
-            client.__exit__ = MagicMock(return_value=False)
-            client.get = MagicMock(return_value=cookie_resp)
-            client.post = MagicMock(return_value=sign_resp)
-            client_cls.return_value = client
-
-            parser = QQParser()
-            result = parser.resolve_url(ArchEnum.X86_64, json.dumps(QQ_JSON_RESPONSE))
-
-        assert result == signed_url
-        # 验证 cookie 请求 URL
-        client.get.assert_called_once()
-        assert client.get.call_args.args[0] == COOKIE_URL
-        assert client.get.call_args.kwargs["headers"]["User-Agent"] == USER_AGENT
-        # 验证 GetSign 请求 URL 与 body
-        client.post.assert_called_once()
-        call_kwargs = client.post.call_args.kwargs
-        assert client.post.call_args.args[0] == SIGN_URL
-        assert call_kwargs["json"] == {"url": original_url}
-        assert call_kwargs["cookies"] == {
-            "tgw_l7_route": "dd315a3e7f4613df13ad03ceb8eebf38"
-        }
-        assert call_kwargs["headers"]["x-oidb"] == (
-            '{"uint32_command":"0x9b8e","uint32_service_type":1}'
-        )
-        # 验证 DEFAULT_TIMEOUT 已应用到 httpx.Client
-        client_cls.assert_called_once_with(timeout=DEFAULT_TIMEOUT)
-
-    def test_returns_none_when_no_parse_url(self) -> None:
-        """parse_url 返回 None 时，resolve_url 不调用网络，直接返回 None"""
-        with patch("parsers.qq.httpx.Client") as client_cls:
-            parser = QQParser()
-            # 未知架构
-            result = parser.resolve_url("riscv64", json.dumps(QQ_JSON_RESPONSE))
-        assert result is None
-        client_cls.assert_not_called()
-
-    def test_returns_none_when_cookie_missing(self) -> None:
-        """cookie 响应中无 tgw_l7_route 时返回 None"""
-        cookie_resp = _make_cookie_response(None)
-        with patch("parsers.qq.httpx.Client") as client_cls:
-            client = MagicMock()
-            client.__enter__ = MagicMock(return_value=client)
-            client.__exit__ = MagicMock(return_value=False)
-            client.get = MagicMock(return_value=cookie_resp)
-            client.post = MagicMock()
-            client_cls.return_value = client
-
-            parser = QQParser()
-            result = parser.resolve_url(
-                ArchEnum.X86_64, json.dumps(QQ_JSON_RESPONSE)
+    def test_resolve_equals_parse(self) -> None:
+        parser = QQParser()
+        response = json.dumps(QQ_API_RESPONSE)
+        for arch in [ArchEnum.X86_64, ArchEnum.AARCH64, ArchEnum.LOONG64]:
+            assert parser.resolve_url(arch, response) == parser.parse_url(
+                arch, response
             )
 
-        assert result is None
-        client.post.assert_not_called()
-
-    def test_returns_none_when_response_invalid(self) -> None:
-        """GetSign 返回非 dict 时返回 None"""
-        cookie_resp = _make_cookie_response("cookie_value")
-        sign_resp = _make_sign_response(["not", "a", "dict"])
-        with patch("parsers.qq.httpx.Client") as client_cls:
-            client = MagicMock()
-            client.__enter__ = MagicMock(return_value=client)
-            client.__exit__ = MagicMock(return_value=False)
-            client.get = MagicMock(return_value=cookie_resp)
-            client.post = MagicMock(return_value=sign_resp)
-            client_cls.return_value = client
-
-            parser = QQParser()
-            result = parser.resolve_url(
-                ArchEnum.X86_64, json.dumps(QQ_JSON_RESPONSE)
-            )
-
-        assert result is None
-
-    def test_returns_none_when_data_missing(self) -> None:
-        """GetSign 响应中 data 不是 dict 时返回 None"""
-        cookie_resp = _make_cookie_response("cookie_value")
-        sign_resp = _make_sign_response({"data": "not a dict"})
-        with patch("parsers.qq.httpx.Client") as client_cls:
-            client = MagicMock()
-            client.__enter__ = MagicMock(return_value=client)
-            client.__exit__ = MagicMock(return_value=False)
-            client.get = MagicMock(return_value=cookie_resp)
-            client.post = MagicMock(return_value=sign_resp)
-            client_cls.return_value = client
-
-            parser = QQParser()
-            result = parser.resolve_url(
-                ArchEnum.X86_64, json.dumps(QQ_JSON_RESPONSE)
-            )
-
-        assert result is None
-
-    def test_returns_none_when_url_missing(self) -> None:
-        """GetSign 响应中 data.url 为空时返回 None"""
-        cookie_resp = _make_cookie_response("cookie_value")
-        sign_resp = _make_sign_response({"data": {"url": ""}})
-        with patch("parsers.qq.httpx.Client") as client_cls:
-            client = MagicMock()
-            client.__enter__ = MagicMock(return_value=client)
-            client.__exit__ = MagicMock(return_value=False)
-            client.get = MagicMock(return_value=cookie_resp)
-            client.post = MagicMock(return_value=sign_resp)
-            client_cls.return_value = client
-
-            parser = QQParser()
-            result = parser.resolve_url(
-                ArchEnum.X86_64, json.dumps(QQ_JSON_RESPONSE)
-            )
-
-        assert result is None
-
-    def test_returns_none_on_http_error(self) -> None:
-        """httpx.HTTPError 时返回 None"""
-        cookie_resp = _make_cookie_response("cookie_value")
-        sign_resp = _make_sign_response({})
-        sign_resp.raise_for_status = MagicMock(
-            side_effect=httpx.HTTPError("boom")
-        )
-
-        with patch("parsers.qq.httpx.Client") as client_cls:
-            client = MagicMock()
-            client.__enter__ = MagicMock(return_value=client)
-            client.__exit__ = MagicMock(return_value=False)
-            client.get = MagicMock(return_value=cookie_resp)
-            client.post = MagicMock(return_value=sign_resp)
-            client_cls.return_value = client
-
-            parser = QQParser()
-            result = parser.resolve_url(
-                ArchEnum.X86_64, json.dumps(QQ_JSON_RESPONSE)
-            )
-
-        assert result is None
-
-    def test_returns_none_on_invalid_json(self) -> None:
-        """GetSign 响应非 JSON 时返回 None"""
-        cookie_resp = _make_cookie_response("cookie_value")
-        sign_resp = MagicMock()
-        sign_resp.raise_for_status = MagicMock()
-        sign_resp.json = MagicMock(side_effect=json.JSONDecodeError("", "", 0))
-        with patch("parsers.qq.httpx.Client") as client_cls:
-            client = MagicMock()
-            client.__enter__ = MagicMock(return_value=client)
-            client.__exit__ = MagicMock(return_value=False)
-            client.get = MagicMock(return_value=cookie_resp)
-            client.post = MagicMock(return_value=sign_resp)
-            client_cls.return_value = client
-
-            parser = QQParser()
-            result = parser.resolve_url(
-                ArchEnum.X86_64, json.dumps(QQ_JSON_RESPONSE)
-            )
-
-        assert result is None
+    def test_unknown_arch_returns_none(self) -> None:
+        parser = QQParser()
+        response = json.dumps(QQ_API_RESPONSE)
+        assert parser.resolve_url("riscv64", response) is None

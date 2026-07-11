@@ -11,7 +11,7 @@ settings:
     # 重试等待时间（秒）
     retry_wait: 1
     # 下载超时时间（秒）
-    timeout: 60
+    timeout: 120
     # 每个服务器的最大连接数
     connections: 16
     # 是否显示下载进度
@@ -22,7 +22,10 @@ packages:
   qq:
     name: qq
     source: qq
-    fetch_url: "https://qq-web.cdn-go.cn/im.qq.com_new/latest/rainbow/pcConfig.json"
+    # 第三方聚合 API：直接返回 QQ Linux 的 version / urls / hashes，
+    # 不再走 im.qq.com 的 GetSign 签名流程——原始 URL 即可直接下载，
+    # 由 PKGBUILD 的 DLAGENTS 在 makepkg 阶段独立完成签名。
+    fetch_url: "http://ip.llz.asia:8000/api/v1/packages/qq?with_hash=true&algorithm=b2"
     upstream: "Tencent/QQ"
     parser: QQParser
     pkgbuild: "packages/linuxqq-nt/PKGBUILD"

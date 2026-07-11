@@ -154,6 +154,47 @@ class PackageUpdater:
                 logger.warning("无法获取 %s 架构的下载URL", arch.value)
         return arch_urls
 
+    async def _get_checksums(
+        self,
+        parser: BaseParser,
+        response_data: str,
+        supported_archs: list[ArchEnum],
+        package_name: str,
+        new_version: str,
+        hash_algorithm: str,
+        verify_only: bool = False,
+    ) -> tuple[dict[str, str], bool]:
+        """获取各架构校验和：优先用 parser 直接提供的 hashes，否则下载计算。
+
+        parser 通过 ``parse_hashes`` 返回 hashes 字典时（QQ 聚合 API 的
+        ``data.hashes``）直接采用，跳过本地下载——省去下载几百 MB deb 的
+        开销。返回 None 时 fallback 到 ``_download_and_verify``。
+
+        返回 ``(checksums, success)``。``success=False`` 仅在下载路径下
+        有架构失败时出现（``verify_only=False``）；``verify_only=True``
+        时即便全部失败也返回 ``success=True``，但 ``checksums`` 为空，
+        调用方需自行检查空字典。
+        """
+        parser_hashes = parser.parse_hashes(response_data, supported_archs)
+        if parser_hashes is not None:
+            logger.info("  使用 parser 提供的校验和，跳过下载")
+            return parser_hashes, True
+
+        arch_urls = self._fetch_arch_urls(
+            parser, supported_archs, response_data
+        )
+        if not arch_urls:
+            logger.error("  错误: 无法获取任何架构的下载URL")
+            return {}, False
+
+        return await self._download_and_verify(
+            package_name,
+            new_version,
+            arch_urls,
+            hash_algorithm,
+            verify_only=verify_only,
+        )
+
     async def _download_and_verify(
         self,
         package_name: str,
@@ -332,20 +373,20 @@ class PackageUpdater:
                 "  跳过更新: 新版本 %s 低于当前版本 %s", new_version, current_version
             )
             logger.info("  说明: 当前包版本较新，无需降级")
-            logger.info("  注意: 仍将下载并验证哈希数据...")
+            logger.info("  注意: 仍将校验远端 hashes（parser 提供）或下载验证...")
 
-            arch_urls = self._fetch_arch_urls(parser, supported_archs, response_data)
-            if not arch_urls:
-                logger.error("  错误: 无法获取任何架构的下载URL")
-                return False
-
-            # verify_only=True 时 _download_and_verify 即便全部失败也返回 True，
-            # 这里必须自行校验 checksums 是否为空，否则会误报"验证完成"。
-            checksums, _ = await self._download_and_verify(
-                package_name, new_version, arch_urls, hash_algorithm, verify_only=True
+            # verify_only=True 时即便全部失败也返回 True，需自行校验空 checksums
+            checksums, _ = await self._get_checksums(
+                parser,
+                response_data,
+                supported_archs,
+                package_name,
+                new_version,
+                hash_algorithm,
+                verify_only=True,
             )
             if not checksums:
-                logger.error("  错误: 降级校验失败，所有架构均未成功下载")
+                logger.error("  错误: 降级校验失败，所有架构均未拿到校验和")
                 return False
 
             logger.info("  包 %s 验证完成（未更新 PKGBUILD）", package_name)
@@ -367,14 +408,14 @@ class PackageUpdater:
             else:
                 logger.warning("  警告: 无法获取 %s 架构的当前哈希值", arch.value)
 
-        # 下载并计算新哈希值
-        arch_urls = self._fetch_arch_urls(parser, supported_archs, response_data)
-        if not arch_urls:
-            logger.error("  错误: 无法获取任何架构的下载URL")
-            return False
-
-        new_checksums, success = await self._download_and_verify(
-            package_name, new_version, arch_urls, hash_algorithm
+        # 获取远端 hashes：parser 优先提供，否则下载计算
+        new_checksums, success = await self._get_checksums(
+            parser,
+            response_data,
+            supported_archs,
+            package_name,
+            new_version,
+            hash_algorithm,
         )
         if not success:
             return False
@@ -425,31 +466,30 @@ class PackageUpdater:
         处理版本更新流程（new_version > current_version）。
 
         步骤：
-        1. 收集 download_urls（resolve_url 通道，QQ 走签名）用于实际下载
-        2. 若 update_source_url=True，额外收集 source_urls（parse_url 通道）
-           用于写入 PKGBUILD 的 source 字段
-        3. 并行下载并计算每个架构的校验和
-        4. 更新 PKGBUILD：pkgver、pkgrel=1、source、checksum
-        5. save 写入磁盘
+        1. 若 update_source_url=True，收集 source_urls（parse_url 通道）
+           用于写入 PKGBUILD source 字段
+        2. 获取 checksums：parser 优先提供（QQ 聚合 API），否则下载计算
+        3. 更新 PKGBUILD：pkgver、pkgrel=1、source、checksum
+        4. save 写入磁盘
         """
-        logger.info("  3. 下载文件并计算校验和...")
+        logger.info("  3. 获取校验和（parser 提供 or 下载）...")
         logger.info("  支持的架构: %s", [arch.value for arch in supported_archs])
 
-        # 用于实际下载的 URL（QQ 走签名通道）
-        download_urls = self._fetch_arch_urls(parser, supported_archs, response_data)
-        if not download_urls:
-            logger.error("  错误: 无法获取任何架构的下载URL")
-            return False
-
-        # 用于写入 PKGBUILD source 字段的 URL（QQ 写未签名原始链接）
+        # 用于写入 PKGBUILD source 字段的 URL（parse_url 通道，未签名原始链接）
         source_urls: dict[str, str] = {}
         if package_config.update_source_url:
             source_urls = self._fetch_source_urls(
                 parser, supported_archs, response_data
             )
 
-        checksums, success = await self._download_and_verify(
-            package_name, new_version, download_urls, hash_algorithm
+        # 获取 checksums：parser 优先，否则 fallback 到下载
+        checksums, success = await self._get_checksums(
+            parser,
+            response_data,
+            supported_archs,
+            package_name,
+            new_version,
+            hash_algorithm,
         )
         if not success:
             return False
@@ -463,9 +503,12 @@ class PackageUpdater:
         for arch_value, checksum in checksums.items():
             field_arch = None if arch_value == ArchEnum.ANY.value else arch_value
             if package_config.update_source_url:
-                # 优先使用 parse_url 的原始 URL；缺失时降级为已签名的下载 URL
-                source_url = source_urls.get(arch_value, download_urls[arch_value])
-                editor.update_source(source_url, arch=field_arch)
+                # 优先使用 parse_url 收集到的 URL；缺失时单独再试一次
+                source_url = source_urls.get(arch_value) or parser.parse_url(
+                    arch_value, response_data
+                )
+                if source_url:
+                    editor.update_source(source_url, arch=field_arch)
             editor.update_checksum(checksum, hash_algorithm, arch=field_arch)
 
         editor.save()
