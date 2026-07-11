@@ -39,3 +39,5 @@ htmlcov/
 
 # macOS
 .DS_Store
+
+.trae/
