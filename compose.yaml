@@ -1,0 +1,12 @@
+services:
+  aur-packages-helper:
+    build: .
+    image: aur-packages-helper:latest
+    container_name: aur-packages-helper
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./config.docker.toml:/app/config.docker.toml:ro
+    environment:
+      AUR_PACKAGES_HELPER_CONFIG: /app/config.docker.toml

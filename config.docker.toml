@@ -1,0 +1,18 @@
+[server]
+host = "0.0.0.0"
+port = 8000
+
+[http]
+user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
+default_timeout = 30.0
+chunk_size = 4096
+max_concurrent_downloads = 5
+log_body_max_length = 500
+
+[qq]
+fetch_url = "https://qq-web.cdn-go.cn/im.qq.com_new/latest/rainbow/pcConfig.json"
+origin = "https://im.qq.com"
+cookie_url = "https://im.qq.com/index/"
+sign_url = "https://im.qq.com/http2rpc/gotrpc/noauth/trpc.qqntv2.urlsign.UrlSign/GetSign"
+oidb_command = "0x9b8e"
+oidb_service_type = 1
