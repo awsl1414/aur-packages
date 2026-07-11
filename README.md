@@ -20,3 +20,5 @@
 uv sync          # 同步依赖
 uv run main.py   # 启动服务
 ```
+
+服务启动后访问 `http://127.0.0.1:8000/docs` 查看交互式 API 文档，路由规范见 [docs/api.md](docs/api.md)。
