@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi[standard]>=0.139.0",
+    "httpx>=0.28.1",
     "tortoise-orm>=1.1.7",
 ]
 
