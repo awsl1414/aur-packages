@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-_CONFIG_ENV_VAR = "AUR_PACKAGES_HELPER_CONFIG"
+_CONFIG_ENV_VAR = "APP_CONFIG"
 _DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.toml"
 
 
@@ -46,7 +46,7 @@ def load_config(path: Path | str | None = None) -> AppConfig:
     """加载 TOML 配置文件。
 
     默认查找项目根 ``config.toml``，可通过环境变量
-    ``AUR_PACKAGES_HELPER_CONFIG`` 指定自定义路径。
+    ``APP_CONFIG`` 指定自定义路径。
     """
     config_path: Path = (
         Path(path)

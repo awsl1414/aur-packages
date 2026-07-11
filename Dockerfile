@@ -1,21 +1,38 @@
-FROM python:3.13-slim
+# syntax=docker/dockerfile:1.7
+
+FROM python:3.13-slim AS builder
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 WORKDIR /app
 
-# 依赖层（缓存友好：仅当 pyproject.toml/uv.lock 变化时重建）
+ENV UV_LINK_MODE=copy
+
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev
 
-# 源码层
-COPY main.py ./
-COPY app/ ./app/
-COPY config.toml ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync \
+        --locked \
+        --no-dev \
+        --no-install-project
 
-# 默认指向镜像内 config.toml；compose 可通过环境变量覆盖
-ENV AUR_PACKAGES_HELPER_CONFIG=/app/config.toml
+
+FROM python:3.13-slim
+
+WORKDIR /app
+
+COPY --from=builder /app/.venv /app/.venv
+
+COPY --chown=1000:1000 . .
+
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    APP_CONFIG=/app/config.toml
+
+
+USER 1000:1000
 
 EXPOSE 8000
 
-CMD ["uv", "run", "main.py"]
+CMD ["python", "main.py"]
