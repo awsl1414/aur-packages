@@ -12,7 +12,7 @@
 
 # 运行程序（使用 uv）
 uv run scripts/main.py                    # 更新所有包
-uv run scripts/main.py --package qq       # 更新指定包
+uv run scripts/main.py --package linuxqq-nt  # 更新指定包
 uv run scripts/main.py --list             # 列出所有可用包
 
 # 运行测试

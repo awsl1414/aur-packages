@@ -100,10 +100,10 @@ class TestPackageConfig:
 class TestConfigLoader:
     def test_load_from_yaml(self) -> None:
         loader = ConfigLoader.load_from_yaml()
-        assert "qq" in loader.packages
+        assert "linuxqq-nt" in loader.packages
         assert "navicat" in loader.packages
         assert "trae" in loader.packages
-        assert loader.packages["qq"].parser == "QQParser"
+        assert loader.packages["linuxqq-nt"].parser == "QQParser"
 
     def test_navicat_urls_loaded(self) -> None:
         loader = ConfigLoader.load_from_yaml()
@@ -124,9 +124,9 @@ class TestConfigLoader:
         assert zen.get_effective_hash_algorithm("b2") == "b2"
 
     def test_qq_default_hash_algorithm(self) -> None:
-        """qq 包未设置 hash_algorithm，使用全局默认"""
+        """linuxqq-nt 包未设置 hash_algorithm，使用全局默认"""
         loader = ConfigLoader.load_from_yaml()
-        qq = loader.packages["qq"]
+        qq = loader.packages["linuxqq-nt"]
         assert qq.hash_algorithm is None
         assert qq.get_effective_hash_algorithm("b2") == "b2"
 
