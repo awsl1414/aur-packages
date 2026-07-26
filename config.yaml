@@ -25,7 +25,7 @@ packages:
     # 第三方聚合 API：直接返回 QQ Linux 的 version / urls / hashes，
     # 不再走 im.qq.com 的 GetSign 签名流程——原始 URL 即可直接下载，
     # 由 PKGBUILD 的 DLAGENTS 在 makepkg 阶段独立完成签名。
-    fetch_url: "http://ip.llz.asia:8000/api/v1/packages/qq?with_hash=true&algorithm=b2"
+    fetch_url: "https://aur.llz.asia/api/v1/packages/qq?with_hash=true&algorithm=b2"
     upstream: "Tencent/QQ"
     parser: QQParser
     pkgbuild: "packages/linuxqq-nt/PKGBUILD"
