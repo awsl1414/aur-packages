@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class QQParser(BaseParser):
-    """QQ Linux 版本解析器"""
+    """QQ Linux 版本解析器：URL 需经 im.qq.com GetSign 签名方可下载"""
 
     def _parse_response(self, response_data: str) -> dict[str, Any] | None:
         """解析 JSON 响应；解析失败返回 None"""

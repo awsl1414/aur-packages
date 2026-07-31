@@ -108,12 +108,12 @@ class PackageService:
                 )
             return arch_value, resolved
 
-        # Phase 1: 并发解析所有架构的下载 URL
+        # 阶段 1：并发解析各架构的可下载 URL
         resolved_results: list[tuple[str, str | None]] = await asyncio.gather(
             *[_resolve_one(arch) for arch in entry.archs]
         )
 
-        # Phase 2: 过滤 + 并发下载
+        # 阶段 2：过滤后并发下载并计算 hash
         hashes: dict[str, str | None] = {}
         urls: dict[str, str] = {}
         for arch_value, resolved in resolved_results:

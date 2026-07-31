@@ -3,6 +3,7 @@
 @README.md
 @CONTRIBUTING.md
 @.claude/rules/type-hints.md
+@.claude/rules/comments.md
 
 ## 项目定位
 

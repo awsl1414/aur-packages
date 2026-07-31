@@ -46,9 +46,7 @@ class Fetcher:
     def __init__(
         self, client: AsyncClient, max_concurrent: int = MAX_CONCURRENT_DOWNLOADS
     ) -> None:
-        # 故意不在 client 级别挂 DEFAULT_HEADERS。request 级别的 headers 会
-        # 与 client 级别 headers 合并（httpx 行为），导致 parser 提供的
-        # 特殊 header 集合无法完全替换默认头。改在 fetch_text 内按需选择。
+        # client 不挂默认头，按请求选择 header（原因见 DEFAULT_HEADERS）
         self.client = client
         self._semaphore = asyncio.Semaphore(max_concurrent)
 
@@ -57,10 +55,8 @@ class Fetcher:
     ) -> str | None:
         """获取文本数据。
 
-        ``headers`` 为 None 时使用 ``DEFAULT_HEADERS``；提供时使用该 header
-        集合（**完整替换**默认头，不与任何 client 级别 header 合并）。失败时
-        输出状态码 + 响应体（截断），便于诊断 CDN 边缘节点拒绝、
-        SSL SNI 不匹配、403/451 等场景。
+        ``headers`` 为 None 时用 ``DEFAULT_HEADERS``，否则用传入集合（完整替换）。
+        失败时输出状态码 + 响应体（截断），便于诊断 CDN 拒绝、SNI 不匹配、403/451 等。
         """
         request_headers: dict[str, str] = (
             headers if headers is not None else DEFAULT_HEADERS

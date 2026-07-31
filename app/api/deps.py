@@ -1,4 +1,4 @@
-"""FastAPI 依赖：跨资源共享的服务访问点"""
+"""FastAPI 依赖：共享服务（如 PackageService）的请求级访问入口"""
 
 from fastapi import Request
 

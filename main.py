@@ -49,7 +49,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
         app.state.package_service = PackageService(fetcher, registry)
         yield
-        # httpx.AsyncClient 由 async with 自动关闭
 
 
 def create_app() -> FastAPI:

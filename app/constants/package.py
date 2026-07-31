@@ -14,7 +14,7 @@ class ArchEnum(Enum):
 
 
 class HashAlgorithmEnum(Enum):
-    """哈希算法"""
+    """支持的哈希算法"""
 
     SHA256 = "sha256"
     SHA512 = "sha512"

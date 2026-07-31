@@ -12,12 +12,16 @@ _DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.toml"
 
 @dataclass(frozen=True)
 class ServerConfig:
+    """服务监听地址与端口"""
+
     host: str
     port: int
 
 
 @dataclass(frozen=True)
 class HttpConfig:
+    """HTTP 客户端相关配置"""
+
     user_agent: str
     default_timeout: float
     chunk_size: int
@@ -27,6 +31,8 @@ class HttpConfig:
 
 @dataclass(frozen=True)
 class QQConfig:
+    """QQ 解析器相关配置"""
+
     fetch_url: str
     origin: str
     cookie_url: str
@@ -37,6 +43,8 @@ class QQConfig:
 
 @dataclass(frozen=True)
 class AppConfig:
+    """应用根配置，聚合各子配置"""
+
     server: ServerConfig
     http: HttpConfig
     qq: QQConfig

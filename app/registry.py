@@ -27,7 +27,7 @@ class PackageRegistry:
         self._entries: dict[str, PackageEntry] = {}
 
     def register(self, entry: PackageEntry) -> None:
-        """注册一个包。重名注册将覆盖旧条目。"""
+        """注册一个包；重名将覆盖旧条目"""
         self._entries[entry.name] = entry
 
     def get(self, name: str) -> PackageEntry | None:
