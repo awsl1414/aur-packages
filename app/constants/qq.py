@@ -2,9 +2,6 @@
 
 from app.config import config
 
-# QQ 版本信息数据源（pcConfig.json）
-QQ_FETCH_URL: str = config.qq.fetch_url
-
 # im.qq.com 站点 origin（签名请求 Origin 头）
 QQ_ORIGIN: str = config.qq.origin
 

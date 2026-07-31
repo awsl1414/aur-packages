@@ -8,6 +8,7 @@ services:
       - "8000:8000"
     volumes:
       - ./config.docker.toml:/app/config.docker.toml:ro
+      - ./data:/app/data # 持久化 SQLite 数据库
     environment:
       APP_CONFIG: /app/config.docker.toml
     dns:

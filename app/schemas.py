@@ -10,9 +10,9 @@ class PackageList(BaseModel):
 
 
 class PackageInfo(BaseModel):
-    """包信息：版本号 + 各架构原始下载 URL，可选文件 hash"""
+    """包信息：版本号 + 各架构原始下载 URL + 文件 hash"""
 
     name: str
     version: str
     urls: dict[str, str]
-    hashes: dict[str, str | None] | None = None
+    hashes: dict[str, str | None]

@@ -10,9 +10,28 @@ max_concurrent_downloads = 5
 log_body_max_length = 500
 
 [qq]
-fetch_url = "https://qq-web.cdn-go.cn/im.qq.com_new/latest/rainbow/pcConfig.json"
 origin = "https://im.qq.com"
 cookie_url = "https://im.qq.com/index/"
 sign_url = "https://im.qq.com/http2rpc/gotrpc/noauth/trpc.qqntv2.urlsign.UrlSign/GetSign"
 oidb_command = "0x9b8e"
 oidb_service_type = 1
+
+[database]
+# SQLite 数据库文件路径，相对项目根
+sqlite_path = "data/aur_packages.db"
+# GET /{name} 命中 DB 快照的最大年龄（秒），超过则回源；建议 ≥ 定时采集间隔
+hash_cache_ttl_seconds = 7200
+
+[scheduler]
+# 定时采集总开关
+enabled = true
+# cron 表达式求值时区（interval 模式不受时区影响）
+timezone = "Asia/Shanghai"
+# 触发时刻的随机抖动上限（秒），错峰避免多包同时打上游
+jitter_seconds = 60
+# 误火宽限期（秒），超过则丢弃迟到的触发
+misfire_grace_seconds = 300
+# 单包两次采集的最小间隔（秒）：限制 refresh / GET 回源频率，防止反复下载消耗资源
+min_collect_interval_seconds = 300
+# 服务启动时是否立即采集一次（仅 interval 模式；false 时首次采集在一个间隔之后）
+run_on_startup = false

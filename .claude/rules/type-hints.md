@@ -7,42 +7,43 @@
 1. **所有函数必须有返回类型注解**
    ```python
    # ✓ 正确
-   def get_version(url: str) -> str | None:
-       ...
+   def get_version(url: str) -> str | None: ...
+
 
    # ✗ 错误（缺少返回类型）
-   def get_version(url: str):
-       ...
+   def get_version(url: str): ...
    ```
 
 2. **所有参数必须有类型注解**
    ```python
    # ✓ 正确
-   async def fetch_hash(url: str, path: Path, retries: int = 3) -> bool:
-       ...
+   async def fetch_hash(url: str, path: Path, retries: int = 3) -> bool: ...
+
 
    # ✗ 错误（缺少参数类型）
-   async def fetch_hash(url, path, retries = 3):
-       ...
+   async def fetch_hash(url, path, retries=3): ...
    ```
 
 3. **使用 Python 3.13+ 的现代类型注解语法**
    ```python
    # ✓ 使用 | 联合类型（Python 3.10+）
-   def parse_version(data: str | None) -> str | None:
-       ...
+   def parse_version(data: str | None) -> str | None: ...
+
 
    # ✓ 使用 list/dict 泛型（Python 3.9+）
    def get_urls(arch: str) -> list[str]:
        return []
 
+
    def get_config() -> dict[str, str]:
        return {}
 
+
    # ✗ 避免（旧式语法）
    from typing import List, Dict, Optional, Union
-   def parse_version(data: Union[str, None]) -> Optional[str]:
-       ...
+
+
+   def parse_version(data: Union[str, None]) -> Optional[str]: ...
    ```
 
 4. **类属性和方法注解**
@@ -53,28 +54,25 @@
        def __init__(self) -> None:  # __init__ 返回 None
            self.config: ConfigLoader = ConfigLoader.load_from_yaml()
 
-       def compute_hash(self, path: Path, algorithm: str) -> str:
-           ...
+       def compute_hash(self, path: Path, algorithm: str) -> str: ...
    ```
 
 5. **异步函数类型注解**
    ```python
-   async def fetch_text(url: str) -> str | None:
-       ...
+   async def fetch_text(url: str) -> str | None: ...
 
-   async def fetch_all(urls: dict[str, str]) -> dict[str, bool]:
-       ...
+
+   async def fetch_all(urls: dict[str, str]) -> dict[str, bool]: ...
    ```
 
 6. **复杂类型使用 typing 模块**
    ```python
    from typing import Callable, Any
 
+
    def process_data(
-       data: dict[str, Any],
-       callback: Callable[[str], bool] | None = None
-   ) -> bool:
-       ...
+       data: dict[str, Any], callback: Callable[[str], bool] | None = None
+   ) -> bool: ...
    ```
 
 ## 类型检查

@@ -2,9 +2,11 @@
 
 import asyncio
 import logging
+from datetime import UTC, datetime, timedelta
 
 from app.constants import ArchEnum, HashAlgorithmEnum
 from app.fetcher import Fetcher
+from app.models import Package, PackageHash, PackageVersion
 from app.parsers.base import BaseParser
 from app.registry import PackageEntry, PackageRegistry
 from app.schemas import PackageInfo
@@ -16,31 +18,50 @@ class PackageNotFoundError(KeyError):
     """请求的包未在注册表中"""
 
 
-class PackageService:
-    """编排 fetch + parse + 可选 hash 计算的查询服务"""
+class CollectThrottledError(Exception):
+    """包采集触发节流（两次采集间隔小于 min_collect_interval_seconds）"""
 
-    def __init__(self, fetcher: Fetcher, registry: PackageRegistry) -> None:
+
+class PackageService:
+    """编排 fetch + parse + hash 计算的查询服务"""
+
+    def __init__(
+        self,
+        fetcher: Fetcher,
+        registry: PackageRegistry,
+        min_collect_interval_seconds: int = 0,
+    ) -> None:
         self.fetcher = fetcher
         self.registry = registry
+        self._min_collect_interval = min_collect_interval_seconds
+        # per-package 上次采集完成时间（仅内存，重启重置；TTL/定时兜底）
+        self._last_collected: dict[str, datetime] = {}
+
+    def is_throttled(self, name: str) -> bool:
+        """该包是否处于采集节流窗口内（距上次采集不足最小间隔）"""
+        last: datetime | None = self._last_collected.get(name)
+        if last is None or self._min_collect_interval <= 0:
+            return False
+        elapsed = datetime.now(UTC) - last
+        return elapsed < timedelta(seconds=self._min_collect_interval)
 
     async def list_packages(self) -> list[str]:
-        """返回所有已注册包名"""
+        """返回所有启用（enabled）的包名"""
         return [entry.name for entry in self.registry.list_all()]
 
     async def get_info(
         self,
         name: str,
-        with_hash: bool = False,
         hash_algorithm: str = HashAlgorithmEnum.B2.value,
     ) -> PackageInfo:
-        """查询指定包的最新版本与可选信息。
+        """实时查询指定包的版本号、各架构下载 URL 与文件 hash。
 
         步骤：
         1. 查注册表获取 entry（不存在抛 PackageNotFoundError → 路由层转 404）
         2. 拉取 fetch_url（带 parser 专属请求头）
         3. parse_version → version（失败抛 RuntimeError → 路由层转 502）
         4. 遍历 entry.archs 调 parse_url → urls 字典
-        5. with_hash=True 时：并发调 resolve_url（QQ 走签名）获取各架构 URL
+        5. 并发调 resolve_url（QQ 走签名）获取各架构可下载 URL
            → fetch_and_hash_many 并发流式下载计算 hash；失败的 arch 记 None + warning
         """
         entry: PackageEntry | None = self.registry.get(name)
@@ -67,13 +88,86 @@ class PackageService:
             else:
                 logger.warning("无法获取 %s 的 %s 架构下载 URL", name, arch.value)
 
-        hashes: dict[str, str | None] | None = None
-        if with_hash:
-            hashes = await self._compute_hashes(
-                entry, parser, response_data, hash_algorithm
-            )
+        hashes: dict[str, str | None] = await self._compute_hashes(
+            entry, parser, response_data, hash_algorithm
+        )
 
+        # 记录采集完成时间，供 refresh / GET 回源节流判断
+        self._last_collected[name] = datetime.now(UTC)
         return PackageInfo(name=name, version=version, urls=urls, hashes=hashes)
+
+    async def get_info_cached(
+        self,
+        name: str,
+        hash_algorithm: str,
+        max_age_seconds: int,
+    ) -> PackageInfo:
+        """查询入口：优先 DB 新鲜快照；过期/缺失则回源，节流内拒绝回源以防空放大下载。
+
+        - 命中新鲜快照 → 返回
+        - 未命中且未节流 → 回源 get_info（实时下载）
+        - 未命中且节流内 → 降级返回 DB 该算法 stale 快照（忽略 TTL）；
+          若该算法无任何 stale（如变换 algorithm 绕过），抛 CollectThrottledError → 429
+        """
+        cached: PackageInfo | None = await self._try_cache(
+            name, hash_algorithm, max_age_seconds
+        )
+        if cached is not None:
+            logger.info("命中 DB 缓存：%s", name)
+            return cached
+
+        if self.is_throttled(name):
+            stale: PackageInfo | None = await self._try_cache(
+                name, hash_algorithm, None
+            )
+            if stale is not None:
+                logger.info("节流内回源降级返回 stale：%s", name)
+                return stale
+            # 节流内且无可用 stale（含变换 algorithm 绕过）→ 拒绝回源
+            raise CollectThrottledError(name)
+        return await self.get_info(name, hash_algorithm=hash_algorithm)
+
+    async def _try_cache(
+        self,
+        name: str,
+        hash_algorithm: str,
+        max_age_seconds: int | None,
+    ) -> PackageInfo | None:
+        """尝试从 DB 取快照；未命中返回 None。
+
+        命中条件：最新 success/partial 快照有 version、含所请求算法的 hash 记录。
+        ``max_age_seconds`` 非 None 时还要求快照在该年龄内（新鲜）；为 None 则忽略年龄
+        （用于节流降级时返回 stale）。
+        """
+        pkg: Package | None = await Package.get_or_none(name=name)
+        if pkg is None:
+            return None
+
+        latest: PackageVersion | None = (
+            await PackageVersion.filter(package=pkg, status__in=["success", "partial"])
+            .order_by("-fetched_at", "-id")
+            .first()
+        )
+        if latest is None or not latest.version or latest.fetched_at is None:
+            return None
+
+        if max_age_seconds is not None:
+            fetched_at: datetime = latest.fetched_at
+            # Tortoise 默认返回 aware UTC，兜底处理 naive 情况
+            if fetched_at.tzinfo is None:
+                fetched_at = fetched_at.replace(tzinfo=UTC)
+            cutoff: datetime = datetime.now(UTC) - timedelta(seconds=max_age_seconds)
+            if fetched_at < cutoff:
+                return None  # 过期
+
+        records: list[PackageHash] = await PackageHash.filter(
+            version=latest, algorithm=hash_algorithm
+        )
+        if not records:
+            return None  # 该算法无记录 → 回源
+        hashes: dict[str, str | None] = {h.arch: h.hash_value for h in records}
+        urls: dict[str, str] = {h.arch: h.url for h in records if h.url}
+        return PackageInfo(name=name, version=latest.version, urls=urls, hashes=hashes)
 
     async def _compute_hashes(
         self,

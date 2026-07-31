@@ -8,11 +8,14 @@
 
 `aur-packages-helper` 是 [aur-packages](https://github.com/awsl1414/aur-packages) 的配套服务，负责获取应用版本、计算文件 hash 等辅助功能，供 `aur-packages` 在更新 PKGBUILD 时调用。
 
+支持定时采集各包版本与文件 hash 并落库 SQLite，查询接口优先返回数据库新鲜快照（TTL 内命中缓存，过期或缺失才回源实时计算）。
+
 ## 技术栈
 
 - Python 3.13+ / uv
 - FastAPI（Web 服务）
-- Tortoise ORM（数据持久化）
+- Tortoise ORM（数据持久化，SQLite）
+- APScheduler（定时采集调度）
 
 ## 开发
 

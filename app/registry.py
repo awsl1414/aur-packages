@@ -17,18 +17,18 @@ class PackageEntry:
 
 
 class PackageRegistry:
-    """包注册表：管理所有可查询的包。
+    """包注册表：内存中的可查询包集合，由 DB 加载（replace_all）构建。
 
-    新增包只需在应用启动时调用 ``register``，无需修改路由——
+    新增/修改包只需操作 ``packages`` 表并调用 reload，无需改路由——
     通用查询接口 ``GET /api/packages/{name}`` 会自动覆盖。
     """
 
     def __init__(self) -> None:
         self._entries: dict[str, PackageEntry] = {}
 
-    def register(self, entry: PackageEntry) -> None:
-        """注册一个包；重名将覆盖旧条目"""
-        self._entries[entry.name] = entry
+    def replace_all(self, entries: list[PackageEntry]) -> None:
+        """用给定列表整体替换注册表内容（用于从 DB 重新加载）"""
+        self._entries = {entry.name: entry for entry in entries}
 
     def get(self, name: str) -> PackageEntry | None:
         """按名称查找包，不存在返回 None"""

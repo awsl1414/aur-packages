@@ -7,7 +7,7 @@
 
 ## 项目定位
 
-本服务为 [aur-packages](https://github.com/awsl1414/aur-packages) 提供应用版本、文件 hash 等信息，基于 FastAPI + Tortoise ORM 实现。
+本服务为 [aur-packages](https://github.com/awsl1414/aur-packages) 提供应用版本、文件 hash 等信息，基于 FastAPI + Tortoise ORM（SQLite）+ APScheduler 实现。包配置以 SQLite `packages` 表为唯一来源，定时采集版本与 hash 落库；查询接口优先返回 DB 新鲜快照，过期或缺失才回源。
 
 ## 开发命令
 

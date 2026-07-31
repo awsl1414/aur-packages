@@ -2,7 +2,6 @@
 
 import logging
 from http import HTTPStatus
-from typing import Generic, TypeVar
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -11,8 +10,6 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T")
-
 
 class ErrorCode:
     """业务错误码：前三位对齐 HTTP 状态码，后两位为子码"""
@@ -20,6 +17,7 @@ class ErrorCode:
     SUCCESS = 0
     PACKAGE_NOT_FOUND = 40400
     VALIDATION_ERROR = 42200
+    TOO_MANY_REQUESTS = 42900
     UPSTREAM_ERROR = 50200
     INTERNAL_ERROR = 50000
 
@@ -29,12 +27,13 @@ _HTTP_STATUS: dict[int, HTTPStatus] = {
     ErrorCode.SUCCESS: HTTPStatus.OK,
     ErrorCode.PACKAGE_NOT_FOUND: HTTPStatus.NOT_FOUND,
     ErrorCode.VALIDATION_ERROR: HTTPStatus.UNPROCESSABLE_ENTITY,
+    ErrorCode.TOO_MANY_REQUESTS: HTTPStatus.TOO_MANY_REQUESTS,
     ErrorCode.UPSTREAM_ERROR: HTTPStatus.BAD_GATEWAY,
     ErrorCode.INTERNAL_ERROR: HTTPStatus.INTERNAL_SERVER_ERROR,
 }
 
 
-class ApiResponse(BaseModel, Generic[T]):
+class ApiResponse[T](BaseModel):
     """统一响应包装：code + message + data"""
 
     code: int
@@ -51,7 +50,7 @@ class BizError(Exception):
         super().__init__(message)
 
 
-def success(data: T) -> ApiResponse[T]:
+def success[T](data: T) -> ApiResponse[T]:
     """构造成功响应"""
     return ApiResponse(code=ErrorCode.SUCCESS, message="ok", data=data)
 

@@ -31,14 +31,37 @@ class HttpConfig:
 
 @dataclass(frozen=True)
 class QQConfig:
-    """QQ 解析器相关配置"""
+    """QQ 解析器相关配置（签名流程参数；版本源 URL 由 packages 表管理）"""
 
-    fetch_url: str
     origin: str
     cookie_url: str
     sign_url: str
     oidb_command: str
     oidb_service_type: int
+
+
+@dataclass(frozen=True)
+class DatabaseConfig:
+    """数据库相关配置"""
+
+    # 已解析为绝对路径的 SQLite 文件路径（相对项目根的配置会被展开）
+    sqlite_path: Path
+    # GET /{name} 命中 DB 快照的最大年龄（秒）；超过则回源实时下载计算
+    hash_cache_ttl_seconds: int
+
+
+@dataclass(frozen=True)
+class SchedulerConfig:
+    """定时采集调度器配置"""
+
+    enabled: bool
+    timezone: str
+    jitter_seconds: int
+    misfire_grace_seconds: int
+    # 单包两次采集（下载+算 hash）的最小间隔（秒），限制 refresh / GET 回源频率，防滥用
+    min_collect_interval_seconds: int
+    # 服务启动时是否立即采集一次（仅 interval 模式；cron 始终按表达式首次触发）
+    run_on_startup: bool
 
 
 @dataclass(frozen=True)
@@ -48,6 +71,8 @@ class AppConfig:
     server: ServerConfig
     http: HttpConfig
     qq: QQConfig
+    database: DatabaseConfig
+    scheduler: SchedulerConfig
 
 
 def load_config(path: Path | str | None = None) -> AppConfig:
@@ -67,6 +92,14 @@ def load_config(path: Path | str | None = None) -> AppConfig:
     server_data: dict[str, Any] = data["server"]
     http_data: dict[str, Any] = data["http"]
     qq_data: dict[str, Any] = data["qq"]
+    database_data: dict[str, Any] = data["database"]
+    scheduler_data: dict[str, Any] = data["scheduler"]
+
+    # sqlite_path 相对路径以配置文件所在目录（项目根）为基准展开为绝对路径
+    base_dir: Path = config_path.resolve().parent
+    sqlite_path: Path = Path(str(database_data["sqlite_path"]))
+    if not sqlite_path.is_absolute():
+        sqlite_path = base_dir / sqlite_path
 
     return AppConfig(
         server=ServerConfig(
@@ -81,12 +114,25 @@ def load_config(path: Path | str | None = None) -> AppConfig:
             log_body_max_length=int(http_data["log_body_max_length"]),
         ),
         qq=QQConfig(
-            fetch_url=str(qq_data["fetch_url"]),
             origin=str(qq_data["origin"]),
             cookie_url=str(qq_data["cookie_url"]),
             sign_url=str(qq_data["sign_url"]),
             oidb_command=str(qq_data["oidb_command"]),
             oidb_service_type=int(qq_data["oidb_service_type"]),
+        ),
+        database=DatabaseConfig(
+            sqlite_path=sqlite_path,
+            hash_cache_ttl_seconds=int(database_data["hash_cache_ttl_seconds"]),
+        ),
+        scheduler=SchedulerConfig(
+            enabled=bool(scheduler_data["enabled"]),
+            timezone=str(scheduler_data["timezone"]),
+            jitter_seconds=int(scheduler_data["jitter_seconds"]),
+            misfire_grace_seconds=int(scheduler_data["misfire_grace_seconds"]),
+            min_collect_interval_seconds=int(
+                scheduler_data["min_collect_interval_seconds"]
+            ),
+            run_on_startup=bool(scheduler_data["run_on_startup"]),
         ),
     )
 

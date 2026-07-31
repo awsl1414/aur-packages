@@ -9,10 +9,10 @@ from app.constants.http import (
 from app.constants.package import ArchEnum, HashAlgorithmEnum
 
 __all__ = [
-    "ArchEnum",
     "CHUNK_SIZE",
     "DEFAULT_TIMEOUT",
-    "HashAlgorithmEnum",
     "MAX_CONCURRENT_DOWNLOADS",
     "USER_AGENT",
+    "ArchEnum",
+    "HashAlgorithmEnum",
 ]

@@ -5,6 +5,8 @@ description = "为 aur-packages 项目提供应用版本、文件 hash 等信息
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "aiosqlite>=0.22.1",
+    "apscheduler>=4.0.0a6",
     "fastapi[standard]>=0.139.0",
     "httpx>=0.28.1",
     "tortoise-orm>=1.1.7",
