@@ -116,7 +116,7 @@ GET /api/v1/packages/{name}
 | --- | --- | --- | --- |
 | `algorithm` | `string` | `b2` | hash 算法：`b2`（BLAKE2b）/ `sha256` / `sha512` |
 
-**数据来源（DB 优先 + TTL 回源）**：接口优先返回数据库内最新且在 `[http].hash_cache_ttl_seconds` 有效期内的采集快照；快照过期、缺失、最新快照为 `failed`、或所请求算法无对应 hash 记录时，才回源实时下载计算（较慢）。回源结果不落库——落库由定时任务与 `POST /refresh` 负责。
+**数据来源（DB 优先 + TTL 回源）**：接口优先返回数据库内最新且在 `[http].hash_cache_ttl_seconds` 有效期内的采集快照；快照过期、缺失、最新快照为 `failed`、或所请求算法无对应 hash 记录时，才回源实时下载计算（较慢）。回源结果会一并落库（复用定时采集的同一落库路径），使后续节流窗口内的请求能命中快照或 stale 降级，而非被节流拒绝。
 
 **响应** `200` — `ApiResponse<PackageInfo>`（`hashes` 总填充；单架构 `null` 表示该架构签名/下载失败）
 

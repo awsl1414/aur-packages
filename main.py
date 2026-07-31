@@ -40,8 +40,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     # 1. 初始化数据库（首启执行 schema.sql + 种子）
     await init_db(config.database.sqlite_path)
-    # 2. 从 DB 加载包注册表与 name→id 映射
-    registry, name_to_id = await load_registry_from_db()
+    # 2. 从 DB 加载包注册表、name→id 映射与有效包列表（调度同步复用，不重复查库）
+    registry, name_to_id, pkgs = await load_registry_from_db()
 
     async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
         fetcher: Fetcher = Fetcher(client)
@@ -57,7 +57,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
                     scheduler, package_service, name_to_id, config.scheduler
                 )
                 app.state.schedule_service = schedule_service
-                await schedule_service.start()
+                await schedule_service.start(pkgs)
                 yield
                 await schedule_service.stop()
         else:

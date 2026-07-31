@@ -4,6 +4,8 @@ import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 
+from tortoise.transactions import in_transaction
+
 from app.constants import ArchEnum, HashAlgorithmEnum
 from app.fetcher import Fetcher
 from app.models import Package, PackageHash, PackageVersion
@@ -12,6 +14,10 @@ from app.registry import PackageEntry, PackageRegistry
 from app.schemas import PackageInfo
 
 logger = logging.getLogger(__name__)
+
+_STATUS_SUCCESS = "success"
+_STATUS_PARTIAL = "partial"
+_STATUS_FAILED = "failed"
 
 
 class PackageNotFoundError(KeyError):
@@ -44,6 +50,16 @@ class PackageService:
             return False
         elapsed = datetime.now(UTC) - last
         return elapsed < timedelta(seconds=self._min_collect_interval)
+
+    def prune_last_collected(self, keep: set[str]) -> None:
+        """剔除不在 ``keep`` 集合中的包的节流记录。
+
+        reload 后已删除/停用的包不再采集，其节流记录应清理，避免长生命周期下
+        ``_last_collected`` 只增不减。
+        """
+        self._last_collected = {
+            n: t for n, t in self._last_collected.items() if n in keep
+        }
 
     async def list_packages(self) -> list[str]:
         """返回所有启用（enabled）的包名"""
@@ -105,7 +121,8 @@ class PackageService:
         """查询入口：优先 DB 新鲜快照；过期/缺失则回源，节流内拒绝回源以防空放大下载。
 
         - 命中新鲜快照 → 返回
-        - 未命中且未节流 → 回源 get_info（实时下载）
+        - 未命中且未节流 → 回源 get_info（实时下载）并落库，使后续节流窗口内的
+          请求能命中新鲜快照或 stale 降级，而非被节流拒绝
         - 未命中且节流内 → 降级返回 DB 该算法 stale 快照（忽略 TTL）；
           若该算法无任何 stale（如变换 algorithm 绕过），抛 CollectThrottledError → 429
         """
@@ -125,7 +142,83 @@ class PackageService:
                 return stale
             # 节流内且无可用 stale（含变换 algorithm 绕过）→ 拒绝回源
             raise CollectThrottledError(name)
-        return await self.get_info(name, hash_algorithm=hash_algorithm)
+
+        info: PackageInfo = await self.get_info(name, hash_algorithm=hash_algorithm)
+        # 回源也落库：get_info 已写 _last_collected 开启节流窗口，若不落库则窗口内
+        # 后续请求既无新鲜快照也无 stale → 429。落库后整链路自洽（与定时/refresh 一致）
+        await self._persist_fetch(name, info, hash_algorithm)
+        return info
+
+    async def _persist_fetch(
+        self, name: str, info: PackageInfo, algorithm: str
+    ) -> None:
+        """回源落库：按 name 取 Package 后复用 persist_result。Package 不存在则跳过。
+
+        registry 由 DB 构建，能进入回源说明包必在 DB，此处仍兜底防异常。
+        """
+        pkg: Package | None = await Package.get_or_none(name=name)
+        if pkg is None:
+            logger.warning("回源落库时 %s 在 DB 不存在，跳过", name)
+            return
+        await self.persist_result(pkg, info, algorithm=algorithm)
+
+    async def persist_result(
+        self, pkg: Package, info: PackageInfo, algorithm: str
+    ) -> None:
+        """按版本号与各架构 hash 命中情况判定 success/partial/failed 并落库。
+
+        expected 架构集合取自 ``info.hashes`` 的 key（即本次实际采集的架构，源自
+        registry entry.archs），而非 DB 的 ``pkg.archs``——后者可能与内存 registry
+        不同步（运维改 DB 未 reload），导致 status 误判。version 与 hashes 在单事务内
+        写入，避免中途失败留下不完整快照被后续 _try_cache 当作完整结果返回。
+        """
+        hashes: dict[str, str | None] = info.hashes or {}
+        if not info.version:
+            await self.persist_failure(pkg, "未解析到版本号")
+            return
+        if hashes and all(v is None for v in hashes.values()):
+            await self.persist_failure(pkg, "全部架构 hash 计算失败")
+            return
+
+        # 缺失架构不会出现（hashes 覆盖 entry 全部 archs），仅需看 hash 为 None 的架构
+        bad: set[str] = {a for a, v in hashes.items() if v is None}
+        status: str = _STATUS_PARTIAL if bad else _STATUS_SUCCESS
+
+        async with in_transaction():
+            version: PackageVersion = await PackageVersion.create(
+                package=pkg, version=info.version, status=status, error=None
+            )
+            if hashes:
+                await PackageHash.bulk_create(
+                    [
+                        PackageHash(
+                            version=version,
+                            arch=arch_value,
+                            algorithm=algorithm,
+                            hash_value=h,
+                            url=info.urls.get(arch_value),
+                        )
+                        for arch_value, h in hashes.items()
+                    ]
+                )
+        logger.info(
+            "采集 %s 完成：version=%s status=%s", pkg.name, info.version, status
+        )
+
+    async def persist_failure(self, pkg: Package, error: str) -> None:
+        """记录失败快照便于审计。
+
+        落库异常被吞掉只记日志——调用方（_collect）以此方法兜底，若它再上抛会让
+        整个采集异常逃逸到 APScheduler，与「单包失败不影响调度」的契约冲突。
+        """
+        try:
+            await PackageVersion.create(
+                package=pkg, version=None, status=_STATUS_FAILED, error=error
+            )
+        except Exception:
+            logger.exception("记录采集失败落库异常：%s", pkg.name)
+            return
+        logger.warning("采集 %s 失败已记录：%s", pkg.name, error)
 
     async def _try_cache(
         self,
