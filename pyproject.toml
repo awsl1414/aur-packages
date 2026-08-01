@@ -27,6 +27,8 @@ package = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# 工具型项目（非包模式），显式把项目根加入 sys.path 以支持绝对导入 app.*
+pythonpath = ["."]
 
 [tool.ty]
 # Ty 配置 - Astral 开发的快速 Python 类型检查器
