@@ -2,6 +2,7 @@
 
 import json
 import logging
+from typing import Any
 
 from app.constants import ArchEnum
 from app.models import Package
@@ -11,7 +12,9 @@ from app.registry import PackageEntry, PackageRegistry
 logger = logging.getLogger(__name__)
 
 
-async def load_registry_from_db() -> tuple[PackageRegistry, dict[str, int], list[Package]]:
+async def load_registry_from_db() -> tuple[
+    PackageRegistry, dict[str, int], list[Package]
+]:
     """加载所有 enabled 包，构建注册表、name→id 映射与有效包列表。
 
     name→id 映射供调度器按包 id 注册 schedule，避免每次查库。返回的有效包列表
@@ -27,10 +30,14 @@ async def load_registry_from_db() -> tuple[PackageRegistry, dict[str, int], list
     for p in pkgs:
         try:
             archs: list[ArchEnum] = [ArchEnum(a) for a in json.loads(p.archs)]
+            # parser_config 为 JSON 字符串（可空），透传给 parser 构造函数
+            parser_config: dict[str, Any] = (
+                json.loads(p.parser_config) if p.parser_config else {}
+            )
             entries.append(
                 PackageEntry(
                     name=p.name,
-                    parser=get_parser(p.parser_type),
+                    parser=get_parser(p.parser_type, parser_config),
                     fetch_url=p.fetch_url,
                     archs=archs,
                 )

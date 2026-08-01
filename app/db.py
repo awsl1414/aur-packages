@@ -81,6 +81,7 @@ async def init_db(sqlite_path: Path) -> None:
         await _ensure_column(
             conn, "packages", "hash_algorithm", "TEXT NOT NULL DEFAULT 'b2'"
         )
+        await _ensure_column(conn, "packages", "parser_config", "TEXT")
         await _ensure_column(conn, "packages", "description", "TEXT")
         logger.info("数据库已存在，已完成列迁移检查")
         return
