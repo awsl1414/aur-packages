@@ -22,6 +22,11 @@ sqlite_path = "data/aur_packages.db"
 # GET /{name} 命中 DB 快照的最大年龄（秒），超过则回源；建议 ≥ 定时采集间隔
 hash_cache_ttl_seconds = 7200
 
+[github]
+# GitHub 认证 token（应对匿名调用 api.github.com 的 60 次/时限流）
+# 留空则匿名请求；优先级：环境变量 GITHUB_TOKEN > 本字段
+token = ""
+
 [scheduler]
 # 定时采集总开关
 enabled = true

@@ -51,6 +51,16 @@ class DatabaseConfig:
 
 
 @dataclass(frozen=True)
+class GithubConfig:
+    """GitHub 认证配置（应对匿名调用 api.github.com 的限流）。
+
+    token 为空时所有请求匿名发送。优先级：环境变量 ``GITHUB_TOKEN`` > 配置文件。
+    """
+
+    token: str | None
+
+
+@dataclass(frozen=True)
 class SchedulerConfig:
     """定时采集调度器配置"""
 
@@ -72,6 +82,7 @@ class AppConfig:
     http: HttpConfig
     qq: QQConfig
     database: DatabaseConfig
+    github: GithubConfig
     scheduler: SchedulerConfig
 
 
@@ -123,6 +134,15 @@ def load_config(path: Path | str | None = None) -> AppConfig:
         database=DatabaseConfig(
             sqlite_path=sqlite_path,
             hash_cache_ttl_seconds=int(database_data["hash_cache_ttl_seconds"]),
+        ),
+        github=GithubConfig(
+            # 环境变量优先于配置文件，避免敏感凭证落入仓库
+            token=os.environ.get("GITHUB_TOKEN")
+            or (
+                str(data["github"]["token"])
+                if data.get("github", {}).get("token")
+                else None
+            )
         ),
         scheduler=SchedulerConfig(
             enabled=bool(scheduler_data["enabled"]),

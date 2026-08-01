@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from urllib.parse import urlparse
 
 import httpx
 from httpx import AsyncClient, HTTPError
@@ -20,6 +21,14 @@ logger = logging.getLogger(__name__)
 # 日志中响应体截断长度（字符），避免大响应体刷屏
 _LOG_BODY_MAX_LENGTH: int = config.http.log_body_max_length
 
+# 可选 GitHub Token：配置后对 GitHub 域名请求统一带 Authorization，提升速率配额
+_GITHUB_TOKEN: str | None = config.github.token
+
+# 需要 GitHub 鉴权的域名：API、release 下载与 asset 重定向落点
+_GITHUB_HOSTS: frozenset[str] = frozenset(
+    {"api.github.com", "github.com", "objects.githubusercontent.com"}
+)
+
 # 通用默认请求头。绝大多数 parser 在没有特殊需求时直接使用这套 header。
 #
 # 重要：通用请求走 DEFAULT_HEADERS，特殊请求走 parser.get_request_headers()——
@@ -34,6 +43,22 @@ DEFAULT_HEADERS: dict[str, str] = {
     "Accept-Encoding": "gzip, deflate, br",
     "Cache-Control": "max-age=0",
 }
+
+
+def _with_github_auth(url: str, headers: dict[str, str]) -> dict[str, str]:
+    """对 GitHub 域名请求注入 ``Authorization`` 头。
+
+    token 为空则原样返回。鉴权头是叠加而非替换——在 parser 专属头或默认头基础上追加，
+    不破坏「默认头与 parser 头互斥替换」的既有契约。
+    """
+    if not _GITHUB_TOKEN:
+        return headers
+    host: str | None = urlparse(url).hostname
+    if host not in _GITHUB_HOSTS:
+        return headers
+    merged: dict[str, str] = dict(headers)
+    merged["Authorization"] = f"Bearer {_GITHUB_TOKEN}"
+    return merged
 
 
 class Fetcher:
@@ -58,8 +83,8 @@ class Fetcher:
         ``headers`` 为 None 时用 ``DEFAULT_HEADERS``，否则用传入集合（完整替换）。
         失败时输出状态码 + 响应体（截断），便于诊断 CDN 拒绝、SNI 不匹配、403/451 等。
         """
-        request_headers: dict[str, str] = (
-            headers if headers is not None else DEFAULT_HEADERS
+        request_headers: dict[str, str] = _with_github_auth(
+            url, headers if headers is not None else DEFAULT_HEADERS
         )
         try:
             response = await self.client.get(url, headers=request_headers)
@@ -85,8 +110,8 @@ class Fetcher:
         用于计算文件 hash 而无需在本地保存完整文件。``headers`` 为 None 时
         使用 ``DEFAULT_HEADERS``。失败时返回 None 并记日志。
         """
-        request_headers: dict[str, str] = (
-            headers if headers is not None else DEFAULT_HEADERS
+        request_headers: dict[str, str] = _with_github_auth(
+            url, headers if headers is not None else DEFAULT_HEADERS
         )
         try:
             builder = get_hash_builder(algorithm)
