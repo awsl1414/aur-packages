@@ -72,7 +72,7 @@ class SchedulerConfig:
     timezone: str
     jitter_seconds: int
     misfire_grace_seconds: int
-    # 单包两次采集（下载+算 hash）的最小间隔（秒），限制 refresh / GET 回源频率，防滥用
+    # 单包两次采集的最小间隔（秒），限制手动刷新 / 后台刷新触发频率，防滥用
     min_collect_interval_seconds: int
     # 服务启动时是否立即采集一次（仅 interval 模式；cron 始终按表达式首次触发）
     run_on_startup: bool
