@@ -61,6 +61,17 @@ def _with_github_auth(url: str, headers: dict[str, str]) -> dict[str, str]:
     return merged
 
 
+def _describe_http_error(e: HTTPError) -> str:
+    """格式化 httpx 异常为「类名[: 详情]」，便于诊断网络层故障。
+
+    网络异常（连接超时、TLS 重置、对端中断等）的 ``str(e)`` 常为空，
+    仅靠 ``%s`` 打印只剩空白无法定位卡点；保留类名可区分 ConnectError /
+    ConnectTimeout / ReadTimeout / RemoteProtocolError 等不同环节。
+    """
+    msg: str = str(e).strip()
+    return f"{type(e).__name__}: {msg}" if msg else type(e).__name__
+
+
 class Fetcher:
     """异步 HTTP 客户端封装。
 
@@ -91,7 +102,7 @@ class Fetcher:
             response.raise_for_status()
             return response.text
         except HTTPError as e:
-            logger.error("从 %s 获取文本失败: %s", url, e)
+            logger.error("从 %s 获取文本失败: %s", url, _describe_http_error(e))
             if isinstance(e, httpx.HTTPStatusError) and e.response is not None:
                 logger.error("  状态码: %d", e.response.status_code)
                 body: str = e.response.text
@@ -124,7 +135,7 @@ class Fetcher:
                     hash_func.update(chunk)
             return hash_func.hexdigest()
         except HTTPError as e:
-            logger.error("流式下载并计算 hash 失败 %s: %s", url, e)
+            logger.error("流式下载并计算 hash 失败 %s: %s", url, _describe_http_error(e))
             if isinstance(e, httpx.HTTPStatusError) and e.response is not None:
                 logger.error("  状态码: %d", e.response.status_code)
             return None

@@ -43,7 +43,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     # 2. 从 DB 加载包注册表、name→id 映射与有效包列表（调度同步复用，不重复查库）
     registry, name_to_id, pkgs = await load_registry_from_db()
 
-    async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
+    # follow_redirects：GitHub release 等 CDN 会 302 到带签名的临时下载链接，
+    # 不跟随则流式下载在重定向处直接失败
+    async with httpx.AsyncClient(
+        timeout=DEFAULT_TIMEOUT, follow_redirects=True
+    ) as client:
         fetcher: Fetcher = Fetcher(client)
         package_service: PackageService = PackageService(
             fetcher, registry, config.scheduler.min_collect_interval_seconds
