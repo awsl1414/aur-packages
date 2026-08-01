@@ -1,4 +1,5 @@
 """异步 HTTP 客户端模块"""
+from cmath import log
 
 import asyncio
 import logging
@@ -55,7 +56,6 @@ DEFAULT_HEADERS: dict[str, str] = {
     "User-Agent": USER_AGENT,
     "Accept": "*/*",
     "Accept-Language": "zh-CN,zh;q=0.9",
-    "Accept-Encoding": "gzip, deflate, br",
     "Cache-Control": "max-age=0",
 }
 
