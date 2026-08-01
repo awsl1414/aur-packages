@@ -31,38 +31,7 @@ jobs:
       - name: Install aria2
         run: |
           sudo apt-get update
-          sudo apt-get install -y aria2 dnsutils
-
-      - name: Resolve QQ package domains via Chinese DNS
-        run: |
-          set -euo pipefail
-          # 显式指定中国子网，使 DNSPod 返回国内 CDN IP，
-          # 避免 GitHub Actions 海外 runner 解析到海外 POP。
-          CHINA_SUBNET="118.134.175.0/24"
-          CHINA_DNS="119.29.29.29"
-
-          # QQ 包涉及的所有外部域名
-          domains=(
-            "qq-web.cdn-go.cn"   # pcConfig.json 数据源（fetch_url）
-            "im.qq.com"          # tgw_l7_route cookie + GetSign RPC
-            "qqdl.gtimg.cn"      # deb 包实际下载链接
-          )
-
-          for domain in "${domains[@]}"; do
-            IP=$(dig @"$CHINA_DNS" "$domain" +subnet="$CHINA_SUBNET" +short \
-              | grep -E '^[0-9]' | head -1)
-            if [ -z "$IP" ]; then
-              echo "ERROR: Failed to resolve $domain via Chinese DNS" >&2
-              exit 1
-            fi
-            echo "$IP $domain" | sudo tee -a /etc/hosts
-            echo "Resolved $domain -> $IP"
-          done
-
-          echo "--- verification ---"
-          for domain in "${domains[@]}"; do
-            getent ahosts "$domain"
-          done
+          sudo apt-get install -y aria2
 
       - name: Install uv
         uses: astral-sh/setup-uv@v8.1.0
