@@ -56,7 +56,7 @@ VALUES (
     'qq', 'qq',
     'https://qq-web.cdn-go.cn/im.qq.com_new/latest/rainbow/pcConfig.json',
     '["x86_64","aarch64","loong64"]',
-    'interval', 3600
+    'interval', 14400
 )
 ON CONFLICT(name) DO NOTHING;
 
@@ -72,7 +72,7 @@ VALUES (
     'https://www.navicat.com.cn/products/navicat-premium-release-note#L',
     '["x86_64","aarch64"]',
     '{"urls":{"x86_64":"https://dn.navicat.com/download/navicat17-premium-cs-x86_64.AppImage","aarch64":"https://dn.navicat.com/download/navicat17-premium-cs-aarch64.AppImage"}}',
-    'interval', 3600
+    'interval', 14400
 )
 ON CONFLICT(name) DO NOTHING;
 
@@ -82,7 +82,7 @@ VALUES (
     'bt-dualboot-ng', 'pypi',
     'https://pypi.org/pypi/bt-dualboot-ng/json',
     '["any"]',
-    'interval', 3600
+    'interval', 14400
 )
 ON CONFLICT(name) DO NOTHING;
 
@@ -93,7 +93,7 @@ VALUES (
     'https://icube-normal.trae.ai/icube/api/v1/native/version/trae/latest',
     '["x86_64","aarch64"]',
     '{"region":"cn"}',
-    'interval', 3600
+    'interval', 14400
 )
 ON CONFLICT(name) DO NOTHING;
 
@@ -103,7 +103,7 @@ VALUES (
     'https://icube-normal.trae.ai/icube/api/v1/native/version/trae/latest',
     '["x86_64","aarch64"]',
     '{"region":"sg"}',
-    'interval', 3600
+    'interval', 14400
 )
 ON CONFLICT(name) DO NOTHING;
 
@@ -114,7 +114,7 @@ VALUES (
     'https://icube-normal.trae.ai/icube/api/v1/native/version/trae/latest',
     '["x86_64","aarch64"]',
     '{"region":"va"}',
-    'interval', 3600
+    'interval', 14400
 )
 ON CONFLICT(name) DO NOTHING;
 
@@ -125,7 +125,7 @@ VALUES (
     'https://api.trae.cn/icube/api/v1/native/version/trae/cn/latest',
     '["x86_64","aarch64"]',
     '{"region":"cn"}',
-    'interval', 3600
+    'interval', 14400
 )
 ON CONFLICT(name) DO NOTHING;
 
@@ -135,7 +135,7 @@ VALUES (
     'zen-browser', 'zen',
     'https://api.github.com/repos/zen-browser/desktop/releases/tags/twilight-1',
     '["x86_64","aarch64"]',
-    'interval', 3600
+    'interval', 14400
 )
 ON CONFLICT(name) DO NOTHING;
 
