@@ -9,15 +9,20 @@ uv 项目根位于仓库根目录（`pyproject.toml`、`uv.lock`、`config.yaml`
 ```
 scripts/
 ├── core/           # 核心协调器（PackageUpdater：Fetch → Parse → Update）
-├── constants/      # 枚举定义（ArchEnum, ParserEnum, HashAlgorithmEnum）
+├── constants/      # 枚举定义（ArchEnum, HashAlgorithmEnum）
 ├── fetcher/        # HTTP 客户端（httpx，获取版本信息）
 ├── loaders/        # 配置加载（仓库根 config.yaml → Pydantic 模型）
-├── parsers/        # 版本解析器（BaseParser 及子类）
+├── parsers/        # 唯一解析器（ApiParser：消费 helper API 统一响应）
 ├── updater/        # PKGBUILD 编辑器（正则替换）
 ├── utils/          # 工具函数（aria2c 下载器、哈希、URL/版本工具）
 ├── tests/          # pytest 测试
 └── main.py         # 程序入口（argparse 命令行接口）
 ```
+
+所有上游解析（QQ / Navicat / Trae / Zen / PyPI）统一由姊妹项目
+`aur-packages-helper` 的 `GET /api/v1/packages/{name}` 接口完成，客户端只
+消费 `{version, urls, hashes}` 结构。helper 未提供 hashes 时回退到本地
+aria2c 下载计算。
 
 ## 前置依赖
 

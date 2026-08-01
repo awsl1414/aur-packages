@@ -12,37 +12,16 @@ class TestPackageConfig:
     def test_defaults(self) -> None:
         config = PackageConfig(
             name="test",
-            source="test",
-            fetch_url="https://example.com",
-            upstream="test/test",
-            parser="TestParser",
             pkgbuild="packages/test/PKGBUILD",
         )
         assert config.update_source_url is True
         assert config.enable is True
-        assert config.urls == {}
         assert config.arch == []
         assert config.hash_algorithm is None
-
-    def test_urls_field(self) -> None:
-        config = PackageConfig(
-            name="test",
-            source="test",
-            fetch_url="https://example.com",
-            upstream="test/test",
-            parser="TestParser",
-            pkgbuild="packages/test/PKGBUILD",
-            urls={"x86_64": "https://example.com/test.AppImage"},
-        )
-        assert config.urls["x86_64"] == "https://example.com/test.AppImage"
 
     def test_get_supported_archs(self) -> None:
         config = PackageConfig(
             name="test",
-            source="test",
-            fetch_url="https://example.com",
-            upstream="test/test",
-            parser="TestParser",
             pkgbuild="packages/test/PKGBUILD",
             arch=["x86_64", "aarch64"],
         )
@@ -52,22 +31,19 @@ class TestPackageConfig:
     def test_get_supported_archs_empty(self) -> None:
         config = PackageConfig(
             name="test",
-            source="test",
-            fetch_url="https://example.com",
-            upstream="test/test",
-            parser="TestParser",
             pkgbuild="packages/test/PKGBUILD",
         )
         assert config.get_supported_archs() == []
 
     def test_extra_fields_ignored(self) -> None:
-        config = PackageConfig(
-            name="test",
-            source="test",
-            fetch_url="https://example.com",
-            upstream="test/test",
-            parser="TestParser",
-            pkgbuild="packages/test/PKGBUILD",
+        """model_config extra=ignore：传入额外字段字典时被忽略"""
+        config = PackageConfig.model_validate(
+            {
+                "name": "test",
+                "pkgbuild": "packages/test/PKGBUILD",
+                "source": "ignored",
+                "parser": "ignored",
+            }
         )
         assert config.name == "test"
 
@@ -75,10 +51,6 @@ class TestPackageConfig:
         """hash_algorithm 为 None 时使用全局默认"""
         config = PackageConfig(
             name="test",
-            source="test",
-            fetch_url="https://example.com",
-            upstream="test/test",
-            parser="TestParser",
             pkgbuild="packages/test/PKGBUILD",
         )
         assert config.get_effective_hash_algorithm("sha512") == "sha512"
@@ -87,10 +59,6 @@ class TestPackageConfig:
         """hash_algorithm 显式设置时覆盖全局默认"""
         config = PackageConfig(
             name="test",
-            source="test",
-            fetch_url="https://example.com",
-            upstream="test/test",
-            parser="TestParser",
             pkgbuild="packages/test/PKGBUILD",
             hash_algorithm="b2",
         )
@@ -103,13 +71,19 @@ class TestConfigLoader:
         assert "linuxqq-nt" in loader.packages
         assert "navicat" in loader.packages
         assert "trae" in loader.packages
-        assert loader.packages["linuxqq-nt"].parser == "QQParser"
+        # name 现在是 helper 包名
+        assert loader.packages["linuxqq-nt"].name == "qq"
+        assert loader.packages["navicat"].name == "navicat"
 
-    def test_navicat_urls_loaded(self) -> None:
+    def test_api_base_url_loaded(self) -> None:
+        """全局 api.base_url 正确加载"""
         loader = ConfigLoader.load_from_yaml()
-        navicat = loader.packages["navicat"]
-        assert "x86_64" in navicat.urls
-        assert "aarch64" in navicat.urls
+        assert loader.settings.api.base_url.startswith("https://")
+
+    def test_navicat_update_source_url_disabled(self) -> None:
+        """navicat URL 静态写死在 PKGBUILD，update_source_url 为 False"""
+        loader = ConfigLoader.load_from_yaml()
+        assert loader.packages["navicat"].update_source_url is False
 
     def test_settings_hash_algorithm_default(self) -> None:
         """全局默认 hash_algorithm 为 b2"""
@@ -148,10 +122,6 @@ class TestPackageConfigUnknownArch:
         """未知架构字符串被跳过"""
         config = PackageConfig(
             name="test",
-            source="test",
-            fetch_url="https://example.com",
-            upstream="test/test",
-            parser="TestParser",
             pkgbuild="packages/test/PKGBUILD",
             arch=["x86_64", "riscv64"],
         )

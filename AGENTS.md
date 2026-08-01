@@ -32,11 +32,9 @@ uv run ty check scripts/
 
 ## 添加新软件包
 
-1. 在 `config.yaml` 中添加包配置
-2. 在 `parsers/` 中创建新的解析器类，继承 `BaseParser`
-3. 在 `constants/constants.py` 的 `ParserEnum` 中添加解析器名称
-4. 在 `core/package_updater.py` 的 `PackageUpdater.__init__()` 中注册解析器实例
-5. 在 `packages/` 目录中创建对应的 PKGBUILD 文件
+1. 在 `aur-packages-helper` 的 DB 中注册包（`name`、`parser_type`、`fetch_url`、`archs`、`parser_config`），由 helper 服务端完成上游解析
+2. 在 `config.yaml` 中添加包配置（`name` 填 helper 注册的包名，含 `pkgbuild` 路径与 `arch`）
+3. 在 `packages/` 目录中创建对应的 PKGBUILD 文件
 
 ## Commit 规范
 

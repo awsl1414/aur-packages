@@ -4,7 +4,11 @@
 settings:
   # 全局默认哈希算法（支持 b2、sha512、sha256）
   hash_algorithm: b2
-  # 下载设置
+  # helper API（aur-packages-helper）：所有上游解析统一在服务端完成，
+  # 客户端通过 GET {base_url}/{name}?algorithm={algo} 获取 version/urls/hashes
+  api:
+    base_url: "https://aur.llz.asia/api/v1/packages"
+  # 下载设置（仅当 helper 未返回 hashes 时回退本地下载计算才使用）
   download:
     # 下载重试次数
     max_retries: 3
@@ -18,16 +22,10 @@ settings:
     show_progress: true
 
 # 包配置
+# name: helper 中注册的包名（用于拼接 API 查询 URL）
 packages:
   linuxqq-nt:
-    name: linuxqq-nt
-    source: qq
-    # 第三方聚合 API：直接返回 QQ Linux 的 version / urls / hashes，
-    # 不再走 im.qq.com 的 GetSign 签名流程——原始 URL 即可直接下载，
-    # 由 PKGBUILD 的 DLAGENTS 在 makepkg 阶段独立完成签名。
-    fetch_url: "https://aur.llz.asia/api/v1/packages/qq?algorithm=b2"
-    upstream: "Tencent/QQ"
-    parser: QQParser
+    name: qq
     pkgbuild: "packages/linuxqq-nt/PKGBUILD"
     update_source_url: true
     enable: true  # 是否启用更新，false 则跳过
@@ -37,27 +35,17 @@ packages:
       - loong64
 
   navicat:
-    name: navicat-premium-zh-cn
-    source: navicat-premium-cs
-    fetch_url: "https://www.navicat.com.cn/products/navicat-premium-release-note#L"
-    upstream: "PremiumSoft CyberTech Ltd./Navicat Premium"
-    parser: NavicatPremiumCSParser
+    name: navicat
     pkgbuild: "packages/navicat17-premium-zh-cn/PKGBUILD"
+    # URL 静态写死在 PKGBUILD，无需更新 source 字段
     update_source_url: false
-    enable: true  # 是否启用更新，false 则跳过
+    enable: true
     arch:
       - x86_64
       - aarch64
-    urls:
-      x86_64: "https://dn.navicat.com/download/navicat17-premium-cs-x86_64.AppImage"
-      aarch64: "https://dn.navicat.com/download/navicat17-premium-cs-aarch64.AppImage"
 
   trae:
     name: trae
-    source: trae
-    fetch_url: "https://icube-normal.trae.ai/icube/api/v1/native/version/trae/latest"
-    upstream: "ByteDance/Trae"
-    parser: TraeParser
     pkgbuild: "packages/trae/PKGBUILD"
     update_source_url: true
     enable: true
@@ -67,10 +55,6 @@ packages:
 
   trae-sg:
     name: trae-sg
-    source: trae
-    fetch_url: "https://icube-normal.trae.ai/icube/api/v1/native/version/trae/latest"
-    upstream: "ByteDance/Trae"
-    parser: TraeParser_SG
     pkgbuild: "packages/trae-sg/PKGBUILD"
     update_source_url: true
     enable: true
@@ -80,10 +64,6 @@ packages:
 
   trae-us:
     name: trae-us
-    source: trae
-    fetch_url: "https://icube-normal.trae.ai/icube/api/v1/native/version/trae/latest"
-    upstream: "ByteDance/Trae"
-    parser: TraeParser_US
     pkgbuild: "packages/trae-us/PKGBUILD"
     update_source_url: true
     enable: true
@@ -96,10 +76,6 @@ packages:
   # 注意：trae 和 trae-cn 的 tarball 内部目录结构完全相同，仅二进制/补全文件名不同（trae vs trae-cn）
   trae-cn:
     name: trae-cn
-    source: trae
-    fetch_url: "https://api.trae.cn/icube/api/v1/native/version/trae/cn/latest"
-    upstream: "ByteDance/Trae"
-    parser: TraeParser_CN
     pkgbuild: "packages/trae-cn/PKGBUILD"
     update_source_url: true
     enable: true
@@ -109,10 +85,6 @@ packages:
 
   zen-browser:
     name: zen-browser
-    source: zen-browser
-    fetch_url: "https://api.github.com/repos/zen-browser/desktop/releases/tags/twilight-1"
-    upstream: "zen-browser/desktop"
-    parser: ZenParser
     pkgbuild: "packages/zen-browser-twilight-bin/PKGBUILD"
     update_source_url: true
     enable: true
@@ -122,10 +94,6 @@ packages:
 
   bt-dualboot-ng:
     name: bt-dualboot-ng
-    source: bt-dualboot-ng
-    fetch_url: "https://pypi.org/pypi/bt-dualboot-ng/json"
-    upstream: "awsl1414/bt-dualboot"
-    parser: PyPIParser
     pkgbuild: "packages/bt-dualboot-ng/PKGBUILD"
     update_source_url: true
     enable: true

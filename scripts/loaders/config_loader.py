@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class DownloadSettings(BaseModel):
-    """下载配置"""
+    """下载配置（回退下载路径使用）"""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -22,30 +22,37 @@ class DownloadSettings(BaseModel):
     show_progress: bool = True
 
 
+class ApiSettings(BaseModel):
+    """helper API 配置"""
+
+    model_config = ConfigDict(extra="ignore")
+
+    base_url: str
+
+
 class Settings(BaseModel):
     """全局配置"""
 
     model_config = ConfigDict(extra="ignore")
 
     hash_algorithm: str = HashAlgorithmEnum.B2.value
+    api: ApiSettings
     download: DownloadSettings = Field(default_factory=DownloadSettings)
 
 
 class PackageConfig(BaseModel):
-    """单个包的配置"""
+    """单个包的配置。
+
+    ``name`` 为 ``aur-packages-helper`` 中注册的包名（用于拼接 API 查询 URL）。
+    """
 
     model_config = ConfigDict(extra="ignore")
 
     name: str
-    source: str
-    fetch_url: str
-    upstream: str
-    parser: str
     pkgbuild: str
     arch: list[str] = Field(default_factory=list)
     update_source_url: bool = Field(default=True)
     enable: bool = Field(default=True)
-    urls: dict[str, str] = Field(default_factory=dict)
     hash_algorithm: str | None = None
 
     def get_supported_archs(self) -> list[ArchEnum]:

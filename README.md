@@ -10,8 +10,8 @@
 - 自动获取最新版本并更新 PKGBUILD
 - 多架构支持：x86_64、aarch64、loong64
 - 多算法校验和自动计算（支持 BLAKE2b、SHA512、SHA256）
-- 基于 aria2c 的多连接分片下载
-- 插件化解析器设计，易于扩展
+- 上游解析统一由 [aur-packages-helper](https://github.com/awsl1414/aur-packages-helper) 服务端完成，客户端消费统一 API
+- 基于 aria2c 的多连接分片下载（helper 未返回 hashes 时回退）
 
 ## 快速开始
 
