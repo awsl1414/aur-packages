@@ -77,9 +77,7 @@ class ScheduleService:
         )
         self._schedule_signatures[f"pkg-{pkg.id}"] = self._schedule_signature(pkg)
 
-    def _schedule_signature(
-        self, pkg: Package
-    ) -> tuple[str, int | None, str | None]:
+    def _schedule_signature(self, pkg: Package) -> tuple[str, int | None, str | None]:
         """调度相关配置签名：变更才需重建 schedule"""
         return (pkg.schedule_type, pkg.interval_seconds, pkg.cron_expr)
 
@@ -123,9 +121,7 @@ class ScheduleService:
                 info: PackageInfo = await self._svc.get_info(
                     pkg.name, hash_algorithm=pkg.hash_algorithm
                 )
-                await self._svc.persist_result(
-                    pkg, info, algorithm=pkg.hash_algorithm
-                )
+                await self._svc.persist_result(pkg, info, algorithm=pkg.hash_algorithm)
             except Exception as e:
                 logger.exception("采集 %s 失败", pkg.name)
                 await self._svc.persist_failure(pkg, str(e))
@@ -170,9 +166,7 @@ class ScheduleService:
 
         # 2. 清理已删/停用包的应用层锁与节流记录（reload 是天然清理时机）
         enabled_names: set[str] = {p.name for p in pkgs}
-        self._locks = {
-            n: lk for n, lk in self._locks.items() if n in enabled_names
-        }
+        self._locks = {n: lk for n, lk in self._locks.items() if n in enabled_names}
         self._svc.prune_last_collected(enabled_names)
 
         # 3. 同步 schedule：移除已停用/已删项，新增/更新变更项
