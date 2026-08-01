@@ -79,7 +79,9 @@ class TestPKGBUILDEditorGetters:
 
     def test_get_checksum_no_arch(self, pkgbuild) -> None:
         editor = PKGBUILDEditor(pkgbuild)
-        assert editor.get_checksum(hash_algorithm=HashAlgorithmEnum.SHA512.value) == "SKIP"
+        assert (
+            editor.get_checksum(hash_algorithm=HashAlgorithmEnum.SHA512.value) == "SKIP"
+        )
 
     def test_get_checksum_b2(self, tmp_path: Path) -> None:
         """获取 b2sums 校验和"""
@@ -102,7 +104,12 @@ class TestPKGBUILDEditorGetters:
     def test_get_checksum_algorithm_not_found(self, pkgbuild) -> None:
         """PKGBUILD 中不存在该算法的校验和时返回空字符串"""
         editor = PKGBUILDEditor(pkgbuild)
-        assert editor.get_checksum(arch="x86_64", hash_algorithm=HashAlgorithmEnum.B2.value) == ""
+        assert (
+            editor.get_checksum(
+                arch="x86_64", hash_algorithm=HashAlgorithmEnum.B2.value
+            )
+            == ""
+        )
 
 
 class TestPKGBUILDEditorUpdate:
@@ -133,7 +140,9 @@ class TestPKGBUILDEditorUpdate:
 
     def test_update_source_arch(self, pkgbuild) -> None:
         editor = PKGBUILDEditor(pkgbuild)
-        editor.update_source("https://example.com/test-2.0.0-x86_64.tar.gz", arch="x86_64")
+        editor.update_source(
+            "https://example.com/test-2.0.0-x86_64.tar.gz", arch="x86_64"
+        )
         assert "test-2.0.0-x86_64" in editor.content
 
     def test_save_and_reopen(self, pkgbuild) -> None:
@@ -324,7 +333,9 @@ class TestUpdateSourceArchEdgeCases:
         assert "a::https://new/file.tar.gz" in editor.content
         assert "b::https://old/2.tar.gz" in editor.content
 
-    def test_alias_containing_double_colon_splits_at_first(self, tmp_path: Path) -> None:
+    def test_alias_containing_double_colon_splits_at_first(
+        self, tmp_path: Path
+    ) -> None:
         """别名含 :: 时按 makepkg 语义在首个 :: 处分隔"""
         body = 'source_x86_64=("weird::name::https://old/file.tar.gz")\n'
         editor = PKGBUILDEditor(self._write(tmp_path, body))

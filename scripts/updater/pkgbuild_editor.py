@@ -60,9 +60,7 @@ class PKGBUILDEditor:
         )
         return match.group(1) if match else None
 
-    def _get_scalar_field_as_int(
-        self, field: str, default: int | None
-    ) -> int | None:
+    def _get_scalar_field_as_int(self, field: str, default: int | None) -> int | None:
         """取标量并按 int 解析；缺失或解析失败返回 default。"""
         raw = self._get_scalar_field(field)
         if raw is None:
@@ -160,9 +158,7 @@ class PKGBUILDEditor:
         new_inner = " ".join(f'"{entry}"' for entry in entries)
         new_block = f"{field}=({new_inner})"
         # count=1：仅更新第一个匹配块；lambda 返回值不被解析为反向引用模板
-        self.content = block_re.sub(
-            lambda _m: new_block, self.content, count=1
-        )
+        self.content = block_re.sub(lambda _m: new_block, self.content, count=1)
 
     def update_checksum(
         self,
