@@ -23,8 +23,8 @@ oidb_service_type = 1
 [database]
 # SQLite 数据库文件路径，相对项目根
 sqlite_path = "data/aur_packages.db"
-# GET /{name} 命中 DB 快照的最大年龄（秒），超过则回源；建议 ≥ 定时采集间隔
-hash_cache_ttl_seconds = 7200
+# GET /{name} 命中 DB 快照的最大年龄（秒），超过则触发后台异步刷新；建议 ≥ 定时采集间隔
+version_stale_seconds = 7200
 
 [github]
 # GitHub 认证 token（应对匿名调用 api.github.com 的 60 次/时限流）
@@ -43,4 +43,4 @@ misfire_grace_seconds = 300
 # 单包两次采集的最小间隔（秒）：限制 refresh / GET 回源频率，防止反复下载消耗资源
 min_collect_interval_seconds = 300
 # 服务启动时是否立即采集一次（仅 interval 模式；false 时首次采集在一个间隔之后）
-run_on_startup = false
+run_on_startup = true

@@ -1,7 +1,8 @@
 """app.api.v1.packages 路由测试：异常 → 业务码映射。
 
 直接调用路由处理函数（绕过 FastAPI 依赖注入），用 Fake 服务控制异常，验证
-PackageNotFoundError / CollectThrottledError / RuntimeError 分别映射到 404/429/502。
+GET 的 PackageNotFoundError / DataNotReadyError 与 refresh 的
+PackageNotFoundError / CollectThrottledError / RuntimeError 分别映射到对应业务码。
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from app.response import BizError, ErrorCode
 from app.schemas import PackageInfo
 from app.services.package_service import (
     CollectThrottledError,
+    DataNotReadyError,
     PackageNotFoundError,
     PackageService,
 )
@@ -43,9 +45,7 @@ class FakePackageService:
     async def list_packages(self) -> list[str]:
         return self._names
 
-    async def get_info_cached(
-        self, name: str, hash_algorithm: str, max_age_seconds: int
-    ) -> PackageInfo:
+    async def get_info(self, name: str, hash_algorithm: str = "b2") -> PackageInfo:
         if self._error is not None:
             raise self._error
         assert self._info is not None
@@ -115,18 +115,11 @@ async def test_get_package_not_found() -> None:
     assert exc.value.code == ErrorCode.PACKAGE_NOT_FOUND
 
 
-async def test_get_package_throttled() -> None:
-    svc = _svc_pkg(error=CollectThrottledError("qq"))
+async def test_get_package_data_not_ready() -> None:
+    svc = _svc_pkg(error=DataNotReadyError("qq"))
     with pytest.raises(BizError) as exc:
         await get_package("qq", service=svc)
-    assert exc.value.code == ErrorCode.TOO_MANY_REQUESTS
-
-
-async def test_get_package_upstream_error() -> None:
-    svc = _svc_pkg(error=RuntimeError("upstream down"))
-    with pytest.raises(BizError) as exc:
-        await get_package("qq", service=svc)
-    assert exc.value.code == ErrorCode.UPSTREAM_ERROR
+    assert exc.value.code == ErrorCode.DATA_NOT_READY
 
 
 async def test_get_package_success() -> None:

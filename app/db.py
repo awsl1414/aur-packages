@@ -10,7 +10,6 @@ import re
 from pathlib import Path
 
 from tortoise import Tortoise, connections
-from tortoise.backends.base.client import BaseDBAsyncClient
 
 logger = logging.getLogger(__name__)
 
@@ -40,24 +39,12 @@ def _split_sql(sql: str) -> list[str]:
     return [stmt.strip() for stmt in cleaned.split(";") if stmt.strip()]
 
 
-async def _ensure_column(
-    conn: BaseDBAsyncClient, table: str, column: str, definition: str
-) -> None:
-    """若表缺少某列则 ALTER ADD COLUMN（用于 schema 演进的轻量迁移）"""
-    _, rows = await conn.execute_query(f"PRAGMA table_info({table});")
-    existing: set[str] = {row[1] for row in rows}
-    if column not in existing:
-        await conn.execute_query(
-            f"ALTER TABLE {table} ADD COLUMN {column} {definition};"
-        )
-        logger.info("迁移：%s 表新增 %s 列", table, column)
-
-
 async def init_db(sqlite_path: Path) -> None:
-    """初始化数据库：建连接 → 开外键 → 首启建表 / 老库轻量迁移。
+    """初始化数据库：建连接 → 开外键 → 首启执行 schema.sql 建库。
 
-    以 ``packages`` 表是否存在判定是否首次启动。已初始化则跳过建表，
-    但会补齐后续版本新增的列（ALTER ADD COLUMN），保证老库平滑升级。
+    以 ``packages`` 表是否存在判定是否首次启动；已初始化则跳过建表。
+    schema 演进采用**删库重建**：采集结果可由定时任务再生，故升级 schema 时
+    直接删除 ``data/aur_packages.db`` 重启即可，不做增量列迁移。
 
     启用全局 fallback：tortoise 1.1 用 contextvar 追踪当前 context，而本服务的
     ORM 调用分散在 lifespan 子任务（调度器）与 uvicorn 请求任务两类上下文——
@@ -77,13 +64,7 @@ async def init_db(sqlite_path: Path) -> None:
         "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'packages';"
     )
     if rows:
-        # 老库：补齐新版本新增的列（CHECK/索引变更不迁移，需重建库）
-        await _ensure_column(
-            conn, "packages", "hash_algorithm", "TEXT NOT NULL DEFAULT 'b2'"
-        )
-        await _ensure_column(conn, "packages", "parser_config", "TEXT")
-        await _ensure_column(conn, "packages", "description", "TEXT")
-        logger.info("数据库已存在，已完成列迁移检查")
+        logger.info("数据库已存在，跳过建表")
         return
 
     logger.info("首次启动，执行 schema.sql 建库")

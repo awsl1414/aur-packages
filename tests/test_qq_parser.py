@@ -122,12 +122,3 @@ def test_parse_response_non_dict_json() -> None:
 
 def test_parse_response_dict_passthrough() -> None:
     assert _PARSER._parse_response('{"a": 1}') == {"a": 1}
-
-
-# ── resolve_url（QQ 重写为签名流程——此处只验空 URL 短路，不触网络）────────
-
-
-async def test_resolve_url_no_url_returns_none() -> None:
-    """无 deb URL 时 resolve_url 直接返回 None，不触发签名"""
-    payload = _payload(x64DownloadUrl=None)
-    assert await _PARSER.resolve_url(ArchEnum.X86_64, payload) is None

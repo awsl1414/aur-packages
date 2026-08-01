@@ -9,10 +9,9 @@ async def test_loads_valid_packages(db, make_package) -> None:
     await make_package(name="qq", parser_type="qq")
     await make_package(name="wechat", parser_type="qq", archs='["x86_64"]')
 
-    registry, name_to_id, pkgs = await load_registry_from_db()
+    registry, pkgs = await load_registry_from_db()
     assert registry.get("qq") is not None
     assert registry.get("wechat") is not None
-    assert set(name_to_id) == {"qq", "wechat"}
     assert {p.name for p in pkgs} == {"qq", "wechat"}
 
 
@@ -20,9 +19,7 @@ async def test_excludes_disabled(db, make_package) -> None:
     await make_package(name="qq", enabled=True)
     await make_package(name="old", enabled=False)
 
-    _, name_to_id, pkgs = await load_registry_from_db()
-    assert "qq" in name_to_id
-    assert "old" not in name_to_id
+    _, pkgs = await load_registry_from_db()
     assert [p.name for p in pkgs] == ["qq"]
 
 
@@ -32,10 +29,10 @@ async def test_bad_parser_type_isolated(db, make_package, caplog) -> None:
     await make_package(name="bad", parser_type="UNKNOWN_PARSER")
 
     with caplog.at_level("WARNING"):
-        registry, name_to_id, pkgs = await load_registry_from_db()
+        registry, pkgs = await load_registry_from_db()
 
     assert registry.get("good") is not None
-    assert "bad" not in name_to_id  # 坏行被排除
+    assert "bad" not in {p.name for p in pkgs}  # 坏行被排除
     assert {p.name for p in pkgs} == {"good"}
     assert any("bad" in r.getMessage() for r in caplog.records)
 
@@ -45,9 +42,9 @@ async def test_bad_archs_isolated(db, make_package) -> None:
     await make_package(name="good", parser_type="qq")
     await make_package(name="badarch", archs='["not-an-arch"]')
 
-    registry, name_to_id, pkgs = await load_registry_from_db()
+    registry, pkgs = await load_registry_from_db()
     assert registry.get("good") is not None
-    assert "badarch" not in name_to_id
+    assert "badarch" not in {p.name for p in pkgs}
     assert [p.name for p in pkgs] == ["good"]
 
 
@@ -56,7 +53,6 @@ async def test_all_bad_rows_returns_empty(db, make_package) -> None:
     await make_package(name="bad1", parser_type="NOPE")
     await make_package(name="bad2", archs='["??"]')
 
-    registry, name_to_id, pkgs = await load_registry_from_db()
+    registry, pkgs = await load_registry_from_db()
     assert registry.list_all() == []
-    assert name_to_id == {}
     assert pkgs == []

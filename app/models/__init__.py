@@ -34,14 +34,15 @@ class Package(Model):
 
 
 class PackageVersion(Model):
-    """版本快照：定时任务每次采集产出一条"""
+    """版本快照：版本采集域，与 hash 采集解耦独立落库"""
 
     id = fields.IntField(pk=True)
     package: fields.ForeignKeyRelation[Package] = fields.ForeignKeyField(
         "models.Package", related_name="versions", on_delete=fields.CASCADE
     )
     version = fields.CharField(max_length=64, null=True)
-    status = fields.CharField(max_length=16)  # success / partial / failed
+    urls = fields.TextField(null=True)  # 各架构原始下载 URL JSON（arch→url）
+    status = fields.CharField(max_length=16)  # success / failed（仅版本抓取结果）
     error = fields.TextField(null=True)
     fetched_at = fields.DatetimeField(auto_now_add=True)
 
@@ -53,7 +54,7 @@ class PackageVersion(Model):
 
 
 class PackageHash(Model):
-    """文件 hash：版本快照下「架构 × 算法」粒度的记录"""
+    """文件 hash：版本快照下「架构 × 算法」粒度的记录，逐架构独立成败"""
 
     id = fields.IntField(pk=True)
     version: fields.ForeignKeyRelation[PackageVersion] = fields.ForeignKeyField(
@@ -63,6 +64,8 @@ class PackageHash(Model):
     algorithm = fields.CharField(max_length=16)
     hash_value = fields.CharField(max_length=256, null=True)
     url = fields.CharField(max_length=2048, null=True)  # 原始下载 URL（parse_url 结果）
+    status = fields.CharField(max_length=16)  # success / failed（下载+计算结果）
+    error = fields.TextField(null=True)
     fetched_at = fields.DatetimeField(auto_now_add=True)
 
     class Meta:

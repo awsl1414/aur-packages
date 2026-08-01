@@ -140,14 +140,16 @@ VALUES (
 ON CONFLICT(name) DO NOTHING;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 版本快照：定时任务每次采集产出一条
+-- 版本快照：版本采集域，每次抓取版本源产出一条。
+-- 与 hash 采集解耦——version 在此独立落库，不受 hash 下载成败影响。
 -- 保留全部历史，便于版本变更检测与故障审计；最新版本通过视图查询。
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS package_versions (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     package_id  INTEGER NOT NULL,                                -- 所属包，关联 packages.id（ON DELETE CASCADE）
-    version     TEXT,                                            -- 解析到的版本号；采集失败时可为 NULL
-    status      TEXT    NOT NULL CHECK (status IN ('success', 'partial', 'failed')), -- success=全量成功；partial=部分架构失败；failed=整包失败
+    version     TEXT,                                            -- 解析到的版本号；版本抓取失败时为 NULL
+    urls        TEXT,                                            -- 各架构原始下载 URL JSON（arch→url），成功时写入；供 hash 采集复用，免去重取版本源
+    status      TEXT    NOT NULL CHECK (status IN ('success', 'failed')), -- 仅反映版本抓取结果；hash 成败见 package_hashes
     error       TEXT,                                            -- failed 时记录失败原因
     fetched_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),   -- 采集时间
     FOREIGN KEY (package_id) REFERENCES packages (id) ON DELETE CASCADE
@@ -166,8 +168,10 @@ CREATE TABLE IF NOT EXISTS package_hashes (
     version_id  INTEGER NOT NULL,                                -- 所属版本快照，关联 package_versions.id（ON DELETE CASCADE）
     arch        TEXT    NOT NULL,                                -- CPU 架构，如 x86_64
     algorithm   TEXT    NOT NULL,                                -- 哈希算法，如 b2
-    hash_value  TEXT,                                            -- 计算结果；NULL 表示该架构采集失败
+    hash_value  TEXT,                                            -- 计算结果；失败时为 NULL
     url         TEXT,                                            -- 原始下载 URL（parse_url 结果，稳定不过期；不存签名后的临时链接）
+    status      TEXT    NOT NULL CHECK (status IN ('success', 'failed')), -- 逐架构显式记录下载+计算成败
+    error       TEXT,                                            -- failed 时记录失败原因
     fetched_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),  -- 该条 hash 的采集时间（UTC，ISO8601）
     FOREIGN KEY (version_id) REFERENCES package_versions (id) ON DELETE CASCADE,
     -- 同一版本下同一架构同一算法只保留一条，保证插入幂等
@@ -178,8 +182,9 @@ CREATE TABLE IF NOT EXISTS package_hashes (
 CREATE INDEX IF NOT EXISTS idx_hashes_arch_algo ON package_hashes (arch, algorithm);
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 视图：每个包的最新版本快照，供 aur-packages 直接读取
--- 取 fetched_at 最大者；同时间取 id 最大者保证确定性与唯一。
+-- 视图：每个包的最新「成功」版本快照，供 aur-packages 直接读取
+-- 仅取 status='success' 的最新行（version 可信）；failed 审计行不参与。
+-- 同时间取 id 最大者保证确定性与唯一。
 -- ─────────────────────────────────────────────────────────────────────────────
 DROP VIEW IF EXISTS v_latest_versions;
 CREATE VIEW v_latest_versions AS
@@ -187,16 +192,15 @@ SELECT
     p.id           AS package_id,   -- 包 id（packages.id）
     p.name,                        -- 包名
     p.enabled,                     -- 是否启用定时采集
-    v.id           AS version_id,  -- 最新版本快照 id（无快照时为 NULL）
-    v.version,                     -- 版本号（采集失败时为 NULL）
-    v.status,                      -- success / partial / failed
-    v.error,                       -- failed 时的失败原因
-    v.fetched_at                   -- 最新快照采集时间（UTC，ISO8601）
+    v.id           AS version_id,  -- 最新成功版本快照 id（无成功快照时为 NULL）
+    v.version,                     -- 版本号
+    v.urls,                        -- 各架构原始下载 URL JSON
+    v.fetched_at                   -- 最新成功快照采集时间（UTC，ISO8601）
 FROM packages p
 LEFT JOIN package_versions v ON v.id = (
     SELECT vv.id
     FROM package_versions vv
-    WHERE vv.package_id = p.id
+    WHERE vv.package_id = p.id AND vv.status = 'success'
     ORDER BY vv.fetched_at DESC, vv.id DESC
     LIMIT 1
 );

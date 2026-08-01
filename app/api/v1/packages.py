@@ -5,12 +5,12 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 
 from app.api.deps import get_package_service, get_schedule_service
-from app.config import config
 from app.constants import HashAlgorithmEnum
 from app.response import ApiResponse, BizError, ErrorCode, success
 from app.schemas import PackageInfo, PackageList
 from app.services.package_service import (
     CollectThrottledError,
+    DataNotReadyError,
     PackageNotFoundError,
     PackageService,
 )
@@ -58,20 +58,13 @@ async def get_package(
     ] = HashAlgorithmEnum.B2.value,
 ) -> ApiResponse[PackageInfo]:
     try:
-        info: PackageInfo = await service.get_info_cached(
-            name,
-            hash_algorithm=algorithm,
-            max_age_seconds=config.database.hash_cache_ttl_seconds,
-        )
+        info: PackageInfo = await service.get_info(name, hash_algorithm=algorithm)
     except PackageNotFoundError:
         raise BizError(ErrorCode.PACKAGE_NOT_FOUND, f"包 '{name}' 未注册") from None
-    except CollectThrottledError:
+    except DataNotReadyError:
         raise BizError(
-            ErrorCode.TOO_MANY_REQUESTS,
-            f"包 '{name}' 采集过于频繁，请稍后重试",
+            ErrorCode.DATA_NOT_READY, f"包 '{name}' 数据尚未就绪，请稍后重试"
         ) from None
-    except RuntimeError as e:
-        raise BizError(ErrorCode.UPSTREAM_ERROR, str(e)) from e
     return success(info)
 
 

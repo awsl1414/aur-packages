@@ -8,7 +8,7 @@
 
 `aur-packages-helper` 是 [aur-packages](https://github.com/awsl1414/aur-packages) 的配套服务，负责获取应用版本、计算文件 hash 等辅助功能，供 `aur-packages` 在更新 PKGBUILD 时调用。
 
-支持定时采集各包版本与文件 hash 并落库 SQLite，查询接口优先返回数据库新鲜快照（TTL 内命中缓存，过期或缺失才回源实时计算）。
+支持定时采集各包版本与文件 hash 并落库 SQLite；查询接口纯读数据库（版本与 hash 独立采集、独立落库，版本先行永不被下载失败连坐），快照过期时后台异步刷新，永不阻塞响应。
 
 ## 技术栈
 

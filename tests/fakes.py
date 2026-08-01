@@ -15,7 +15,7 @@ from app.registry import PackageEntry, PackageRegistry
 
 
 class FakeParser(BaseParser):
-    """可控解析器：绕开 QQ 真实网络签名，用于 get_info/采集编排单测。"""
+    """可控解析器：绕开 QQ 真实网络签名，用于采集/查询编排单测。"""
 
     def __init__(
         self,
@@ -31,18 +31,17 @@ class FakeParser(BaseParser):
     def parse_url(self, arch: ArchEnum | str, response_data: str | Any) -> str | None:
         return self._url_by_arch.get(self._arch_value(arch))
 
-    async def resolve_url(
-        self, arch: ArchEnum | str, response_data: str | Any
-    ) -> str | None:
-        return self.parse_url(arch, response_data)
+    async def resolve_raw_url(self, arch: ArchEnum | str, raw_url: str) -> str | None:
+        """默认原样返回原始 URL（不做签名），模拟非 QQ parser。"""
+        return raw_url
 
 
 class FakeFetcher:
     """可控 Fetcher：fetch_text 返回预设文本，fetch_and_hash_many 返回预设 hash。
 
-    - ``delay`` 让 fetch_text 异步阻塞，放大锁持有窗口
-    - ``entered`` 在首次进入 fetch_text 时 set，供并发测试确定性等待
-      （替代基于 sleep 的时序假设）
+    - ``text=None`` 模拟版本源抓取失败；``hashes`` 缺某 key → 该架构 hash 为 None（下载失败）
+    - ``delay``/``entered`` 用于放大锁持有窗口的并发测试（替代基于 sleep 的时序假设）
+    - ``text_calls``/``hash_calls`` 计数，断言是否触网
 
     与 ``Fetcher`` 同构（鸭子类型），注入 PackageService 时需用 ``as_fetcher()`` 转换。
     """
@@ -59,6 +58,7 @@ class FakeFetcher:
         self._delay = delay
         self._entered = entered
         self.text_calls: int = 0
+        self.hash_calls: int = 0
 
     async def fetch_text(
         self, url: str, headers: dict[str, str] | None = None
@@ -76,6 +76,7 @@ class FakeFetcher:
         algorithm: str = "b2",
         headers: dict[str, str] | None = None,
     ) -> dict[str, str | None]:
+        self.hash_calls += 1
         return {key: self._hashes.get(key) for key in urls}
 
     def as_fetcher(self) -> Fetcher:

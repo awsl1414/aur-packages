@@ -1,7 +1,15 @@
-"""包查询编排服务"""
+"""包采集编排服务。
+
+版本采集与 hash 下载是两个独立域：各自独立 fetch、独立事务落库。version 先行落库，
+永不被 hash 下载失败回滚；查询接口（get_info）纯读 DB，永不下载，stale 时仅
+fire-and-forget 触发后台刷新。每次 collect 都重新下载算 hash（无短路）。
+"""
 
 import asyncio
+import json
 import logging
+from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from tortoise.transactions import in_transaction
@@ -15,9 +23,9 @@ from app.schemas import PackageInfo
 
 logger = logging.getLogger(__name__)
 
-_STATUS_SUCCESS = "success"
-_STATUS_PARTIAL = "partial"
-_STATUS_FAILED = "failed"
+# hash 行失败原因（区分两阶段）
+_ERR_NO_DOWNLOAD_URL = "无法获取可下载 URL"
+_ERR_HASH_FAILED = "下载或 hash 计算失败"
 
 
 class PackageNotFoundError(KeyError):
@@ -28,38 +36,79 @@ class CollectThrottledError(Exception):
     """包采集触发节流（两次采集间隔小于 min_collect_interval_seconds）"""
 
 
+class DataNotReadyError(Exception):
+    """包已注册但尚无任何成功版本快照可读"""
+
+
+@dataclass
+class _VersionSnapshot:
+    """版本采集结果：已落库的 version 行 + 解析出的版本号与各架构原始 URL"""
+
+    version_row: PackageVersion
+    version: str
+    urls: dict[str, str]
+
+
+@dataclass
+class _HashResult:
+    """单架构 hash 采集结果（含失败原因，便于逐行落库）"""
+
+    arch_value: str
+    hash_value: str | None
+    url: str | None
+    error: str | None
+
+
+def _utcnow() -> datetime:
+    return datetime.now(UTC)
+
+
 class PackageService:
-    """编排 fetch + parse + hash 计算的查询服务"""
+    """编排 fetch + parse + hash 计算的采集与查询服务。
+
+    独占采集与查询、per-package 锁与节流；调度器与手动刷新均委托本服务。
+    """
 
     def __init__(
         self,
         fetcher: Fetcher,
         registry: PackageRegistry,
         min_collect_interval_seconds: int = 0,
+        version_stale_seconds: int = 0,
     ) -> None:
         self.fetcher = fetcher
         self.registry = registry
         self._min_collect_interval = min_collect_interval_seconds
-        # per-package 上次采集完成时间（仅内存，重启重置；TTL/定时兜底）
+        self._version_stale_seconds = version_stale_seconds
+        # per-package 采集锁：保证同包不重入（QQ 签名+下载较慢）
+        self._locks: dict[str, asyncio.Lock] = {}
+        # per-package 上次采集完成时间（仅内存，重启重置；节流与后台刷新共用）
         self._last_collected: dict[str, datetime] = {}
+        # 后台刷新任务引用，防止被 GC 回收
+        self._bg_tasks: set[asyncio.Task[None]] = set()
+        # 已在排队/运行的后台采集包名，防止并发 stale GET 各起一个重复采集
+        self._bg_inflight: set[str] = set()
+
+    # ── 节流 / 运行时清理 ────────────────────────────────────────────────
 
     def is_throttled(self, name: str) -> bool:
         """该包是否处于采集节流窗口内（距上次采集不足最小间隔）"""
         last: datetime | None = self._last_collected.get(name)
         if last is None or self._min_collect_interval <= 0:
             return False
-        elapsed = datetime.now(UTC) - last
-        return elapsed < timedelta(seconds=self._min_collect_interval)
+        return _utcnow() - last < timedelta(seconds=self._min_collect_interval)
 
-    def prune_last_collected(self, keep: set[str]) -> None:
-        """剔除不在 ``keep`` 集合中的包的节流记录。
+    def prune_runtime(self, keep: set[str]) -> None:
+        """剔除不在 ``keep`` 集合中的包的节流记录与采集锁。
 
-        reload 后已删除/停用的包不再采集，其节流记录应清理，避免长生命周期下
-        ``_last_collected`` 只增不减。
+        reload 后已删除/停用的包不再采集，其运行时状态应清理，避免长生命周期下只增不减。
         """
         self._last_collected = {
             n: t for n, t in self._last_collected.items() if n in keep
         }
+        self._locks = {n: lk for n, lk in self._locks.items() if n in keep}
+
+    # ── 查询（纯读） ────────────────────────────────────────────────────
 
     async def list_packages(self) -> list[str]:
         """返回所有启用（enabled）的包名"""
@@ -70,31 +119,180 @@ class PackageService:
         name: str,
         hash_algorithm: str = HashAlgorithmEnum.B2.value,
     ) -> PackageInfo:
-        """实时查询指定包的版本号、各架构下载 URL 与文件 hash。
+        """纯 DB 读：返回最新成功版本快照 + 其所请求算法的各架构 hash。
 
-        步骤：
-        1. 查注册表获取 entry（不存在抛 PackageNotFoundError → 路由层转 404）
-        2. 拉取 fetch_url（带 parser 专属请求头）
-        3. parse_version → version（失败抛 RuntimeError → 路由层转 502）
-        4. 遍历 entry.archs 调 parse_url → urls 字典
-        5. 并发调 resolve_url（QQ 走签名）获取各架构可下载 URL
-           → fetch_and_hash_many 并发流式下载计算 hash；失败的 arch 记 None + warning
+        无网络、不阻塞下载。version fetched_at 超过 ``version_stale_seconds``
+        时 fire-and-forget 触发后台刷新；包已注册但从未采集成功则抛
+        ``DataNotReadyError``（路由层转「数据未就绪」），并尝试后台首次采集。
         """
         entry: PackageEntry | None = self.registry.get(name)
         if entry is None:
             raise PackageNotFoundError(name)
 
-        parser: BaseParser = entry.parser
+        read: tuple[PackageInfo, datetime] | None = await self._read_info(
+            name, hash_algorithm, entry
+        )
+        if read is None:
+            # 无任何成功版本快照：尝试后台首次采集，并告知调用方数据未就绪
+            self._maybe_trigger_refresh(name)
+            raise DataNotReadyError(name)
 
+        info, fetched_at = read
+        if self._is_stale(fetched_at):
+            self._maybe_trigger_refresh(name)
+        return info
+
+    async def _read_info(
+        self, name: str, hash_algorithm: str, entry: PackageEntry
+    ) -> tuple[PackageInfo, datetime] | None:
+        """从 DB 读最新成功 version + 其 hashes；无则返回 None。
+
+        urls 与 hashes 均以**当前** entry.archs 为键集：reload 改动 archs 后，
+        落库时捕获的旧 urls 不再原样泄露（被删架构不出现，新架构无 URL 则缺），
+        保证两个 dict 键集一致。
+        """
+        pkg: Package | None = await Package.get_or_none(name=name)
+        if pkg is None:
+            return None
+
+        latest: PackageVersion | None = (
+            await PackageVersion.filter(package=pkg, status="success")
+            .order_by("-fetched_at", "-id")
+            .first()
+        )
+        if latest is None or not latest.version or latest.fetched_at is None:
+            return None
+
+        persisted_urls: dict[str, str] = json.loads(latest.urls) if latest.urls else {}
+        urls: dict[str, str] = {
+            arch.value: persisted_urls[arch.value]
+            for arch in entry.archs
+            if arch.value in persisted_urls
+        }
+        records: list[PackageHash] = await PackageHash.filter(
+            version=latest, algorithm=hash_algorithm
+        )
+        hashes: dict[str, str | None] = {arch.value: None for arch in entry.archs}
+        for h in records:
+            if h.status == "success" and h.hash_value:
+                hashes[h.arch] = h.hash_value
+
+        return (
+            PackageInfo(name=name, version=latest.version, urls=urls, hashes=hashes),
+            latest.fetched_at,
+        )
+
+    def _is_stale(self, fetched_at: datetime) -> bool:
+        """版本快照是否超过 ``version_stale_seconds`` 视为过期"""
+        if self._version_stale_seconds <= 0:
+            return False
+        ts: datetime = fetched_at
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=UTC)
+        return _utcnow() - ts > timedelta(seconds=self._version_stale_seconds)
+
+    def _maybe_trigger_refresh(self, name: str) -> None:
+        """fire-and-forget 触发后台采集：节流窗口内、正采集中或已有后台任务排队时跳过。
+
+        后台任务在下一 event-loop tick 才取锁，故并发 stale GET 会同时看到锁空闲——
+        用 ``_bg_inflight`` 去重，确保同包至多一个后台采集在排队/运行，避免 N 个
+        请求触发 N 次冗余全量下载。
+        """
+        if self.is_throttled(name) or name in self._bg_inflight:
+            return
+        lock: asyncio.Lock | None = self._locks.get(name)
+        if lock is not None and lock.locked():
+            return
+        self._bg_inflight.add(name)
+        task: asyncio.Task[None] = asyncio.create_task(self._background_collect(name))
+        self._bg_tasks.add(task)
+        task.add_done_callback(self._bg_tasks.discard)
+
+    async def _background_collect(self, name: str) -> None:
+        """后台采集回调：吞异常仅记日志，绝不影响触发它的 GET 响应"""
+        try:
+            await self.collect(name)
+        except Exception:
+            logger.exception("后台刷新 %s 失败", name)
+        finally:
+            self._bg_inflight.discard(name)
+
+    # ── 采集（写） ──────────────────────────────────────────────────────
+
+    async def collect(self, name: str) -> PackageInfo:
+        """同步采集：版本→hash，回读 DB 返回 PackageInfo。
+
+        供定时任务与后台刷新调用；手动刷新走 ``collect_now``（含节流拒绝）。
+        """
+        async with self._locks.setdefault(name, asyncio.Lock()):
+            return await self._collect_locked(name)
+
+    async def collect_now(self, name: str) -> PackageInfo:
+        """手动触发采集：节流检查与采集同处 per-package 锁内（消除 check-then-act）。
+
+        节流内抛 ``CollectThrottledError`` → 路由层转 429。
+        """
+        if self.registry.get(name) is None:
+            raise PackageNotFoundError(name)
+        async with self._locks.setdefault(name, asyncio.Lock()):
+            if self.is_throttled(name):
+                raise CollectThrottledError(name)
+            return await self._collect_locked(name)
+
+    async def _collect_locked(self, name: str) -> PackageInfo:
+        """实际采集逻辑（调用方已持 per-package 锁）。
+
+        版本域失败（已由 collect_version 落 failed 审计行）抛 RuntimeError：
+        refresh 路径据此转 502；定时/后台路径各自吞掉。hash 域失败不抛——
+        version 已先行落库，逐架构失败行单独记录。每次都重新下载算 hash（无短路）。
+        """
+        entry: PackageEntry | None = self.registry.get(name)
+        if entry is None:
+            raise PackageNotFoundError(name)
+        pkg: Package | None = await Package.get_or_none(name=name)
+        if pkg is None:
+            raise PackageNotFoundError(name)
+
+        algorithm: str = pkg.hash_algorithm
+        snapshot: _VersionSnapshot | None = await self.collect_version(pkg, entry)
+        if snapshot is None:
+            self._last_collected[name] = _utcnow()
+            raise RuntimeError(f"采集 {name} 版本失败")
+
+        await self.collect_hashes(entry, snapshot, algorithm)
+        self._last_collected[name] = _utcnow()
+
+        read: tuple[PackageInfo, datetime] | None = await self._read_info(
+            name, algorithm, entry
+        )
+        if read is not None:
+            return read[0]
+        # 刚落 success version 却读不到属异常兜底，用快照内容占位
+        return PackageInfo(
+            name=name, version=snapshot.version, urls=snapshot.urls, hashes={}
+        )
+
+    async def collect_version(
+        self, pkg: Package, entry: PackageEntry
+    ) -> _VersionSnapshot | None:
+        """版本域：fetch_text → parse_version + 逐 arch parse_url → 落库。
+
+        失败（抓取/解析）落 failed 审计行并返回 None；成功落 success 行并返回快照。
+        """
+        parser: BaseParser = entry.parser
         response_data: str | None = await self.fetcher.fetch_text(
             entry.fetch_url, parser.get_request_headers()
         )
         if response_data is None:
-            raise RuntimeError(f"无法获取 {name} 的版本信息")
+            await self.persist_version_failure(
+                pkg, f"无法获取版本源: {entry.fetch_url}"
+            )
+            return None
 
         version: str | None = parser.parse_version(response_data)
-        if version is None:
-            raise RuntimeError(f"无法解析 {name} 的版本号")
+        if not version:
+            await self.persist_version_failure(pkg, "无法解析版本号")
+            return None
 
         urls: dict[str, str] = {}
         for arch in entry.archs:
@@ -102,191 +300,36 @@ class PackageService:
             if url:
                 urls[arch.value] = url
             else:
-                logger.warning("无法获取 %s 的 %s 架构下载 URL", name, arch.value)
+                logger.warning("无法获取 %s 的 %s 架构下载 URL", pkg.name, arch.value)
 
-        hashes: dict[str, str | None] = await self._compute_hashes(
-            entry, parser, response_data, hash_algorithm
-        )
+        version_row: PackageVersion = await self.persist_version(pkg, version, urls)
+        logger.info("采集 %s 版本完成：version=%s", pkg.name, version)
+        return _VersionSnapshot(version_row, version, urls)
 
-        # 记录采集完成时间，供 refresh / GET 回源节流判断
-        self._last_collected[name] = datetime.now(UTC)
-        return PackageInfo(name=name, version=version, urls=urls, hashes=hashes)
-
-    async def get_info_cached(
-        self,
-        name: str,
-        hash_algorithm: str,
-        max_age_seconds: int,
-    ) -> PackageInfo:
-        """查询入口：优先 DB 新鲜快照；过期/缺失则回源，节流内拒绝回源以防空放大下载。
-
-        - 命中新鲜快照 → 返回
-        - 未命中且未节流 → 回源 get_info（实时下载）并落库，使后续节流窗口内的
-          请求能命中新鲜快照或 stale 降级，而非被节流拒绝
-        - 未命中且节流内 → 降级返回 DB 该算法 stale 快照（忽略 TTL）；
-          若该算法无任何 stale（如变换 algorithm 绕过），抛 CollectThrottledError → 429
-        """
-        cached: PackageInfo | None = await self._try_cache(
-            name, hash_algorithm, max_age_seconds
-        )
-        if cached is not None:
-            logger.info("命中 DB 缓存：%s", name)
-            return cached
-
-        if self.is_throttled(name):
-            stale: PackageInfo | None = await self._try_cache(
-                name, hash_algorithm, None
-            )
-            if stale is not None:
-                logger.info("节流内回源降级返回 stale：%s", name)
-                return stale
-            # 节流内且无可用 stale（含变换 algorithm 绕过）→ 拒绝回源
-            raise CollectThrottledError(name)
-
-        info: PackageInfo = await self.get_info(name, hash_algorithm=hash_algorithm)
-        # 回源也落库：get_info 已写 _last_collected 开启节流窗口，若不落库则窗口内
-        # 后续请求既无新鲜快照也无 stale → 429。落库后整链路自洽（与定时/refresh 一致）
-        await self._persist_fetch(name, info, hash_algorithm)
-        return info
-
-    async def _persist_fetch(
-        self, name: str, info: PackageInfo, algorithm: str
-    ) -> None:
-        """回源落库：按 name 取 Package 后复用 persist_result。Package 不存在则跳过。
-
-        registry 由 DB 构建，能进入回源说明包必在 DB，此处仍兜底防异常。
-        """
-        pkg: Package | None = await Package.get_or_none(name=name)
-        if pkg is None:
-            logger.warning("回源落库时 %s 在 DB 不存在，跳过", name)
-            return
-        await self.persist_result(pkg, info, algorithm=algorithm)
-
-    async def persist_result(
-        self, pkg: Package, info: PackageInfo, algorithm: str
-    ) -> None:
-        """按版本号与各架构 hash 命中情况判定 success/partial/failed 并落库。
-
-        expected 架构集合取自 ``info.hashes`` 的 key（即本次实际采集的架构，源自
-        registry entry.archs），而非 DB 的 ``pkg.archs``——后者可能与内存 registry
-        不同步（运维改 DB 未 reload），导致 status 误判。version 与 hashes 在单事务内
-        写入，避免中途失败留下不完整快照被后续 _try_cache 当作完整结果返回。
-        """
-        hashes: dict[str, str | None] = info.hashes or {}
-        if not info.version:
-            await self.persist_failure(pkg, "未解析到版本号")
-            return
-        if hashes and all(v is None for v in hashes.values()):
-            await self.persist_failure(pkg, "全部架构 hash 计算失败")
-            return
-
-        # 缺失架构不会出现（hashes 覆盖 entry 全部 archs），仅需看 hash 为 None 的架构
-        bad: set[str] = {a for a, v in hashes.items() if v is None}
-        status: str = _STATUS_PARTIAL if bad else _STATUS_SUCCESS
-
-        async with in_transaction():
-            version: PackageVersion = await PackageVersion.create(
-                package=pkg, version=info.version, status=status, error=None
-            )
-            if hashes:
-                await PackageHash.bulk_create(
-                    [
-                        PackageHash(
-                            version=version,
-                            arch=arch_value,
-                            algorithm=algorithm,
-                            hash_value=h,
-                            url=info.urls.get(arch_value),
-                        )
-                        for arch_value, h in hashes.items()
-                    ]
-                )
-        logger.info(
-            "采集 %s 完成：version=%s status=%s", pkg.name, info.version, status
-        )
-
-    async def persist_failure(self, pkg: Package, error: str) -> None:
-        """记录失败快照便于审计。
-
-        落库异常被吞掉只记日志——调用方（_collect）以此方法兜底，若它再上抛会让
-        整个采集异常逃逸到 APScheduler，与「单包失败不影响调度」的契约冲突。
-        """
-        try:
-            await PackageVersion.create(
-                package=pkg, version=None, status=_STATUS_FAILED, error=error
-            )
-        except Exception:
-            logger.exception("记录采集失败落库异常：%s", pkg.name)
-            return
-        logger.warning("采集 %s 失败已记录：%s", pkg.name, error)
-
-    async def _try_cache(
-        self,
-        name: str,
-        hash_algorithm: str,
-        max_age_seconds: int | None,
-    ) -> PackageInfo | None:
-        """尝试从 DB 取快照；未命中返回 None。
-
-        命中条件：最新 success/partial 快照有 version、含所请求算法的 hash 记录。
-        ``max_age_seconds`` 非 None 时还要求快照在该年龄内（新鲜）；为 None 则忽略年龄
-        （用于节流降级时返回 stale）。
-        """
-        pkg: Package | None = await Package.get_or_none(name=name)
-        if pkg is None:
-            return None
-
-        latest: PackageVersion | None = (
-            await PackageVersion.filter(package=pkg, status__in=["success", "partial"])
-            .order_by("-fetched_at", "-id")
-            .first()
-        )
-        if latest is None or not latest.version or latest.fetched_at is None:
-            return None
-
-        if max_age_seconds is not None:
-            fetched_at: datetime = latest.fetched_at
-            # Tortoise 默认返回 aware UTC，兜底处理 naive 情况
-            if fetched_at.tzinfo is None:
-                fetched_at = fetched_at.replace(tzinfo=UTC)
-            cutoff: datetime = datetime.now(UTC) - timedelta(seconds=max_age_seconds)
-            if fetched_at < cutoff:
-                return None  # 过期
-
-        records: list[PackageHash] = await PackageHash.filter(
-            version=latest, algorithm=hash_algorithm
-        )
-        if not records:
-            return None  # 该算法无记录 → 回源
-        hashes: dict[str, str | None] = {h.arch: h.hash_value for h in records}
-        urls: dict[str, str] = {h.arch: h.url for h in records if h.url}
-        return PackageInfo(name=name, version=latest.version, urls=urls, hashes=hashes)
-
-    async def _compute_hashes(
+    async def collect_hashes(
         self,
         entry: PackageEntry,
-        parser: BaseParser,
-        response_data: str,
-        hash_algorithm: str,
-    ) -> dict[str, str | None]:
-        """并发解析所有架构的下载 URL（签名）并流式下载计算 hash。
+        snapshot: _VersionSnapshot,
+        algorithm: str,
+    ) -> list[_HashResult]:
+        """hash 域：逐 arch resolve_raw_url（QQ 签名）→ 并发下载算 hash → 逐行落库。
 
-        两阶段并发：
-        1. 并发调用 resolve_url 获取各架构的可下载 URL
-        2. 并发下载并计算 hash（通过 fetch_and_hash_many，Semaphore 限流）
-
-        resolve_url 失败或下载失败的架构记为 None，不中断整体流程。
+        失败的架构也落 ``status=failed`` 行；version 已先行落库，hash 失败不影响它。
         """
+        parser: BaseParser = entry.parser
 
         async def _resolve_one(arch: ArchEnum) -> tuple[str, str | None]:
             arch_value: str = arch.value
+            raw: str | None = snapshot.urls.get(arch_value)
+            if not raw:
+                return arch_value, None
             try:
-                resolved: str | None = await parser.resolve_url(arch, response_data)
+                resolved: str | None = await parser.resolve_raw_url(arch, raw)
             except Exception:
                 logger.exception(
-                    "%s 的 %s 架构 resolve_url 异常", entry.name, arch_value
+                    "%s 的 %s 架构 resolve_raw_url 异常", entry.name, arch_value
                 )
-                resolved = None
+                return arch_value, None
             if resolved is None:
                 logger.warning(
                     "%s 的 %s 架构无法获取可下载 URL，跳过 hash",
@@ -295,24 +338,86 @@ class PackageService:
                 )
             return arch_value, resolved
 
-        # 阶段 1：并发解析各架构的可下载 URL
         resolved_results: list[tuple[str, str | None]] = await asyncio.gather(
             *[_resolve_one(arch) for arch in entry.archs]
         )
 
-        # 阶段 2：过滤后并发下载并计算 hash
-        hashes: dict[str, str | None] = {}
-        urls: dict[str, str] = {}
+        download_urls: dict[str, str] = {
+            av: r for av, r in resolved_results if r is not None
+        }
+        downloaded: dict[str, str | None] = (
+            await self.fetcher.fetch_and_hash_many(download_urls, algorithm)
+            if download_urls
+            else {}
+        )
+
+        results: list[_HashResult] = []
         for arch_value, resolved in resolved_results:
-            if resolved is not None:
-                urls[arch_value] = resolved
+            raw: str | None = snapshot.urls.get(arch_value)
+            if resolved is None:
+                results.append(_HashResult(arch_value, None, raw, _ERR_NO_DOWNLOAD_URL))
             else:
-                hashes[arch_value] = None
+                digest: str | None = downloaded.get(arch_value)
+                results.append(
+                    _HashResult(
+                        arch_value,
+                        digest,
+                        raw,
+                        None if digest is not None else _ERR_HASH_FAILED,
+                    )
+                )
+        await self.persist_hashes(snapshot.version_row, results, algorithm)
+        ok = sum(1 for r in results if r.hash_value is not None)
+        logger.info("采集 %s hash 完成：%d/%d 架构成功", entry.name, ok, len(results))
+        return results
 
-        if urls:
-            downloaded: dict[str, str | None] = await self.fetcher.fetch_and_hash_many(
-                urls, hash_algorithm
+    # ── 落库（各自独立事务） ────────────────────────────────────────────
+
+    async def persist_version(
+        self, pkg: Package, version: str, urls: dict[str, str]
+    ) -> PackageVersion:
+        """落一条成功版本快照（含 urls JSON），独立事务，立即对查询可见"""
+        async with in_transaction():
+            return await PackageVersion.create(
+                package=pkg,
+                version=version,
+                urls=json.dumps(urls, ensure_ascii=False),
+                status="success",
+                error=None,
             )
-            hashes.update(downloaded)
 
-        return hashes
+    async def persist_version_failure(self, pkg: Package, error: str) -> None:
+        """记录版本抓取失败审计行。落库异常被吞只记日志，避免逃逸到调度器"""
+        try:
+            await PackageVersion.create(
+                package=pkg, version=None, urls=None, status="failed", error=error
+            )
+        except Exception:
+            logger.exception("记录版本失败落库异常：%s", pkg.name)
+            return
+        logger.warning("采集 %s 版本失败已记录：%s", pkg.name, error)
+
+    async def persist_hashes(
+        self,
+        version_row: PackageVersion,
+        results: Iterable[_HashResult],
+        algorithm: str,
+    ) -> None:
+        """逐架构落 hash 行（成功/失败均落），独立事务。
+
+        失败行 hash_value=NULL、status=failed、记录 error，便于审计与重试观察。
+        """
+        rows: list[PackageHash] = [
+            PackageHash(
+                version=version_row,
+                arch=r.arch_value,
+                algorithm=algorithm,
+                hash_value=r.hash_value,
+                url=r.url,
+                status="success" if r.hash_value is not None else "failed",
+                error=r.error,
+            )
+            for r in results
+        ]
+        async with in_transaction():
+            await PackageHash.bulk_create(rows)

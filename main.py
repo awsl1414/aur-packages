@@ -40,8 +40,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     # 1. 初始化数据库（首启执行 schema.sql + 种子）
     await init_db(config.database.sqlite_path)
-    # 2. 从 DB 加载包注册表、name→id 映射与有效包列表（调度同步复用，不重复查库）
-    registry, name_to_id, pkgs = await load_registry_from_db()
+    # 2. 从 DB 加载包注册表与有效包列表（调度同步复用，不重复查库）
+    registry, pkgs = await load_registry_from_db()
 
     # follow_redirects：GitHub release 等 CDN 会 302 到带签名的临时下载链接，
     # 不跟随则流式下载在重定向处直接失败
@@ -50,7 +50,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     ) as client:
         fetcher: Fetcher = Fetcher(client)
         package_service: PackageService = PackageService(
-            fetcher, registry, config.scheduler.min_collect_interval_seconds
+            fetcher,
+            registry,
+            min_collect_interval_seconds=config.scheduler.min_collect_interval_seconds,
+            version_stale_seconds=config.database.version_stale_seconds,
         )
         app.state.package_service = package_service
 
@@ -58,7 +61,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
             # scheduler 由 async with 管理生命周期（__aexit__ 自动 stop）
             async with AsyncScheduler() as scheduler:
                 schedule_service: ScheduleService = ScheduleService(
-                    scheduler, package_service, name_to_id, config.scheduler
+                    scheduler, package_service, config.scheduler
                 )
                 app.state.schedule_service = schedule_service
                 await schedule_service.start(pkgs)

@@ -21,7 +21,6 @@ from apscheduler.triggers.interval import IntervalTrigger
 from app.config import SchedulerConfig
 from app.constants import ArchEnum
 from app.models import PackageVersion
-from app.schemas import PackageInfo
 from app.services.package_service import (
     CollectThrottledError,
     PackageNotFoundError,
@@ -84,7 +83,7 @@ def _svc(fetcher: FakeFetcher | None = None) -> PackageService:
 
 def _build_service(svc: PackageService, scheduler: FakeScheduler) -> ScheduleService:
     # FakeScheduler 与 AsyncScheduler 同构（鸭子类型），用 type: ignore 绕过 ty 静态检查
-    return ScheduleService(scheduler, svc, {"qq": _PKG_ID}, _cfg())  # type: ignore
+    return ScheduleService(scheduler, svc, _cfg())  # type: ignore
 
 
 def _pkg(**kw: Any) -> Any:
@@ -155,7 +154,7 @@ def test_schedule_signature_tracks_config() -> None:
 
 
 async def test_collect_now_unknown_package() -> None:
-    """name 不在 name_to_id → PackageNotFoundError，无需 DB"""
+    """name 不在 registry → PackageNotFoundError，无需 DB"""
     service = _build_service(_svc(), FakeScheduler())
     with pytest.raises(PackageNotFoundError):
         await service.collect_now("ghost")
@@ -210,18 +209,13 @@ async def test_collect_missing_package_logged(db) -> None:
 
 
 async def test_collect_failure_records_failed(db, make_package) -> None:
-    """get_info 抛错 → persist_failure 记 failed 快照，且不逃逸到调度器"""
+    """版本抓取失败 → svc 落 failed 审计行，_collect 不逃逸到调度器"""
     pkg = await make_package()
-
-    async def _boom(*a: Any, **k: Any) -> PackageInfo:
-        raise RuntimeError("upstream down")
-
-    svc = _svc()
-    svc.get_info = _boom  # type: ignore
+    svc = _svc(FakeFetcher(text=None))  # 版本源失败
     service = _build_service(svc, FakeScheduler())
     await service._collect(pkg.id)  # 不抛
     v = await PackageVersion.get(package=pkg)
-    assert v.status == "failed" and v.error
+    assert v.status == "failed" and v.version is None and v.error
 
 
 # ── reload ───────────────────────────────────────────────────────────────────
@@ -251,15 +245,15 @@ async def test_reload_rebuilds_changed_schedule(db, make_package) -> None:
 
 
 async def test_reload_removes_disabled_and_cleans_memory(db, make_package) -> None:
-    """已停用包：移除 schedule，并清理 _locks / _last_collected"""
+    """已停用包：移除 schedule，并清理 svc 持有的 _locks / _last_collected"""
     await make_package(name="qq", enabled=False)
     sched = FakeScheduler(existing_ids=["pkg-1"])
     svc = _svc()
     service = _build_service(svc, sched)
-    service._locks["qq"] = asyncio.Lock()
+    svc._locks["qq"] = asyncio.Lock()
     svc._last_collected["qq"] = datetime.now(UTC)
 
     await service.reload()
     assert sched.removed == ["pkg-1"]
-    assert "qq" not in service._locks
+    assert "qq" not in svc._locks
     assert "qq" not in svc._last_collected

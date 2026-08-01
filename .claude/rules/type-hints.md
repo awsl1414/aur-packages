@@ -80,6 +80,7 @@
    # ✓ 类型参数写在 [] 中
    def retry[T](url: str, fn: Callable[[], Awaitable[T]]) -> T: ...
 
+
    class ApiResponse[T](BaseModel):
        data: T | None = None
 

@@ -181,15 +181,10 @@ class QQParser(BaseParser):
             logger.error("QQ URL 签名响应解析失败: %s", e)
             return None
 
-    async def resolve_url(
-        self, arch: ArchEnum | str, response_data: str | Any
-    ) -> str | None:
-        """获取可直接下载的 URL（QQ 需对 URL 签名以通过 GetSign 鉴权）。
+    async def resolve_raw_url(self, arch: ArchEnum | str, raw_url: str) -> str | None:
+        """对原始 deb 链接签名，返回带 sign 的可直接下载 URL（QQ 鉴权）。
 
         返回的 URL 已带 sign 查询参数，可直接用于流式下载并计算校验和；
         对外 API 暴露的应使用 parse_url 的原始 URL（签名链接会过期）。
         """
-        url = self.parse_url(arch, response_data)
-        if not url:
-            return None
-        return await self._sign_url(url)
+        return await self._sign_url(raw_url)

@@ -19,7 +19,7 @@ class BaseParser(ABC):
     - ``parse_url``：提取**未加工的下载 URL**——会原样写入 PKGBUILD 的
       ``source_<arch>=()`` 字段。对需要鉴权/签名的下载（如 QQ GetSign），
       只能返回原始 URL，签名动作放在内部下载流程中处理
-    - ``resolve_url``（默认委托给 ``parse_url``）：返回**可直接下载的 URL**，
+    - ``resolve_raw_url``（默认原样返回）：把原始 URL 转为**可直接下载的 URL**，
       仅用于程序内部下载和计算校验和。子类可重写为 async 以实现额外处理，
       例如 QQ 走 im.qq.com 的 GetSign 换取带 sign 的临时链接
 
@@ -68,16 +68,16 @@ class BaseParser(ABC):
         由内部下载流程在需要时完成动态签名处理。
         """
 
-    async def resolve_url(
-        self, arch: ArchEnum | str, response_data: str | Any
-    ) -> str | None:
-        """获取可直接用于下载的 URL（程序内部使用，不写入 PKGBUILD）。
+    async def resolve_raw_url(self, arch: ArchEnum | str, raw_url: str) -> str | None:
+        """将 ``parse_url`` 产出的原始 URL 转为可直接下载的 URL（程序内部使用）。
 
-        默认实现：直接返回 ``parse_url`` 的结果。子类可重写为 async 以实现
-        额外处理，例如 QQ 包通过 im.qq.com 的 GetSign 对 URL 签名后返回
-        带 sign 的临时链接。
+        默认原样返回；子类可重写以附加鉴权/签名处理，例如 QQ 对 deb 链接
+        走 im.qq.com GetSign 换取带 sign 的临时链接。
+
+        下载路径与版本源响应解耦：hash 采集从已持久化的原始 URL 出发，
+        无需重取版本源响应数据。
         """
-        return self.parse_url(arch, response_data)
+        return raw_url
 
     def get_request_headers(self) -> dict[str, str] | None:
         """返回抓取本 parser 数据源时使用的完整请求头。

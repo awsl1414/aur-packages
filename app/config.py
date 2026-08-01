@@ -50,8 +50,8 @@ class DatabaseConfig:
 
     # 已解析为绝对路径的 SQLite 文件路径（相对项目根的配置会被展开）
     sqlite_path: Path
-    # GET /{name} 命中 DB 快照的最大年龄（秒）；超过则回源实时下载计算
-    hash_cache_ttl_seconds: int
+    # GET /{name} 命中 DB 快照的最大年龄（秒）；超过则触发后台异步刷新
+    version_stale_seconds: int
 
 
 @dataclass(frozen=True)
@@ -139,7 +139,7 @@ def load_config(path: Path | str | None = None) -> AppConfig:
         ),
         database=DatabaseConfig(
             sqlite_path=sqlite_path,
-            hash_cache_ttl_seconds=int(database_data["hash_cache_ttl_seconds"]),
+            version_stale_seconds=int(database_data["version_stale_seconds"]),
         ),
         github=GithubConfig(
             # 环境变量优先于配置文件，避免敏感凭证落入仓库
