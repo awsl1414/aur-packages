@@ -28,7 +28,6 @@ CREATE TABLE IF NOT EXISTS packages (
     fetch_url        TEXT    NOT NULL,                          -- 版本信息源 URL
     archs            TEXT    NOT NULL,                          -- 支持架构，JSON 数组，如 ["x86_64","aarch64"]
     parser_config    TEXT,                                      -- parser 构造参数 JSON（可空），如 {"region":"sg"} / {"urls":{"x86_64":"..."}}
-    hash_algorithm   TEXT    NOT NULL DEFAULT 'b2',             -- 定时采集使用的 hash 算法：b2 / sha256 / sha512
     enabled          INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),     -- 是否纳入定时采集
     schedule_type    TEXT    NOT NULL DEFAULT 'interval' CHECK (schedule_type IN ('interval', 'cron')), -- 调度模式
     interval_seconds INTEGER CHECK (interval_seconds IS NULL OR interval_seconds > 0), -- interval 模式下的采集间隔（秒）
@@ -61,8 +60,9 @@ VALUES (
 ON CONFLICT(name) DO NOTHING;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 种子数据：其余包（interval 模式，每小时采集一次；hash_algorithm 走默认 b2）
+-- 种子数据：其余包（interval 模式，每小时采集一次）
 -- parser_config 提供 parser 构造参数；无参 parser 留空
+-- hash 算法不再按包配置：每次采集单流计算全部支持算法（b2/sha256/sha512），查询接口任意 algorithm 均可命中
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- Navicat：版本取自 release-note HTML，下载 URL 为固定 AppImage 直链，经 parser_config.urls 注入

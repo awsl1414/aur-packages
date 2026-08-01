@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Callable
-from pathlib import Path
 from typing import Any
 
 import pytest
 
-from app.utils.hash import calculate_file_hash, get_hash_builder
+from app.utils.hash import get_hash_builder
 
 # 算法名 → 对应的 hashlib 参考构造器
 _REFERENCE: dict[str, Callable[[], Any]] = {
@@ -39,21 +38,3 @@ def test_get_hash_builder_unsupported_raises() -> None:
     """不支持的算法抛 ValueError"""
     with pytest.raises(ValueError):
         get_hash_builder("md5")
-
-
-def test_calculate_file_hash(tmp_path: Path) -> None:
-    """对临时文件计算 hash 与 hashlib 直接结果一致"""
-    data = b"x" * 10_000
-    f = tmp_path / "bin"
-    f.write_bytes(data)
-    assert calculate_file_hash(f, "b2") == hashlib.blake2b(data).hexdigest()
-
-
-def test_calculate_file_hash_missing_file(tmp_path: Path) -> None:
-    with pytest.raises(FileNotFoundError):
-        calculate_file_hash(tmp_path / "nope")
-
-
-def test_calculate_file_hash_directory(tmp_path: Path) -> None:
-    with pytest.raises(IsADirectoryError):
-        calculate_file_hash(tmp_path)

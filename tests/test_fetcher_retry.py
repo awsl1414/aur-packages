@@ -116,7 +116,7 @@ async def test_retry_exhausted_on_read_timeout_stream() -> None:
 
     f, calls, monkey, client = _make_fetcher(handler, max_attempts=2)
     try:
-        assert await f.fetch_and_hash("https://example.com/big") is None
+        assert await f.fetch_and_hash_multi("https://example.com/big", ["b2"]) is None
         assert calls[0] == 2
     finally:
         monkey.undo()

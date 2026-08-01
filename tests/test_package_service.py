@@ -165,6 +165,27 @@ async def test_collect_version_fetch_failure_records_and_raises(
     assert v.status == "failed" and v.version is None
 
 
+async def test_collect_computes_all_algorithms(db, make_package) -> None:
+    """采集单流计算全部算法：GET 任意 algorithm 均命中，不再依赖包配置算法"""
+    pkg = await make_package()
+    svc = _service(text="cfg", hashes={"x86_64": "h1", "aarch64": "h2"})
+    await svc.collect("qq")
+
+    v: PackageVersion = await PackageVersion.get(package=pkg, status="success")
+    # 三种算法 × 两架构 = 6 行
+    assert await PackageHash.filter(version=v).count() == 6
+    for algo in ("b2", "sha256", "sha512"):
+        rows = await PackageHash.filter(version=v, algorithm=algo)
+        assert {h.arch: h.hash_value for h in rows} == {
+            "x86_64": "h1",
+            "aarch64": "h2",
+        }
+
+    # 请求非默认算法也能取到（核心回归：修复「请求非配置算法→hash 永远空」）
+    info = await svc.get_info("qq", hash_algorithm="sha512")
+    assert info.hashes == {"x86_64": "h1", "aarch64": "h2"}
+
+
 # ── collect_now（手动刷新 + 节流）──────────────────────────────────────────
 
 

@@ -27,6 +27,11 @@ logger = logging.getLogger(__name__)
 _ERR_NO_DOWNLOAD_URL = "无法获取可下载 URL"
 _ERR_HASH_FAILED = "下载或 hash 计算失败"
 
+# 采集时一次性计算全部支持的算法（单流多 hash），使 GET 任意 algorithm 都能命中
+_ALL_ALGORITHMS: list[str] = [a.value for a in HashAlgorithmEnum]
+# 采集后回读 / refresh 返回时默认使用的算法
+_DEFAULT_ALGORITHM: str = HashAlgorithmEnum.B2.value
+
 
 class PackageNotFoundError(KeyError):
     """请求的包未在注册表中"""
@@ -51,9 +56,10 @@ class _VersionSnapshot:
 
 @dataclass
 class _HashResult:
-    """单架构 hash 采集结果（含失败原因，便于逐行落库）"""
+    """单架构 × 单算法 hash 采集结果（含失败原因，便于逐行落库）"""
 
     arch_value: str
+    algorithm: str
     hash_value: str | None
     url: str | None
     error: str | None
@@ -253,17 +259,16 @@ class PackageService:
         if pkg is None:
             raise PackageNotFoundError(name)
 
-        algorithm: str = pkg.hash_algorithm
         snapshot: _VersionSnapshot | None = await self.collect_version(pkg, entry)
         if snapshot is None:
             self._last_collected[name] = _utcnow()
             raise RuntimeError(f"采集 {name} 版本失败")
 
-        await self.collect_hashes(entry, snapshot, algorithm)
+        await self.collect_hashes(entry, snapshot)
         self._last_collected[name] = _utcnow()
 
         read: tuple[PackageInfo, datetime] | None = await self._read_info(
-            name, algorithm, entry
+            name, _DEFAULT_ALGORITHM, entry
         )
         if read is not None:
             return read[0]
@@ -310,11 +315,12 @@ class PackageService:
         self,
         entry: PackageEntry,
         snapshot: _VersionSnapshot,
-        algorithm: str,
     ) -> list[_HashResult]:
-        """hash 域：逐 arch resolve_raw_url（QQ 签名）→ 并发下载算 hash → 逐行落库。
+        """hash 域：逐 arch resolve_raw_url（QQ 签名）→ 并发下载一次算全部算法 → 逐行落库。
 
-        失败的架构也落 ``status=failed`` 行；version 已先行落库，hash 失败不影响它。
+        每个架构单次下载同时产出全部 ``_ALL_ALGORITHMS`` 的 digest（单流多 hash），
+        使任意 algorithm 的查询都能命中。失败的架构对每种算法都落 ``status=failed`` 行；
+        version 已先行落库，hash 失败不影响它。
         """
         parser: BaseParser = entry.parser
 
@@ -345,8 +351,8 @@ class PackageService:
         download_urls: dict[str, str] = {
             av: r for av, r in resolved_results if r is not None
         }
-        downloaded: dict[str, str | None] = (
-            await self.fetcher.fetch_and_hash_many(download_urls, algorithm)
+        downloaded: dict[str, dict[str, str] | None] = (
+            await self.fetcher.fetch_and_hash_many(download_urls, _ALL_ALGORITHMS)
             if download_urls
             else {}
         )
@@ -355,20 +361,33 @@ class PackageService:
         for arch_value, resolved in resolved_results:
             raw: str | None = snapshot.urls.get(arch_value)
             if resolved is None:
-                results.append(_HashResult(arch_value, None, raw, _ERR_NO_DOWNLOAD_URL))
-            else:
-                digest: str | None = downloaded.get(arch_value)
+                # 无可下载 URL：每种算法都记失败行
+                for algo in _ALL_ALGORITHMS:
+                    results.append(
+                        _HashResult(arch_value, algo, None, raw, _ERR_NO_DOWNLOAD_URL)
+                    )
+                continue
+            digests: dict[str, str] | None = downloaded.get(arch_value)
+            for algo in _ALL_ALGORITHMS:
+                digest: str | None = digests.get(algo) if digests else None
                 results.append(
                     _HashResult(
                         arch_value,
+                        algo,
                         digest,
                         raw,
                         None if digest is not None else _ERR_HASH_FAILED,
                     )
                 )
-        await self.persist_hashes(snapshot.version_row, results, algorithm)
-        ok = sum(1 for r in results if r.hash_value is not None)
-        logger.info("采集 %s hash 完成：%d/%d 架构成功", entry.name, ok, len(results))
+        await self.persist_hashes(snapshot.version_row, results)
+        ok_archs = sum(1 for av, r in resolved_results if r is not None)
+        logger.info(
+            "采集 %s hash 完成：%d/%d 架构成功（每架构 %d 种算法）",
+            entry.name,
+            ok_archs,
+            len(resolved_results),
+            len(_ALL_ALGORITHMS),
+        )
         return results
 
     # ── 落库（各自独立事务） ────────────────────────────────────────────
@@ -401,9 +420,8 @@ class PackageService:
         self,
         version_row: PackageVersion,
         results: Iterable[_HashResult],
-        algorithm: str,
     ) -> None:
-        """逐架构落 hash 行（成功/失败均落），独立事务。
+        """逐「架构 × 算法」落 hash 行（成功/失败均落），独立事务。
 
         失败行 hash_value=NULL、status=failed、记录 error，便于审计与重试观察。
         """
@@ -411,7 +429,7 @@ class PackageService:
             PackageHash(
                 version=version_row,
                 arch=r.arch_value,
-                algorithm=algorithm,
+                algorithm=r.algorithm,
                 hash_value=r.hash_value,
                 url=r.url,
                 status="success" if r.hash_value is not None else "failed",

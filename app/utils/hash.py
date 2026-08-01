@@ -2,10 +2,9 @@
 
 import hashlib
 from collections.abc import Callable
-from pathlib import Path
 from typing import Protocol, runtime_checkable
 
-from app.constants import CHUNK_SIZE, HashAlgorithmEnum
+from app.constants import HashAlgorithmEnum
 
 
 @runtime_checkable
@@ -32,37 +31,3 @@ def get_hash_builder(algorithm: str) -> Callable[[], _Hash]:
             f"不支持的哈希算法: {algorithm}，支持的算法: {list(_HASH_BUILDERS.keys())}"
         )
     return _HASH_BUILDERS[key]
-
-
-def calculate_file_hash(
-    file_path: str | Path,
-    hash_algorithm: str = HashAlgorithmEnum.B2.value,
-) -> str:
-    """计算文件哈希值。
-
-    支持：
-        - blake2b (b2)
-        - sha512
-        - sha256
-
-    采用分块读取方式，适用于大文件。
-
-    Raises:
-        FileNotFoundError: 文件不存在。
-        IsADirectoryError: 指定路径不是普通文件。
-    """
-    file_path = Path(file_path)
-
-    if not file_path.exists():
-        raise FileNotFoundError(f"文件不存在: {file_path}")
-
-    if not file_path.is_file():
-        raise IsADirectoryError(f"不是普通文件: {file_path}")
-
-    hash_func = get_hash_builder(hash_algorithm)()
-
-    with file_path.open("rb") as f:
-        while chunk := f.read(CHUNK_SIZE):
-            hash_func.update(chunk)
-
-    return hash_func.hexdigest()

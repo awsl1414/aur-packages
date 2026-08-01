@@ -47,7 +47,6 @@ def make_package() -> Callable[..., Coroutine[Any, Any, Package]]:
             "parser_type": "qq",
             "fetch_url": "https://example.com/config.json",
             "archs": '["x86_64","aarch64","loong64"]',
-            "hash_algorithm": "b2",
             "enabled": True,
             "schedule_type": "interval",
             "interval_seconds": 3600,

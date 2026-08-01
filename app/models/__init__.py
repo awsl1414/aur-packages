@@ -17,7 +17,6 @@ class Package(Model):
     archs = fields.TextField()  # JSON 数组字符串，如 ["x86_64","aarch64"]
     # parser 构造参数 JSON（可空），如 {"region":"sg"} / {"urls":{"x86_64":"..."}}
     parser_config = fields.TextField(null=True)
-    hash_algorithm = fields.CharField(max_length=16, default="b2")
     enabled = fields.BooleanField(default=True)
     schedule_type = fields.CharField(max_length=20, default="interval")
     interval_seconds = fields.IntField(null=True)

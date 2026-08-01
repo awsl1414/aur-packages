@@ -73,11 +73,16 @@ class FakeFetcher:
     async def fetch_and_hash_many(
         self,
         urls: dict[str, str],
-        algorithm: str = "b2",
+        algorithms: list[str],
         headers: dict[str, str] | None = None,
-    ) -> dict[str, str | None]:
+    ) -> dict[str, dict[str, str] | None]:
+        """桩：某架构在 ``_hashes`` 有值视为下载成功，全部算法均返回该 digest；缺失则 None。"""
         self.hash_calls += 1
-        return {key: self._hashes.get(key) for key in urls}
+        out: dict[str, dict[str, str] | None] = {}
+        for key in urls:
+            digest: str | None = self._hashes.get(key)
+            out[key] = ({a: digest for a in algorithms}) if digest is not None else None
+        return out
 
     def as_fetcher(self) -> Fetcher:
         """伪装成 Fetcher 供 PackageService 使用（ty 兼容）。"""

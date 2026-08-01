@@ -170,7 +170,7 @@ async def test_collect_now_throttled() -> None:
 
 
 async def test_collect_now_success_persists(db, make_package) -> None:
-    pkg = await make_package(hash_algorithm="b2")
+    pkg = await make_package()
     service = _build_service(_svc(), FakeScheduler())
     info = await service.collect_now("qq")
     assert info.version == "1.0.0"

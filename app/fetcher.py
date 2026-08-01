@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from urllib.parse import urlparse
 
 import httpx
@@ -13,7 +13,6 @@ from app.constants import (
     CHUNK_SIZE,
     MAX_CONCURRENT_DOWNLOADS,
     USER_AGENT,
-    HashAlgorithmEnum,
 )
 from app.utils.hash import get_hash_builder
 
@@ -178,32 +177,34 @@ class Fetcher:
                     logger.error("  响应体(截断): %s", body[:_LOG_BODY_MAX_LENGTH])
             return None
 
-    async def fetch_and_hash(
+    async def fetch_and_hash_multi(
         self,
         url: str,
-        algorithm: str = HashAlgorithmEnum.B2.value,
+        algorithms: Iterable[str],
         headers: dict[str, str] | None = None,
-    ) -> str | None:
-        """流式下载 URL 内容并边下边算 hash，不落盘。
+    ) -> dict[str, str] | None:
+        """流式下载一次，同时计算多种算法的 hash，不落盘。
 
-        用于计算文件 hash 而无需在本地保存完整文件。``headers`` 为 None 时
-        使用 ``DEFAULT_HEADERS``。瞬时网络错误自动重试（见 ``_retry``）；
-        最终失败返回 None 并记日志。
+        多算法共享同一条下载流（逐 chunk 喂给各 builder），下载只发生一次，
+        额外开销仅是多次 hash 计算（远小于下载耗时）。返回 ``{algorithm: digest}``；
+        下载失败返回 None（共享流，要么全成功要么全失败）。瞬时网络错误自动重试。
         """
         request_headers: dict[str, str] = _with_github_auth(
             url, headers if headers is not None else DEFAULT_HEADERS
         )
+        algo_list: list[str] = list(algorithms)
 
-        async def _attempt() -> str:
-            builder = get_hash_builder(algorithm)
-            hash_func = builder()
+        async def _attempt() -> dict[str, str]:
+            # builder 须在每次尝试内新建，避免重试时累积上一次的部分流
+            builders = {a: get_hash_builder(a)() for a in algo_list}
             async with self.client.stream(
                 "GET", url, headers=request_headers
             ) as response:
                 response.raise_for_status()
                 async for chunk in response.aiter_bytes(CHUNK_SIZE):
-                    hash_func.update(chunk)
-            return hash_func.hexdigest()
+                    for hash_func in builders.values():
+                        hash_func.update(chunk)
+            return {a: h.hexdigest() for a, h in builders.items()}
 
         try:
             return await self._retry(url, _attempt)
@@ -222,21 +223,25 @@ class Fetcher:
     async def fetch_and_hash_many(
         self,
         urls: dict[str, str],
-        algorithm: str = HashAlgorithmEnum.B2.value,
+        algorithms: Iterable[str],
         headers: dict[str, str] | None = None,
-    ) -> dict[str, str | None]:
-        """并发下载多个 URL 并计算 hash，不落盘。
+    ) -> dict[str, dict[str, str] | None]:
+        """并发下载多个 URL，每个同时算多种算法，不落盘。
 
-        ``urls`` 为 ``{key: url}`` 映射，返回 ``{key: hash | None}``。
-        每个下载通过 Semaphore 限流，失败的 key 记 None。
+        ``urls`` 为 ``{key: url}``，返回 ``{key: {algorithm: digest} | None}``；
+        某 key 下载失败则其值为 None。通过 Semaphore 限流。
         """
 
-        async def _download_one(key: str, url: str) -> tuple[str, str | None]:
+        async def _download_one(
+            key: str, url: str
+        ) -> tuple[str, dict[str, str] | None]:
             async with self._semaphore:
-                digest: str | None = await self.fetch_and_hash(url, algorithm, headers)
-                return key, digest
+                result: dict[str, str] | None = await self.fetch_and_hash_multi(
+                    url, algorithms, headers
+                )
+                return key, result
 
-        results: list[tuple[str, str | None]] = await asyncio.gather(
+        results: list[tuple[str, dict[str, str] | None]] = await asyncio.gather(
             *[_download_one(key, url) for key, url in urls.items()]
         )
         return dict(results)
