@@ -77,7 +77,7 @@ class ConfigLoader(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    settings: Settings = Field(default_factory=Settings)
+    settings: Settings
     packages: dict[str, PackageConfig] = Field(default_factory=dict)
 
     @classmethod
