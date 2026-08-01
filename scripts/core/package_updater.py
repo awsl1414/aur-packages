@@ -40,8 +40,13 @@ class PackageUpdater:
         # 从配置中获取下载设置
         download_settings = self.config.settings.download
 
-        # 初始化 Fetcher（使用配置的超时时间）
-        self.fetcher = Fetcher(timeout=download_settings.timeout)
+        # 初始化 Fetcher（复用下载设置的超时与重试参数；helper API 的
+        # 429/5xx 瞬时错误由 Fetcher 指数退避重试）
+        self.fetcher = Fetcher(
+            timeout=download_settings.timeout,
+            max_retries=download_settings.max_retries,
+            retry_wait=download_settings.retry_wait,
+        )
 
         # 唯一解析器：消费 helper API 的统一响应
         self.parser = ApiParser()
