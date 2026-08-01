@@ -3,7 +3,7 @@
 
 pkgname=trae-us
 pkgver=2.3.61406
-pkgrel=1
+pkgrel=2
 pkgdesc="AI-powered IDE by ByteDance (US CDN)"
 arch=('x86_64' 'aarch64')
 url="https://www.trae.cn/"
@@ -22,7 +22,7 @@ source_x86_64=("Trae-linux-x64-${pkgver}-${pkgrel}.tar.gz::https://lf-cdn.trae.a
 source_aarch64=("Trae-linux-arm64-${pkgver}-${pkgrel}.tar.gz::https://lf-cdn.trae.ai/obj/trae-ai-us/pkg/app/releases/stable/2.3.61406/linux/Trae-linux-arm64.tar.gz")
 b2sums=('2331b0d37fff8478ea37cbf9e5c2e70a59631aae6efb44741fc6c1a8dce65557098e9dffa8c30148ef27432802bec3d1eda279021421e5d3f979e80900662726'
             '656c5d6bea6ef15185e0d8ee0181276f6de3bfae8e66a2c65772a5f1354727952dd020dca057246139a2bab8f4805057fa2db367a6ba0a1b90d9ffd7fcab8412')
-b2sums_x86_64=('a0507fb189820a341e56550eaee5692a94aa354932b8e702e27278e5f5866bd62e52def378ffdd11ec55d20de3cc9c87dba6f125723c741c9662917c0f7c3cfe')
+b2sums_x86_64=('75bda689f312d3591c9511add4c42a88b5620efdf2ce663995285b24cc0a9a366c8e155f52dc48325eb6dc5bd5c9747a29256ddc8f878112bf5210fe75adae89')
 b2sums_aarch64=('12b2ba04ba2c354194a5907870e33714c311503b4fc28fd4d65a7cf63064d4929cf86a135abd5a213f68fddd31263f70e83bbed6f6b80e99629cdf3ee0d5ecb8')
 
 package() {
