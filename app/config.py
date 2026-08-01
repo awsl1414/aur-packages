@@ -27,6 +27,10 @@ class HttpConfig:
     chunk_size: int
     max_concurrent_downloads: int
     log_body_max_length: int
+    # 瞬时网络错误（连接超时/TLS 重置/对端中断等）的总尝试次数（含首次），1 表示不重试
+    retry_max_attempts: int
+    # 指数退避基数（秒）：第 n 次重试前等待 backoff * 2**(n-1)
+    retry_backoff_seconds: float
 
 
 @dataclass(frozen=True)
@@ -123,6 +127,8 @@ def load_config(path: Path | str | None = None) -> AppConfig:
             chunk_size=int(http_data["chunk_size"]),
             max_concurrent_downloads=int(http_data["max_concurrent_downloads"]),
             log_body_max_length=int(http_data["log_body_max_length"]),
+            retry_max_attempts=int(http_data["retry_max_attempts"]),
+            retry_backoff_seconds=float(http_data["retry_backoff_seconds"]),
         ),
         qq=QQConfig(
             origin=str(qq_data["origin"]),

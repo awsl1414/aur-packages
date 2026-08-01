@@ -8,6 +8,10 @@ default_timeout = 30.0
 chunk_size = 4096
 max_concurrent_downloads = 5
 log_body_max_length = 500
+# 瞬时网络错误（连接超时/TLS 重置/对端中断等）的总尝试次数（含首次），1 表示不重试
+retry_max_attempts = 3
+# 指数退避基数（秒）：第 n 次重试前等待 backoff * 2^(n-1)
+retry_backoff_seconds = 1.0
 
 [qq]
 origin = "https://im.qq.com"

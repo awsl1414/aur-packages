@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from urllib.parse import urlparse
 
 import httpx
@@ -20,6 +21,21 @@ logger = logging.getLogger(__name__)
 
 # 日志中响应体截断长度（字符），避免大响应体刷屏
 _LOG_BODY_MAX_LENGTH: int = config.http.log_body_max_length
+
+# 瞬时网络错误重试参数（应对国内访问上游不稳定）
+_RETRY_MAX_ATTEMPTS: int = max(1, config.http.retry_max_attempts)
+_RETRY_BACKOFF_SECONDS: float = config.http.retry_backoff_seconds
+
+# 可重试的瞬时网络异常：建连失败/超时、读取超时、连接池超时、对端中途断开
+_RETRYABLE_NETWORK_EXC: tuple[type[Exception], ...] = (
+    httpx.ConnectError,
+    httpx.ConnectTimeout,
+    httpx.ReadTimeout,
+    httpx.PoolTimeout,
+    httpx.RemoteProtocolError,
+)
+# 可重试的 HTTP 状态码：限流与服务端临时故障
+_RETRYABLE_STATUS: frozenset[int] = frozenset({408, 425, 429, 500, 502, 503, 504})
 
 # 可选 GitHub Token：配置后对 GitHub 域名请求统一带 Authorization，提升速率配额
 _GITHUB_TOKEN: str | None = config.github.token
@@ -72,6 +88,21 @@ def _describe_http_error(e: HTTPError) -> str:
     return f"{type(e).__name__}: {msg}" if msg else type(e).__name__
 
 
+def _is_retryable(e: HTTPError) -> bool:
+    """瞬时错误才重试：网络异常或可重试状态码（限流/5xx）。
+
+    4xx（403 限流鉴权、404 不存在等）是确定性失败，重试无益且拖慢响应，
+    直接放过由调用方记录并返回 None。
+    """
+    if isinstance(e, _RETRYABLE_NETWORK_EXC):
+        return True
+    return (
+        isinstance(e, httpx.HTTPStatusError)
+        and e.response is not None
+        and e.response.status_code in _RETRYABLE_STATUS
+    )
+
+
 class Fetcher:
     """异步 HTTP 客户端封装。
 
@@ -86,21 +117,58 @@ class Fetcher:
         self.client = client
         self._semaphore = asyncio.Semaphore(max_concurrent)
 
+    async def _retry[T](self, url: str, attempt: Callable[[], Awaitable[T]]) -> T:
+        """对瞬时网络错误按指数退避重试，非瞬时错误或耗尽后抛出由调用方记录。
+
+        - 瞬时错误（``_is_retryable``）：指数退避 ``backoff * 2**(n-1)`` 后重试
+        - 确定性失败（4xx 等）或已达 ``retry_max_attempts``：立即/最终向上抛出
+
+        重试只发生在网络层，hash 算法等业务错误由调用方自行捕获，不进入本方法。
+        """
+        last_exc: HTTPError | None = None
+        for i in range(_RETRY_MAX_ATTEMPTS):
+            try:
+                return await attempt()
+            except HTTPError as e:
+                last_exc = e
+                if not _is_retryable(e) or i == _RETRY_MAX_ATTEMPTS - 1:
+                    raise
+                wait: float = _RETRY_BACKOFF_SECONDS * (2**i)
+                logger.warning(
+                    "%s 第 %d/%d 次尝试失败：%s，%.1fs 后重试",
+                    url,
+                    i + 1,
+                    _RETRY_MAX_ATTEMPTS,
+                    _describe_http_error(e),
+                    wait,
+                )
+                await asyncio.sleep(wait)
+        # 循环正常结束意味着 max_attempts 为 0，理论不可达（构造时已 clamp ≥1）
+        assert last_exc is not None
+        raise last_exc
+
     async def fetch_text(
         self, url: str, headers: dict[str, str] | None = None
     ) -> str | None:
         """获取文本数据。
 
         ``headers`` 为 None 时用 ``DEFAULT_HEADERS``，否则用传入集合（完整替换）。
-        失败时输出状态码 + 响应体（截断），便于诊断 CDN 拒绝、SNI 不匹配、403/451 等。
+        瞬时网络错误自动重试（见 ``_retry``）；最终失败时输出状态码 + 响应体（截断），
+        便于诊断 CDN 拒绝、SNI 不匹配、403/451 等。
         """
         request_headers: dict[str, str] = _with_github_auth(
             url, headers if headers is not None else DEFAULT_HEADERS
         )
-        try:
-            response = await self.client.get(url, headers=request_headers)
+
+        async def _attempt() -> str:
+            response: httpx.Response = await self.client.get(
+                url, headers=request_headers
+            )
             response.raise_for_status()
             return response.text
+
+        try:
+            return await self._retry(url, _attempt)
         except HTTPError as e:
             logger.error("从 %s 获取文本失败: %s", url, _describe_http_error(e))
             if isinstance(e, httpx.HTTPStatusError) and e.response is not None:
@@ -119,12 +187,14 @@ class Fetcher:
         """流式下载 URL 内容并边下边算 hash，不落盘。
 
         用于计算文件 hash 而无需在本地保存完整文件。``headers`` 为 None 时
-        使用 ``DEFAULT_HEADERS``。失败时返回 None 并记日志。
+        使用 ``DEFAULT_HEADERS``。瞬时网络错误自动重试（见 ``_retry``）；
+        最终失败返回 None 并记日志。
         """
         request_headers: dict[str, str] = _with_github_auth(
             url, headers if headers is not None else DEFAULT_HEADERS
         )
-        try:
+
+        async def _attempt() -> str:
             builder = get_hash_builder(algorithm)
             hash_func = builder()
             async with self.client.stream(
@@ -134,12 +204,18 @@ class Fetcher:
                 async for chunk in response.aiter_bytes(CHUNK_SIZE):
                     hash_func.update(chunk)
             return hash_func.hexdigest()
+
+        try:
+            return await self._retry(url, _attempt)
         except HTTPError as e:
-            logger.error("流式下载并计算 hash 失败 %s: %s", url, _describe_http_error(e))
+            logger.error(
+                "流式下载并计算 hash 失败 %s: %s", url, _describe_http_error(e)
+            )
             if isinstance(e, httpx.HTTPStatusError) and e.response is not None:
                 logger.error("  状态码: %d", e.response.status_code)
             return None
         except ValueError as e:
+            # 算法无效是配置错误，重试无意义，直接记录
             logger.error("hash 算法无效: %s", e)
             return None
 

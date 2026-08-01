@@ -75,6 +75,19 @@
    ) -> bool: ...
    ```
 
+7. **泛型用 PEP 695 类型参数语法**
+   ```python
+   # ✓ 类型参数写在 [] 中
+   def retry[T](url: str, fn: Callable[[], Awaitable[T]]) -> T: ...
+
+   class ApiResponse[T](BaseModel):
+       data: T | None = None
+
+
+   # ✗ 禁止旧式 TypeVar / Generic
+   T = TypeVar("T")
+   ```
+
 ## 类型检查
 
 项目使用 **ty**（Astral 开发的快速 Python 类型检查器）进行静态类型检查：
