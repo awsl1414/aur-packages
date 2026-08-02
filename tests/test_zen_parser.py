@@ -43,9 +43,10 @@ def _payload(
 @pytest.mark.parametrize(
     "name,expected",
     [
-        ("Twilight build - 1.20t (2026-01-01)", "1.20t"),
-        ("Twilight build - 1.5a", "1.5a"),
-        ("Twilight build - 2.0", "2.0"),
+        ("Twilight build - 1.22t (2026-08-01 at 23:18:32)", "1.22t.20260801"),
+        ("Twilight build - 1.20t (2026-01-01)", "1.20t.20260101"),
+        ("Twilight build - 1.5a", "1.5a"),  # 无日期 → 仅版本号
+        ("Twilight build - 2.0", "2.0"),  # 无日期 → 仅版本号
     ],
 )
 def test_parse_version_patterns(name: str, expected: str) -> None:
