@@ -1,3 +1,5 @@
+
+
 # AUR 包自动更新工具
 
 > 自动化 Arch Linux AUR 包版本更新工具
@@ -42,6 +44,7 @@ uv run scripts/main.py --list       # 列出所有包
 | `trae-sg` | Trae AI IDE 国际版（新加坡 CDN） |
 | `trae-us` | Trae AI IDE 国际版（美国 CDN） |
 | `trae-cn` | Trae AI IDE 国内版（独立产品，非国际版 CDN 变体） |
+| `zen-browser-twilight-bin` | Zen Browser Twilight 夜间版 |
 
 ## 开发
 
