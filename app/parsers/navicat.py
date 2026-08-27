@@ -6,7 +6,6 @@
 
 import logging
 import re
-from typing import Any
 
 from app.constants import ArchEnum
 
@@ -22,18 +21,18 @@ class NavicatParser(BaseParser):
         super().__init__()
         self._urls = urls or {}
 
-    def parse_version(self, response_data: str | Any) -> str | None:
+    def parse_version(self, response_data: str) -> str | None:
         """从 release-note HTML 中提取 ``Navicat ... (Linux) ... version X.Y.Z``"""
-        if not isinstance(response_data, str):
-            return None
         pattern: str = r"(Navicat[^()]*\(Linux\)[^v]*version[^\d]*)(\d+\.\d+\.\d+)"
         matched: re.Match[str] | None = re.search(pattern, response_data, re.IGNORECASE)
         if not matched:
-            logger.warning("Navicat: HTML 中未匹配到 Linux 版本号")
+            self._log_structure_change(
+                "release-note HTML 中未匹配到 Linux 版本号", response_data
+            )
             return None
         return matched.group(2)
 
-    def parse_url(self, arch: ArchEnum | str, response_data: str | Any) -> str | None:
+    def parse_url(self, arch: ArchEnum | str, response_data: str) -> str | None:
         """从配置注入的 arch→URL 映射中取下载链接（与响应无关）"""
         arch_value = self._arch_value(arch)
         url: str | None = self._urls.get(arch_value)

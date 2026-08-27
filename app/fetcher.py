@@ -1,5 +1,4 @@
 """异步 HTTP 客户端模块"""
-from cmath import log
 
 import asyncio
 import logging

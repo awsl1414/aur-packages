@@ -53,11 +53,6 @@ def test_parse_version_patterns(name: str, expected: str) -> None:
     assert _PARSER.parse_version(_payload(name=name)) == expected
 
 
-@pytest.mark.parametrize("bad", [None, 123, b"x"])
-def test_parse_version_non_string(bad: object) -> None:
-    assert _PARSER.parse_version(bad) is None  # type: ignore[arg-type]
-
-
 def test_parse_version_missing_name() -> None:
     assert _PARSER.parse_version(json.dumps({"assets": []})) is None
 
@@ -107,5 +102,7 @@ def test_parse_url_empty_assets() -> None:
     assert _PARSER.parse_url(ArchEnum.X86_64, _payload(assets=[])) is None
 
 
-def test_parse_url_non_string() -> None:
-    assert _PARSER.parse_url(ArchEnum.X86_64, None) is None  # type: ignore[arg-type]
+def test_parse_url_null_assets() -> None:
+    """assets 键存在但值为 null → None 且不抛 TypeError（helper 的 None 表默认，故直构）"""
+    resp = json.dumps({"name": "Twilight build", "assets": None})
+    assert _PARSER.parse_url(ArchEnum.X86_64, resp) is None

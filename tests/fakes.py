@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, cast
+from typing import cast
 
 from app.constants import ArchEnum
 from app.fetcher import Fetcher
@@ -25,10 +25,10 @@ class FakeParser(BaseParser):
         self._version = version
         self._url_by_arch = url_by_arch or {}
 
-    def parse_version(self, response_data: str | Any) -> str | None:
+    def parse_version(self, response_data: str) -> str | None:
         return self._version
 
-    def parse_url(self, arch: ArchEnum | str, response_data: str | Any) -> str | None:
+    def parse_url(self, arch: ArchEnum | str, response_data: str) -> str | None:
         return self._url_by_arch.get(self._arch_value(arch))
 
     async def resolve_raw_url(self, arch: ArchEnum | str, raw_url: str) -> str | None:

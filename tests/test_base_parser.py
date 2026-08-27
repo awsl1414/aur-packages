@@ -1,14 +1,17 @@
-"""app.parsers.base 单元测试：_arch_value 与 _parse_json_dict 的缓存语义。"""
+"""app.parsers.base 单元测试：_arch_value、_parse_json_dict 缓存与结构变更日志。"""
 
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 from unittest.mock import patch
 
+import pytest
+
 from app.constants import ArchEnum
 from app.parsers import base as base_mod
-from app.parsers.base import BaseParser
+from app.parsers.base import _STRUCTURE_SNIPPET_MAX_LENGTH, BaseParser
 
 
 class _Concrete(BaseParser):
@@ -87,3 +90,45 @@ def test_subclass_without_init_inherits_cache() -> None:
     assert parser._cached_response is None
     parser._parse_json_dict('{"a": 1}')
     assert parser._cached_data == {"a": 1}
+
+
+# ── _log_structure_change 统一格式 ───────────────────────────────────────────
+
+
+def test_log_structure_change_format(caplog: pytest.LogCaptureFixture) -> None:
+    """统一格式：标记语 + 解析器名 + 详情 + 响应片段"""
+    with caplog.at_level(logging.WARNING, logger="app.parsers.base"):
+        _Concrete()._log_structure_change("缺少 info.version 字段", '{"info": {}}')
+    message: str = caplog.records[0].getMessage()
+    assert "疑似上游结构变更" in message
+    assert "_Concrete" in message
+    assert "缺少 info.version 字段" in message
+    assert '{"info": {}}' in message
+
+
+def test_log_structure_change_snippet_truncated(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """超长响应片段截断，防止大响应刷屏"""
+    with caplog.at_level(logging.WARNING, logger="app.parsers.base"):
+        _Concrete()._log_structure_change("d", "x" * 10_000)
+    assert "x" * 10_000 not in caplog.records[0].getMessage()
+    assert "x" * _STRUCTURE_SNIPPET_MAX_LENGTH in caplog.records[0].getMessage()
+
+
+def test_log_structure_change_non_str_repr(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """非字符串 evidence 先 repr 再截断（None/bytes/子对象均可作证据）"""
+    with caplog.at_level(logging.WARNING, logger="app.parsers.base"):
+        _Concrete()._log_structure_change("d", None)
+    assert "None" in caplog.records[0].getMessage()
+
+
+def test_invalid_json_logged_as_structure_change(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """JSON 解析失败（如 200 返回 HTML 错误页）走统一结构变更日志"""
+    with caplog.at_level(logging.WARNING, logger="app.parsers.base"):
+        assert _Concrete()._parse_json_dict("<html>err</html>") is None
+    assert "疑似上游结构变更" in caplog.text

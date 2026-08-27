@@ -6,8 +6,6 @@ import json
 from typing import Any
 from unittest.mock import patch
 
-import pytest
-
 from app.constants import ArchEnum
 from app.parsers import base as base_mod
 from app.parsers.pypi import PyPIParser
@@ -32,9 +30,9 @@ def test_parse_version_success() -> None:
     assert _PARSER.parse_version(_payload()) == "1.2.3"
 
 
-@pytest.mark.parametrize("bad", [None, 123, b"bytes"])
-def test_parse_version_non_string(bad: object) -> None:
-    assert _PARSER.parse_version(bad) is None  # type: ignore[arg-type]
+def test_parse_version_info_null() -> None:
+    """info 键存在但值为 null（限流/错误载荷）→ None 且不抛 AttributeError"""
+    assert _PARSER.parse_version(_payload(info=None)) is None
 
 
 def test_parse_version_missing_info() -> None:
@@ -88,8 +86,9 @@ def test_parse_url_empty_urls() -> None:
     assert _PARSER.parse_url("any", _payload(urls=[])) is None
 
 
-def test_parse_url_non_string() -> None:
-    assert _PARSER.parse_url("any", None) is None  # type: ignore[arg-type]
+def test_parse_url_null_urls() -> None:
+    """urls 键存在但值为 null → None 且不抛 TypeError"""
+    assert _PARSER.parse_url("any", _payload(urls=None)) is None
 
 
 def test_parse_url_invalid_json() -> None:

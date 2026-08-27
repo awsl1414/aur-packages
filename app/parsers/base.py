@@ -9,6 +9,9 @@ from app.constants import ArchEnum
 
 logger = logging.getLogger(__name__)
 
+# 结构变更日志附带响应片段的截断长度（字符），防止大响应刷屏
+_STRUCTURE_SNIPPET_MAX_LENGTH: int = 300
+
 
 class BaseParser(ABC):
     """解析器抽象基类，定义版本号和 URL 解析接口。
@@ -26,6 +29,9 @@ class BaseParser(ABC):
     JSON 解析复用 ``_parse_json_dict``：按 ``response_data`` 身份缓存解析结果，
     使一次采集周期内 parse_version + 各架构 parse_url 只解析一次（trae manifest
     较大时收益明显）。子类自定义 ``__init__`` 时须调 ``super().__init__()``。
+
+    结构性校验失败（期望的字段/列表/条目缺失或形态不符）统一走
+    ``_log_structure_change`` 打日志，便于跨 parser 检索上游改版事件。
     """
 
     def __init__(self) -> None:
@@ -38,18 +44,71 @@ class BaseParser(ABC):
         """将 ArchEnum 或 str 统一为架构字符串值"""
         return arch.value if isinstance(arch, ArchEnum) else arch
 
-    def _parse_json_dict(self, response_data: str) -> dict[str, Any] | None:
-        """解析 JSON 响应为 dict 并按 ``response_data`` 缓存；非字典或解析失败返回 None。
+    def _log_structure_change(self, detail: str, evidence: Any) -> None:
+        """统一记录「疑似上游数据结构变更」告警。
 
-        同一响应在一次采集周期内会被 parse_version 与各架构 parse_url 反复使用，
-        缓存使其只解析一次。跨周期 fetcher 返回新的字符串对象，缓存自然失效。
+        响应内容偏离 parser 预期结构时调用——通常是上游 API/页面改版。
+        统一格式（解析器名 + 详情 + 响应片段）便于日志检索与快速定位上游
+        实际返回的内容。``evidence`` 取最贴近失配点的数据（完整响应或
+        子对象），非字符串先 repr；值校验失败（如版本号不一致）与配置
+        错误（如不支持的架构）不属结构变更，走普通 logger。
+        """
+        snippet: str = (evidence if isinstance(evidence, str) else repr(evidence))[
+            :_STRUCTURE_SNIPPET_MAX_LENGTH
+        ]
+        logger.warning(
+            "疑似上游结构变更 [%s] %s；响应片段: %s",
+            type(self).__name__,
+            detail,
+            snippet,
+        )
+
+    def _json_section(self, response_data: str, *keys: str) -> dict[str, Any] | None:
+        """按路径取嵌套 dict 段（如 ``data.manifest.linux``）。
+
+        任一级缺失或非 dict 返回 None 并记结构变更日志，统一各 parser
+        的嵌套导航写法（dict 内容属上游真实可变边界，守卫有必要）。
+        """
+        data: dict[str, Any] | None = self._parse_json_dict(response_data)
+        if data is None:
+            return None
+        section: Any = data
+        for key in keys:
+            if not isinstance(section, dict):
+                break
+            section = section.get(key)
+        if isinstance(section, dict):
+            return section
+        self._log_structure_change(f"响应缺少 {'.'.join(keys)} 段", data)
+        return None
+
+    def _arch_key(self, arch: ArchEnum | str, mapping: dict[str, str]) -> str | None:
+        """架构 → 映射表 key 查找；不支持的架构记普通警告并返回 None。
+
+        不支持的架构是配置/调用错误而非上游结构变更，故走普通日志；
+        与 trae/zen/qq 三处的映射查找保持同一行为与格式。
+        """
+        arch_value: str = self._arch_value(arch)
+        key: str | None = mapping.get(arch_value)
+        if key is None:
+            logger.warning("%s: 不支持的架构 %s", type(self).__name__, arch_value)
+        return key
+
+    def _parse_json_dict(self, response_data: str) -> dict[str, Any] | None:
+        """解析 JSON 响应为 dict 并按 ``response_data`` 缓存。
+
+        非 dict 结构或解析失败返回 None。``response_data`` 由调用方
+        （PackageService.collect_version）保证为 fetch_text 的 str 结果，
+        无需类型守卫。同一响应在一次采集周期内会被 parse_version 与
+        各架构 parse_url 反复使用，缓存使其只解析一次；跨周期 fetcher
+        返回新的字符串对象，缓存自然失效。
         """
         if response_data is self._cached_response:
             return self._cached_data
         try:
             data: Any = json.loads(response_data)
         except json.JSONDecodeError:
-            logger.warning("%s: JSON 解析失败", type(self).__name__)
+            self._log_structure_change("响应非合法 JSON", response_data)
             self._cached_response, self._cached_data = response_data, None
             return None
         result: dict[str, Any] | None = data if isinstance(data, dict) else None
@@ -57,11 +116,11 @@ class BaseParser(ABC):
         return result
 
     @abstractmethod
-    def parse_version(self, response_data: str | Any) -> str | None:
+    def parse_version(self, response_data: str) -> str | None:
         """从响应数据中提取版本号"""
 
     @abstractmethod
-    def parse_url(self, arch: ArchEnum | str, response_data: str | Any) -> str | None:
+    def parse_url(self, arch: ArchEnum | str, response_data: str) -> str | None:
         """从响应数据中提取原始下载 URL（写入 PKGBUILD 的 ``source_<arch>=()``）。
 
         返回值必须是未经签名/鉴权处理的原始 URL——这样 PKGBUILD 静态可见，

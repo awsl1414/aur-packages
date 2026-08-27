@@ -14,7 +14,8 @@ from app.parsers.qq import QQParser
 from app.parsers.trae import TraeParser
 from app.parsers.zen import ZenParser
 
-# parser_type → 解析器类；parser 无状态，每次取用 new 一个实例
+# parser_type → 解析器类。parser 实例仅持有上一响应的解析缓存
+# （见 BaseParser._parse_json_dict），无其他跨请求状态
 _PARSER_REGISTRY: dict[str, type[BaseParser]] = {
     "qq": QQParser,
     "navicat": NavicatParser,

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import json
 from typing import Any
-
-import pytest
+from unittest.mock import patch
 
 from app.constants import ArchEnum
+from app.parsers import qq as qq_mod
 from app.parsers.qq import QQParser
 
 _PARSER = QQParser()
@@ -35,20 +35,15 @@ def test_parse_version_success(qq_response: str) -> None:
     assert _PARSER.parse_version(qq_response) == "3.2.29_260528"
 
 
-@pytest.mark.parametrize(
-    "bad",
-    [
-        None,
-        123,
-        b"bytes-not-str",
-    ],
-)
-def test_parse_version_non_string_returns_none(bad: object) -> None:
-    assert _PARSER.parse_version(bad) is None  # type: ignore[arg-type]
-
-
 def test_parse_version_invalid_json() -> None:
     assert _PARSER.parse_version("{not json") is None
+
+
+def test_parse_version_non_str_deb_value() -> None:
+    """deb 值非字符串（如嵌套 dict）→ None 且不抛 TypeError 逃逸采集流程"""
+    payload = _payload(x64DownloadUrl={"deb": {"url": "https://x/QQ.deb"}})
+    assert _PARSER.parse_version(payload) is None
+    assert _PARSER.parse_url(ArchEnum.X86_64, payload) is None
 
 
 def test_parse_version_missing_linux_section() -> None:
@@ -112,13 +107,20 @@ def test_parse_url_loongarch_as_plain_string() -> None:
     assert _PARSER.parse_url(ArchEnum.LOONG64, payload) == "https://x/loong.deb"
 
 
-# ── _parse_response ──────────────────────────────────────────────────────────
+def test_parse_url_x64_as_plain_string() -> None:
+    """裸字符串形态对各架构统一接受（对称化语义固化）"""
+    payload = _payload(x64DownloadUrl="https://x/QQQ.deb")
+    assert _PARSER.parse_url(ArchEnum.X86_64, payload) == "https://x/QQQ.deb"
 
 
-def test_parse_response_non_dict_json() -> None:
-    """合法 JSON 但非对象（如数组）→ None"""
-    assert _PARSER._parse_response("[1, 2, 3]") is None
+# ── 跨方法缓存：parse_version + 多架构 parse_url 同一响应只解析一次 ─────────
 
 
-def test_parse_response_dict_passthrough() -> None:
-    assert _PARSER._parse_response('{"a": 1}') == {"a": 1}
+def test_version_and_urls_share_single_parse(qq_response: str) -> None:
+    """QQ 复用基类 _parse_json_dict 缓存，同一响应只 json 解析一次"""
+    parser = QQParser()
+    with patch.object(qq_mod.json, "loads", wraps=json.loads) as spy:
+        parser.parse_version(qq_response)
+        parser.parse_url(ArchEnum.X86_64, qq_response)
+        parser.parse_url(ArchEnum.AARCH64, qq_response)
+    assert spy.call_count == 1

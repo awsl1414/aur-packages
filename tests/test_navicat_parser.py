@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from app.constants import ArchEnum
 from app.parsers.navicat import NavicatParser
 
@@ -34,11 +32,6 @@ def test_urls_injected() -> None:
 
 def test_parse_version_success() -> None:
     assert NavicatParser().parse_version(_html()) == "17.3.1"
-
-
-@pytest.mark.parametrize("bad", [None, 123, b"x"])
-def test_parse_version_non_string(bad: object) -> None:
-    assert NavicatParser().parse_version(bad) is None  # type: ignore[arg-type]
 
 
 def test_parse_version_case_insensitive() -> None:
@@ -75,9 +68,9 @@ def test_parse_url_each_arch() -> None:
 
 
 def test_parse_url_independent_of_response() -> None:
-    """response_data 为 None 也能取到注入的 URL"""
+    """response_data 内容不影响注入 URL 的提取"""
     parser = NavicatParser(urls=_URLS)
-    assert parser.parse_url(ArchEnum.X86_64, None) == _URLS["x86_64"]  # type: ignore[arg-type]
+    assert parser.parse_url(ArchEnum.X86_64, "") == _URLS["x86_64"]
 
 
 def test_parse_url_unsupported_arch() -> None:
