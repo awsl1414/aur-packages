@@ -38,6 +38,9 @@ class Settings(BaseModel):
     hash_algorithm: str = HashAlgorithmEnum.B2.value
     api: ApiSettings
     download: DownloadSettings = Field(default_factory=DownloadSettings)
+    # 忽略 SSL 证书校验错误（自签名/过期证书的 helper API 或上游下载源），
+    # 同时作用于 httpx 客户端与 aria2c 回退下载。仅建议在受控环境中开启
+    ignore_ssl_errors: bool = False
 
 
 class PackageConfig(BaseModel):

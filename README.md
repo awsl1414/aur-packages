@@ -14,6 +14,7 @@
 - 多算法校验和自动计算（支持 BLAKE2b、SHA512、SHA256）
 - 上游解析统一由 [aur-packages-helper](https://github.com/awsl1414/aur-packages-helper) 服务端完成，客户端消费统一 API
 - 基于 aria2c 的多连接分片下载（helper 未返回 hashes 时回退）
+- 可选忽略 SSL 证书错误（`settings.ignore_ssl_errors`，适用于自签名证书的私有部署环境）
 
 ## 快速开始
 

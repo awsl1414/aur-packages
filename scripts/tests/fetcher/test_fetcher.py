@@ -109,3 +109,17 @@ async def test_extract_message_from_error_body() -> None:
         result = await fetcher.fetch_text(URL)
 
     assert result is None  # 422 永久错误
+
+
+def test_fetcher_verify_ssl_default() -> None:
+    """默认开启 SSL 证书校验（verify=True 传入 httpx 客户端）"""
+    with patch("fetcher.fetcher.AsyncClient") as client_cls:
+        Fetcher(max_retries=0)
+    assert client_cls.call_args.kwargs["verify"] is True
+
+
+def test_fetcher_verify_ssl_disabled() -> None:
+    """verify_ssl=False 时禁用证书校验（verify=False 传入 httpx 客户端）"""
+    with patch("fetcher.fetcher.AsyncClient") as client_cls:
+        Fetcher(max_retries=0, verify_ssl=False)
+    assert client_cls.call_args.kwargs["verify"] is False

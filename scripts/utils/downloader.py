@@ -1,10 +1,13 @@
 """基于 aria2c 的异步文件下载器模块"""
 
 import asyncio
+import logging
 import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -37,9 +40,15 @@ class Downloader:
         connections: int = 16,
         file_allocation: str = "none",
         show_progress: bool = True,
+        check_certificate: bool = True,
     ) -> None:
         if not shutil.which("aria2c"):
             raise FileNotFoundError("aria2c not found. Please install aria2 first.")
+
+        if not check_certificate:
+            logger.warning(
+                "已禁用 aria2c SSL 证书校验（--check-certificate=false），仅建议在受控环境使用"
+            )
 
         self.max_retries = max_retries
         self.retry_wait = retry_wait
@@ -47,6 +56,7 @@ class Downloader:
         self.connections = connections
         self.file_allocation = file_allocation
         self.show_progress = show_progress
+        self.check_certificate = check_certificate
 
     def _build_base_args(self) -> list[str]:
         return [
@@ -57,6 +67,7 @@ class Downloader:
             f"--max-connection-per-server={self.connections}",
             f"--split={self.connections}",
             f"--file-allocation={self.file_allocation}",
+            f"--check-certificate={'true' if self.check_certificate else 'false'}",
             "--allow-overwrite=true",
             "--auto-file-renaming=false",
             f"--console-log-level={'notice' if self.show_progress else 'error'}",

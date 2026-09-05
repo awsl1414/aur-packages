@@ -46,6 +46,7 @@ class PackageUpdater:
             timeout=download_settings.timeout,
             max_retries=download_settings.max_retries,
             retry_wait=download_settings.retry_wait,
+            verify_ssl=not self.config.settings.ignore_ssl_errors,
         )
 
         # 唯一解析器：消费 helper API 的统一响应
@@ -58,6 +59,7 @@ class PackageUpdater:
             timeout=download_settings.timeout,
             connections=download_settings.connections,
             show_progress=download_settings.show_progress,
+            check_certificate=not self.config.settings.ignore_ssl_errors,
         )
 
         # 项目根目录指仓库根目录（aur-packages/），config.yaml 中的

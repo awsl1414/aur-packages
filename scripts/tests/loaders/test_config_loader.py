@@ -90,6 +90,11 @@ class TestConfigLoader:
         loader = ConfigLoader.load_from_yaml()
         assert loader.settings.hash_algorithm == "b2"
 
+    def test_ignore_ssl_errors_default(self) -> None:
+        """全局默认不忽略 SSL 错误（证书校验开启）"""
+        loader = ConfigLoader.load_from_yaml()
+        assert loader.settings.ignore_ssl_errors is False
+
     def test_zen_browser_uses_global_default(self) -> None:
         """zen-browser 使用全局默认 b2（无需包级覆盖）"""
         loader = ConfigLoader.load_from_yaml()

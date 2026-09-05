@@ -57,12 +57,17 @@ class Fetcher:
         headers: dict[str, str] | None = None,
         max_retries: int = 3,
         retry_wait: float = 2.0,
+        verify_ssl: bool = True,
     ) -> None:
         merged_headers: dict[str, str] = DEFAULT_HEADERS.copy()
         if headers:
             merged_headers.update(headers)
 
-        self.client = AsyncClient(timeout=timeout, headers=merged_headers)
+        if not verify_ssl:
+            logger.warning("已禁用 SSL 证书校验（verify=False），仅建议在受控环境使用")
+        self.client = AsyncClient(
+            timeout=timeout, headers=merged_headers, verify=verify_ssl
+        )
         # 瞬时错误的最大重试次数（不含首次尝试）；0 表示不重试
         self.max_retries = max_retries
         # 指数退避基数（秒）：第 n 次重试前等待 retry_wait * 2^(n-1)

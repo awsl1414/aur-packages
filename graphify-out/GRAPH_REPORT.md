@@ -1,33 +1,30 @@
-# Graph Report - aur-packages  (2026-08-02)
+# Graph Report - aur-packages  (2026-09-05)
 
 ## Corpus Check
-- 62 files · ~15,924 words
+- 63 files · ~16,041 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 582 nodes · 748 edges · 120 communities (54 shown, 66 thin omitted)
-- Extraction: 93% EXTRACTED · 7% INFERRED · 0% AMBIGUOUS · INFERRED: 53 edges (avg confidence: 0.67)
+- 579 nodes · 820 edges · 104 communities (40 shown, 51 thin omitted)
+- Extraction: 95% EXTRACTED · 5% INFERRED · 0% AMBIGUOUS · INFERRED: 45 edges (avg confidence: 0.94)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `e7dc113d`
+- Built from commit: `d96cf0ea`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
-- Any
-- test_pkgbuild_editor.py
+- .load_from_yaml
+- .__exit__
 - AppImage Dependency Analysis Practice
-- PackageConfig
+- package_updater.py
 - PackageUpdater
 - Path
 - Rationale: zen-browser-twilight-bin uses b2sums but updater hardcoded SHA512
-- Any
 - AUR 打包实践指南
 - extract_extension_from_url
-- Any
 - compare_versions
-- Any
 - AUR 包自动更新工具
 - ._update_scalar_field
 - 设计
@@ -56,10 +53,9 @@
 - Keep Repository Alive Workflow
 - PKGBUILDEditor
 - zen-browser-twilight.sh
-- calculate_file_hash
+- _Hash
 - navicat.sh
 - trae-cn.sh
-- LD_PRELOAD Workaround Mechanism
 - CLAUDE.md Project Instructions
 - linuxqq-nt package (Electron QQ)
 - AUR 包已知问题
@@ -78,9 +74,6 @@
 - CONTRIBUTORS.md
 - BaseParser Plugin Pattern
 - zen-browser-twilight-bin
-- Navicat Bundled libsystemd Conflict
-- Trae Bundled GCC Runtime ABI Conflict
-- Trae makepkg Cache Conflict
 - navicat17-premium-zh-cn Package
 - trae Package (China CDN)
 - trae-cn Package (Domestic)
@@ -105,35 +98,26 @@
 - aria2c Multi-threaded Downloader
 - makepkg Build Tool
 - namcap PKGBUILD Linter
-- ty Static Type Checker
 - uv Package Manager
 - ApiParser
 - Downloader
 - Fetcher
-- ABC
 - navicat17-premium-zh-cn package (Chinese Simplified)
 - Trae AI IDE by ByteDance (CDN variants)
 - zen-browser-twilight-bin package (Firefox-based nightly)
-- Enum
-- Any
-- Any
-- Enum
-- Any
 - HashAlgorithmEnum (SHA256/SHA512/B2)
-- TestUpdateSourceEdgeCases
-- Path
 
 ## God Nodes (most connected - your core abstractions)
-1. `PKGBUILDEditor` - 69 edges
-2. `ApiParser` - 24 edges
-3. `PackageUpdater` - 21 edges
-4. `AUR 打包实践指南` - 20 edges
-5. `TestUpdateSourceArchEdgeCases` - 17 edges
-6. `Fetcher` - 16 edges
-7. `PackageConfig` - 15 edges
-8. `TestConfigLoader` - 12 edges
-9. `calculate_file_hash()` - 11 edges
-10. `TestPackageConfig` - 10 edges
+1. `PKGBUILDEditor` - 75 edges
+2. `PackageUpdater` - 30 edges
+3. `ApiParser` - 27 edges
+4. `PackageConfig` - 22 edges
+5. `AUR 打包实践指南` - 20 edges
+6. `Fetcher` - 18 edges
+7. `TestUpdateSourceArchEdgeCases` - 17 edges
+8. `HashAlgorithmEnum` - 15 edges
+9. `ArchEnum` - 14 edges
+10. `calculate_file_hash()` - 13 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `Push to AUR Workflow` --implements--> `Conventional Commits Standard`  [INFERRED]
@@ -144,47 +128,46 @@
   .github/workflows/update-packages.yml → CLAUDE.md
 - `Update Packages Workflow` --implements--> `.SRCINFO Sync Requirement`  [INFERRED]
   .github/workflows/update-packages.yml → docs/packaging-guide.md
-- `PackageUpdater` --uses--> `Fetcher`  [INFERRED]
-  scripts/core/package_updater.py → scripts/fetcher/fetcher.py
+- `PackageUpdater` --uses--> `ArchEnum`  [INFERRED]
+  scripts/core/package_updater.py → scripts/constants/constants.py
 
 ## Import Cycles
 - None detected.
 
 ## Hyperedges (group relationships)
-- **Trae variant packages share makepkg cache + GCC lib issues** — pkg_trae, pkg_trae_sg, pkg_trae_us, pkg_trae_cn, issue_trae_makepkg_cache, issue_trae_gcc_libs [INFERRED 0.85]
 - **Update → SRCINFO → Commit → AUR Push Pipeline** — github_workflows_update_packages, wf_arch_pkg_action, wf_aur_deploy_action, rules_srcinfo [INFERRED 0.85]
 - **makepkg checksum / cache-busting rule cluster** — rules_source_alias_cache, rules_carch_in_source, rules_local_source_hash, rules_rolling_release_checksum, tool_makepkg [INFERRED 0.85]
 - **B2 hash support implementation flow (Enum → Config → Updater)** — specs_hash_algorithm_enum, specs_blake2b_builder, specs_hash_algorithm_field, specs_pkgbuild_editor_api, specs_package_updater_hardcode_removal [EXTRACTED 0.95]
 
-## Communities (120 total, 66 thin omitted)
+## Communities (104 total, 51 thin omitted)
 
-### Community 1 - "test_pkgbuild_editor.py"
-Cohesion: 0.17
-Nodes (5): fixture, pkgbuild(), 更新 source URL 时保留 :: 别名, TestPKGBUILDEditorContextManager, TestPKGBUILDEditorEdgeCases
+### Community 0 - ".load_from_yaml"
+Cohesion: 0.15
+Nodes (9): Path, linuxqq-nt 包未设置 hash_algorithm，使用全局默认, 空 YAML 文件抛出 ValueError, 不存在的文件抛出 FileNotFoundError, navicat URL 静态写死在 PKGBUILD，update_source_url 为 False, 全局默认 hash_algorithm 为 b2, 全局默认不忽略 SSL 错误（证书校验开启）, zen-browser 使用全局默认 b2（无需包级覆盖） (+1 more)
 
-### Community 3 - "PackageConfig"
+### Community 3 - "package_updater.py"
 Cohesion: 0.08
-Nodes (24): BaseModel, Enum, ArchEnum, HashAlgorithmEnum, ApiSettings, ConfigLoader, DownloadSettings, PackageConfig (+16 more)
+Nodes (27): BaseModel, Enum, fixture, ArchEnum, HashAlgorithmEnum, 包更新器 整合fetch、parse和update三个流程 架构设计： 1. 并行更新所有维护的 AUR 包（使用 asyncio.gather） 2.…, ApiSettings, ConfigLoader (+19 more)
 
 ### Community 4 - "PackageUpdater"
 Cohesion: 0.09
-Nodes (22): ArchEnum, PackageConfig, ParsedPackage, Path, PKGBUILDEditor, PackageUpdater, 检查 PKGBUILD 文件是否存在 Args: package_config: 包配置 Returns: True 如果文件存在，False 否则, 从 ``parsed.hashes`` 中挑选出支持架构的校验和。 返回 ``{arch_value:… (+14 more)
+Nodes (19): PackageUpdater, Path, 检查 PKGBUILD 文件是否存在 Args: package_config: 包配置 Returns: True 如果文件存在，False 否则, 从 ``parsed.hashes`` 中挑选出支持架构的校验和。 返回 ``{arch_value:…, 获取各架构校验和：优先用 helper API 提供的 hashes，否则下载计算。 helper 通过 ``data.hashes``…, 下载文件并计算校验和（回退路径） 使用 Downloader 的并发下载功能，并行下载单个包的所有架构, 包更新器，整合fetch、parse和update流程, 处理版本不更新的情况（当前版本 >= 新版本） 复用 update_package 已创建的 editor，避免重复加载 PKGBUILD。 两种场景： 1.… (+11 more)
 
 ### Community 5 - "Path"
-Cohesion: 0.13
-Nodes (14): Path, update_source（arch 特定）替换逻辑的边界条件测试, URL 含 ${_gh}（花括号）时保留 shell 变量，不更新, URL 含 $_gh（无花括号）时同样应保留，等价于 ${_gh}, 别名含 ${pkgver}、URL 硬编码时，保留别名、替换 URL, 单行多条目：替换远程 URL，保留本地源文件, 缺失 source_<arch> 字段时不破坏其它内容, 缩进的 source 行（不在行首）不被匹配，保持原样 (+6 more)
+Cohesion: 0.09
+Nodes (19): Path, 更新 source URL 时保留 :: 别名, update_source（arch 特定）替换逻辑的边界条件测试, URL 含 ${_gh}（花括号）时保留 shell 变量，不更新, URL 含 $_gh（无花括号）时同样应保留，等价于 ${_gh}, 别名含 ${pkgver}、URL 硬编码时，保留别名、替换 URL, 单行多条目：替换远程 URL，保留本地源文件, 缺失 source_<arch> 字段时不破坏其它内容 (+11 more)
 
 ### Community 8 - "AUR 打包实践指南"
 Cohesion: 0.14
 Nodes (13): AUR 打包实践指南, license [官方规范], pkgdesc [官方规范], provides 和 conflicts [推荐实践], Shell 补全 [推荐实践], source 声明 [推荐实践], .SRCINFO [官方规范], 代码质量 [推荐实践] (+5 more)
 
 ### Community 9 - "extract_extension_from_url"
-Cohesion: 0.14
-Nodes (9): TestExtractExtensionFromUrl, TestExtractFilenameFromUrl, TestGenerateDownloadFilename, extract_extension_from_url(), extract_filename_from_url(), generate_download_filename(), 从 URL 中提取文件扩展名（包含点号）      支持复合扩展名（如 .tar.gz）和普通扩展名, 生成标准化的下载文件名      格式: {package_name}_{version}_{arch}{extension}     自动从 URL 提取扩展 (+1 more)
+Cohesion: 0.15
+Nodes (9): TestExtractExtensionFromUrl, TestExtractFilenameFromUrl, TestGenerateDownloadFilename, extract_extension_from_url(), extract_filename_from_url(), generate_download_filename(), 从 URL 中提取文件扩展名（包含点号） 支持复合扩展名（如 .tar.gz）和普通扩展名, 生成标准化的下载文件名 格式: {package_name}_{version}_{arch}{extension} 自动从 URL… (+1 more)
 
 ### Community 11 - "compare_versions"
-Cohesion: 0.14
-Nodes (6): TestCompareVersions, TestParseVersion, compare_versions(), parse_version(), 比较两个版本号      Args:         version1: 第一个版本号         version2: 第二个版本号      Return, 解析版本号为可比较的组成部分      Args:         version: 版本字符串，如 "3.2.22_251203", "17.3.5"
+Cohesion: 0.18
+Nodes (6): TestCompareVersions, TestParseVersion, compare_versions(), parse_version(), 比较两个版本号 Args: version1: 第一个版本号 version2: 第二个版本号 Returns: -1: version1 <…, 解析版本号为可比较的组成部分 Args: version: 版本字符串，如 "3.2.22_251203", "17.3.5" Returns:…
 
 ### Community 13 - "AUR 包自动更新工具"
 Cohesion: 0.13
@@ -238,6 +221,10 @@ Nodes (5): strip 与 debug 包 [推荐实践], VCS 包 [推荐实践], 构建标
 Cohesion: 0.40
 Nodes (4): post-commit script, GRAPHIFY_CHANGED, GRAPHIFY_REBUILD_LOG, PYTHONHASHSEED
 
+### Community 29 - "linuxqq-get-url.sh"
+Cohesion: 0.70
+Nodes (4): _fetch_route_cookie(), _resolve_deb_url(), linuxqq-get-url.sh script, _sign_url()
+
 ### Community 30 - "structure/"
 Cohesion: 0.40
 Nodes (4): structure/, 命名, 添加新包快照, 用途
@@ -271,16 +258,12 @@ Cohesion: 0.50
 Nodes (3): Feedback, Install, trae-us
 
 ### Community 39 - "PKGBUILDEditor"
-Cohesion: 0.11
-Nodes (8): BaseException, PKGBUILD 中不存在该算法的校验和时返回空字符串, TestPKGBUILDEditorGetters, TestPKGBUILDEditorUpdate, PKGBUILDEditor, Path, PKGBUILD 文件编辑器，支持上下文管理器自动保存, 获取当前校验和值。 arch=None 读取非架构特定 sums=()（arch=('any') 包），否则读取 sums_<arch>=()。
+Cohesion: 0.12
+Nodes (8): PKGBUILD 中不存在该算法的校验和时返回空字符串, TestPKGBUILDEditorContextManager, TestPKGBUILDEditorGetters, TestPKGBUILDEditorUpdate, PKGBUILDEditor, Path, PKGBUILD 文件编辑器，支持上下文管理器自动保存, 获取当前校验和值。 arch=None 读取非架构特定 sums=()（arch=('any') 包），否则读取 sums_<arch>=()。
 
 ### Community 40 - "zen-browser-twilight.sh"
 Cohesion: 0.50
 Nodes (3): MOZ_APP_LAUNCHER, zen-browser-twilight.sh script, ZEN_USER_FLAGS
-
-### Community 41 - "calculate_file_hash"
-Cohesion: 0.18
-Nodes (9): Protocol, Path, calculate_file_hash 测试, 文件不存在抛出 FileNotFoundError, TestCalculateFileHash, calculate_file_hash(), _Hash, Path (+1 more)
 
 ### Community 47 - "AUR 包已知问题"
 Cohesion: 0.20
@@ -308,39 +291,35 @@ Nodes (3): Feedback, Install, zen-browser-twilight-bin
 
 ### Community 105 - "ApiParser"
 Cohesion: 0.08
-Nodes (21): Any, ApiParser, ParsedPackage, helper API 统一响应解析器（唯一解析器） 数据源：``aur-packages-helper`` 项目的 ``GET…, helper API 解析结果。 - ``version``：语义化版本号 - ``urls``：``{arch_value: 原始未签名 URL}``，写入…, helper API 统一响应解析器。 一次 ``parse`` 返回完整的 ``ParsedPackage``，避免版本/URL/hash 分别解析时…, 解析 helper API 响应为 ``ParsedPackage``；结构不符返回 None。, 解析 JSON 响应并返回 ``data`` 段；结构不符返回 None。 (+13 more)
+Nodes (19): ApiParser, Any, helper API 统一响应解析器（唯一解析器） 数据源：``aur-packages-helper`` 项目的 ``GET…, helper API 统一响应解析器。 一次 ``parse`` 返回完整的 ``ParsedPackage``，避免版本/URL/hash 分别解析时…, 解析 helper API 响应为 ``ParsedPackage``；结构不符返回 None。, 解析 JSON 响应并返回 ``data`` 段；结构不符返回 None。, ApiParser 单元测试 数据源：``aur-packages-helper`` 的 ``GET /api/v1/packages/{name}``…, data 中无 hashes 字段时 hashes 为空字典（调用方回退下载），不算解析失败 (+11 more)
 
 ### Community 106 - "Downloader"
-Cohesion: 0.28
-Nodes (5): Downloader, DownloadResult, Path, 基于 aria2c 的异步下载器      特性：     - 多连接分片下载（aria2c -x/-s）     - 断点续传（aria2c -c）, 使用单个 aria2c 实例批量下载多个文件          Args:             downloads: {arch: (url, file_p
+Cohesion: 0.13
+Nodes (12): _make_downloader(), Any, Downloader 单元测试（aria2c 参数拼装）, 构造 Downloader，mock 掉 aria2c 存在性检查（CI 环境可能未安装）, 默认开启证书校验（--check-certificate=true）, check_certificate=False 时传给 aria2c --check-certificate=false, TestBuildBaseArgs, Downloader (+4 more)
 
 ### Community 107 - "Fetcher"
-Cohesion: 0.13
-Nodes (22): asyncio, 包更新器 整合fetch、parse和update三个流程 架构设计： 1. 并行更新所有维护的 AUR 包（使用 asyncio.gather） 2.…, Fetcher, HTTP 客户端模块 处理 ``aur-packages-helper`` API 的响应语义： - 成功：HTTP 200，body…, 从 helper 错误响应 body 中提取 ``message`` 字段。 非 JSON、非对象或缺字段时返回 None，由调用方回退到 HTTP…, HTTP 客户端封装，按 helper API 状态码语义处理请求与重试, 获取文本数据。 - HTTP 200 → 返回 body 文本 - 4xx 永久错误 → 记日志，返回 None（不重试） - 429/5xx 或网络异常 →…, 错误 body 的 message 被提取（通过日志间接验证：永久错误路径不抛异常） (+14 more)
-
-### Community 118 - "TestUpdateSourceEdgeCases"
-Cohesion: 0.33
-Nodes (3): update_source（arch=None，arch='any' 包）行为测试, any 包：URL 含 ${_gh} 时保留 shell 变量（与架构特定方法一致）, TestUpdateSourceEdgeCases
+Cohesion: 0.12
+Nodes (25): asyncio, Fetcher, HTTP 客户端模块 处理 ``aur-packages-helper`` API 的响应语义： - 成功：HTTP 200，body…, 从 helper 错误响应 body 中提取 ``message`` 字段。 非 JSON、非对象或缺字段时返回 None，由调用方回退到 HTTP…, HTTP 客户端封装，按 helper API 状态码语义处理请求与重试, 获取文本数据。 - HTTP 200 → 返回 body 文本 - 4xx 永久错误 → 记日志，返回 None（不重试） - 429/5xx 或网络异常 →…, 错误 body 的 message 被提取（通过日志间接验证：永久错误路径不抛异常）, 默认开启 SSL 证书校验（verify=True 传入 httpx 客户端） (+17 more)
 
 ## Knowledge Gaps
-- **138 isolated node(s):** `开发命令`, `添加新软件包`, `Commit 规范`, `注意事项`, `graphify` (+133 more)
-  These have ≤1 connection - possible missing edges or undocumented components.
-- **66 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **137 isolated node(s):** `linuxqq.sh script`, `QQ_DEFAULT_FLAGS`, `QQ_USER_FLAGS`, `navicat.sh script`, `LD_PRELOAD` (+132 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 299 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **51 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `PKGBUILDEditor` connect `PKGBUILDEditor` to `test_pkgbuild_editor.py`, `Path`, `._update_scalar_field`, `TestPKGBUILDEditorEpoch`, `._update_source_field`, `TestUpdateSourceEdgeCases`?**
-  _High betweenness centrality (0.141) - this node is a cross-community bridge._
-- **Why does `PackageUpdater` connect `PackageUpdater` to `Fetcher`?**
-  _High betweenness centrality (0.060) - this node is a cross-community bridge._
-- **Are the 7 inferred relationships involving `PKGBUILDEditor` (e.g. with `TestPKGBUILDEditorContextManager` and `TestPKGBUILDEditorEdgeCases`) actually correct?**
-  _`PKGBUILDEditor` has 7 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 4 inferred relationships involving `ApiParser` (e.g. with `TestApiParseHashes` and `TestApiParseSuccess`) actually correct?**
-  _`ApiParser` has 4 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 2 inferred relationships involving `PackageUpdater` (e.g. with `Fetcher` and `main()`) actually correct?**
-  _`PackageUpdater` has 2 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `开发命令`, `添加新软件包`, `Commit 规范` to the rest of the system?**
-  _138 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `PackageConfig` be split into smaller, more focused modules?**
-  _Cohesion score 0.080338266384778 - nodes in this community are weakly interconnected._
+- **Why does `PKGBUILDEditor` connect `PKGBUILDEditor` to `.__exit__`, `package_updater.py`, `PackageUpdater`, `Path`, `._update_scalar_field`, `TestPKGBUILDEditorEpoch`, `._update_source_field`?**
+  _High betweenness centrality (0.167) - this node is a cross-community bridge._
+- **Why does `PackageUpdater` connect `PackageUpdater` to `package_updater.py`, `PKGBUILDEditor`, `ApiParser`, `Downloader`, `Fetcher`?**
+  _High betweenness centrality (0.089) - this node is a cross-community bridge._
+- **Why does `ApiParser` connect `ApiParser` to `Downloader`, `package_updater.py`, `PackageUpdater`?**
+  _High betweenness centrality (0.064) - this node is a cross-community bridge._
+- **Are the 9 inferred relationships involving `PKGBUILDEditor` (e.g. with `PackageUpdater` and `TestPKGBUILDEditorContextManager`) actually correct?**
+  _`PKGBUILDEditor` has 9 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 9 inferred relationships involving `PackageUpdater` (e.g. with `ArchEnum` and `HashAlgorithmEnum`) actually correct?**
+  _`PackageUpdater` has 9 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 5 inferred relationships involving `ApiParser` (e.g. with `PackageUpdater` and `TestApiParseHashes`) actually correct?**
+  _`ApiParser` has 5 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 4 inferred relationships involving `PackageConfig` (e.g. with `PackageUpdater` and `ArchEnum`) actually correct?**
+  _`PackageConfig` has 4 INFERRED edges - model-reasoned connections that need verification._
