@@ -64,6 +64,23 @@ docker compose build && docker compose up -d
 `COPY pyproject.toml uv.lock ./: no such file or directory`——这与 uv 会向上
 查找 workspace 根不同，Docker 构建上下文完全由传入路径决定。
 
+## 数据持久化
+
+compose 默认把宿主的 `./data` 绑定挂载到容器的 `/app/data`（SQLite 落盘处），
+docker 与 podman、rootful 与 rootless 均可用：容器入口脚本以 root 启动，先把
+数据目录调整为 `PUID`/`PGID`（默认 1000）属主，再经 gosu 降权运行服务，规避
+rootless podman 下容器 uid 与宿主目录属主不一致导致的
+`unable to open database file`。需要匹配宿主账号时在 compose 中设置：
+
+```yaml
+environment:
+  PUID: 1000
+  PGID: 1000
+```
+
+注意 rootless podman 下宿主侧 DB 文件属主显示为子 uid（如 100999），属正常
+映射现象；改用具名卷（`metadata-data:/app/data`）则无此现象。
+
 ## 开发
 
 ```bash

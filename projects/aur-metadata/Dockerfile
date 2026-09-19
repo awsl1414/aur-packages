@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1
 # 构建上下文为 monorepo 仓库根：
 #   docker build -f projects/aur-metadata/Dockerfile .
 
@@ -30,18 +30,23 @@ FROM python:3.13-slim
 WORKDIR /app
 
 COPY --from=builder /app/.venv /app/.venv
-COPY --chown=1000:1000 projects/aur-metadata/configs /app/configs
+COPY projects/aur-metadata/configs /app/configs
+COPY projects/aur-metadata/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
-# 预建运行数据目录并归属 uid 1000（容器内进程以该用户运行，
-# 具名卷首挂载时继承目录属主）
-RUN mkdir -p /app/data && chown 1000:1000 /app/data
+# gosu 供 entrypoint 在 root 启动后降权到 PUID/PGID 运行服务
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends gosu && \
+    rm -rf /var/lib/apt/lists/* && \
+    mkdir -p /app/data
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-USER 1000:1000
-
 EXPOSE 8000
 
+# 不设 USER：entrypoint 以 root 启动、调整数据目录属主后经 gosu 降权，
+# 以兼容 docker/podman 在 rootful/rootless 下的不同 uid 映射（见 entrypoint 注释）
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["aur-metadata", "--config", "/app/configs/config.docker.toml"]

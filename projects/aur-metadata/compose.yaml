@@ -12,9 +12,8 @@ services:
     volumes:
       # 覆盖镜像内配置以调整监听地址/数据库路径等（无需重新构建）
       - ./configs/config.docker.toml:/app/configs/config.docker.toml:ro
-      - metadata-data:/app/data # 持久化 SQLite 数据库
+      - ./data:/app/data # 持久化 SQLite 数据库
     dns:
       - "119.29.29.29" # 必须，否则 qq 解析不到内容
 
-volumes:
-  metadata-data:
+
