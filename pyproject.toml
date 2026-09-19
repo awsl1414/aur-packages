@@ -1,36 +1,35 @@
+# uv workspace 根（虚拟项目：不构建、不安装、无代码）
+# 两个成员应用位于 projects/ 下，统一由根目录的 uv.lock 管理依赖
 [project]
-name = "aur-auto-update"
+name = "aur-packages"
 version = "0.1.0"
-description = "AUR packages update tool"
+description = "AUR packages monorepo"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = [
-    "httpx[socks]>=0.28.1",
-    "pydantic>=2.12.5",
-    "pyyaml>=6.0.3",
-    "argparse>=1.4.0",
-    "pytest>=9.0.2",
-    "pytest-asyncio>=1.3.0",
-    "ty>=0.0.8",
-    "ruff>=0.14.10",
-]
 
-[dependency-groups]
-dev = []
-
-# 工具型项目（不构建/分发），声明非包模式，避免 uv 尝试构建
 [tool.uv]
 package = false
 
-[tool.pytest.ini_options]
-testpaths = ["scripts/tests"]
-# 让测试里的 from core.xxx / from fetcher.xxx 等绝对导入能解析
-pythonpath = ["scripts"]
+[tool.uv.workspace]
+# 显式列出成员，避免未来实验性目录被隐式纳入 workspace
+members = [
+    "projects/aur-auto-update",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14.10",
+    "ty>=0.0.8",
+]
+
+[tool.ruff]
+# 与 ty 的检查范围一致，两个成员的源代码与测试
+line-length = 100
 
 [tool.ty]
 # Ty 配置 - Astral 开发的快速 Python 类型检查器
 # https://docs.astral.sh/ty/
-# 源代码位于 scripts/，运行命令：uv run ty check scripts/
+# 运行命令：uv run ty check projects/
 
 # 源代码配置
 [tool.ty.src]

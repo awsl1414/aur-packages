@@ -1,6 +1,6 @@
 """URL 工具函数单元测试"""
 
-from utils.url_utils import (
+from aur_auto_update.utils.url_utils import (
     extract_extension_from_url,
     extract_filename_from_url,
     generate_download_filename,

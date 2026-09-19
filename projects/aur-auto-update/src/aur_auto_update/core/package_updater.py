@@ -14,28 +14,26 @@ import logging
 from functools import partial
 from pathlib import Path
 
-from constants.constants import ArchEnum, HashAlgorithmEnum
-from fetcher.fetcher import Fetcher
-from loaders.config_loader import ConfigLoader, PackageConfig
-from parsers.api_parser import ApiParser, ParsedPackage
-from updater.pkgbuild_editor import PKGBUILDEditor
-from utils.downloader import Downloader
-from utils.hash import calculate_file_hash
-from utils.url_utils import generate_download_filename
-from utils.version_utils import compare_versions
+from aur_auto_update.constants.constants import ArchEnum, HashAlgorithmEnum
+from aur_auto_update.fetcher.fetcher import Fetcher
+from aur_auto_update.loaders.config_loader import ConfigLoader, PackageConfig
+from aur_auto_update.parsers.api_parser import ApiParser, ParsedPackage
+from aur_auto_update.updater.pkgbuild_editor import PKGBUILDEditor
+from aur_auto_update.utils.downloader import Downloader
+from aur_auto_update.utils.hash import calculate_file_hash
+from aur_auto_update.utils.url_utils import generate_download_filename
+from aur_auto_update.utils.version_utils import compare_versions
 
 logger = logging.getLogger(__name__)
-
-# 回退下载目录（helper 未提供 hashes 时本地下载计算）
-DOWNLOAD_DIR = "downloads"
 
 
 class PackageUpdater:
     """包更新器，整合fetch、parse和update流程"""
 
-    def __init__(self) -> None:
-        # 加载配置
-        self.config = ConfigLoader.load_from_yaml()
+    def __init__(self, config_path: str | Path = "config.yaml") -> None:
+        # 加载配置（相对路径相对当前工作目录解析；配置内的相对路径以
+        # 配置文件所在目录为基准）
+        self.config = ConfigLoader.load_from_yaml(config_path)
 
         # 从配置中获取下载设置
         download_settings = self.config.settings.download
@@ -62,12 +60,9 @@ class PackageUpdater:
             check_certificate=not self.config.settings.ignore_ssl_errors,
         )
 
-        # 项目根目录指仓库根目录（aur-packages/），config.yaml 中的
-        # packages/xxx/PKGBUILD 路径即相对于此处。当前脚本位于 scripts/core/，
-        # 需要向上三级到达仓库根目录
-        self.project_root = Path(__file__).parent.parent.parent
-        # PKGBUILD 目录相对于项目根目录
-        self.pkgbuild_root = self.project_root
+        # 配置文件所在目录为 PKGBUILD 与回退下载目录的解析基准
+        # （config.yaml 位于仓库根，故即仓库根）
+        self.pkgbuild_root = self.config.base_dir
 
     async def close(self) -> None:
         """释放资源"""
@@ -198,7 +193,9 @@ class PackageUpdater:
 
         使用 Downloader 的并发下载功能，并行下载单个包的所有架构
         """
-        download_dir = Path(DOWNLOAD_DIR)
+        # 回退下载目录（helper 未提供 hashes 时本地下载计算），
+        # 相对配置文件所在目录解析
+        download_dir = self.pkgbuild_root / "downloads"
         download_dir.mkdir(exist_ok=True)
 
         downloads = {

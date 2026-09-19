@@ -1,0 +1,29 @@
+[project]
+name = "aur-auto-update"
+version = "0.1.0"
+description = "AUR packages update tool"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "httpx[socks]>=0.28.1",
+    "pydantic>=2.12.5",
+    "pyyaml>=6.0.3",
+]
+
+[project.scripts]
+aur-auto-update = "aur_auto_update.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.12,<0.13"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# 测试中的 async 测试函数无需显式标记
+asyncio_mode = "auto"

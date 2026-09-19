@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from constants.constants import HashAlgorithmEnum
-from updater.pkgbuild_editor import PKGBUILDEditor
+from aur_auto_update.constants.constants import HashAlgorithmEnum
+from aur_auto_update.updater.pkgbuild_editor import PKGBUILDEditor
 
 PKGBUILD_TEMPLATE: str = """\
 # Maintainer: test <test@test.com>

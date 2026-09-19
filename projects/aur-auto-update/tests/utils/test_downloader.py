@@ -3,12 +3,12 @@
 from typing import Any
 from unittest.mock import patch
 
-from utils.downloader import Downloader
+from aur_auto_update.utils.downloader import Downloader
 
 
 def _make_downloader(**kwargs: Any) -> Downloader:
     """构造 Downloader，mock 掉 aria2c 存在性检查（CI 环境可能未安装）"""
-    with patch("utils.downloader.shutil.which", return_value="/usr/bin/aria2c"):
+    with patch("aur_auto_update.utils.downloader.shutil.which", return_value="/usr/bin/aria2c"):
         return Downloader(**kwargs)
 
 

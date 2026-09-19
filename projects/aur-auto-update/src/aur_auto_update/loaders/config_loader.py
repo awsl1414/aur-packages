@@ -1,11 +1,12 @@
 """配置文件加载模块"""
 
 import logging
+from pathlib import Path
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
-from constants.constants import ArchEnum, HashAlgorithmEnum
+from aur_auto_update.constants.constants import ArchEnum, HashAlgorithmEnum
 
 logger = logging.getLogger(__name__)
 
@@ -76,18 +77,32 @@ class PackageConfig(BaseModel):
 
 
 class ConfigLoader(BaseModel):
-    """配置加载器，管理全局设置和包配置"""
+    """配置加载器，管理全局设置和包配置
+
+    ``base_dir`` 为配置文件所在目录，配置内的相对路径（如 ``pkgbuild``）
+    均以该目录为基准解析。
+    """
 
     model_config = ConfigDict(extra="ignore")
 
     settings: Settings
     packages: dict[str, PackageConfig] = Field(default_factory=dict)
+    # 不参与序列化，仅用于配置内相对路径的解析
+    base_dir: Path = Field(exclude=True)
 
     @classmethod
-    def load_from_yaml(cls, filepath: str = "config.yaml") -> "ConfigLoader":
-        """从 YAML 文件加载配置"""
-        with open(filepath, encoding="utf-8") as f:
+    def load_from_yaml(cls, filepath: str | Path = "config.yaml") -> "ConfigLoader":
+        """从 YAML 文件加载配置
+
+        Args:
+            filepath: 配置文件路径；相对路径相对当前工作目录解析
+
+        Returns:
+            加载完成的 ConfigLoader，``base_dir`` 为配置文件所在目录
+        """
+        path = Path(filepath)
+        with path.open(encoding="utf-8") as f:
             data = yaml.safe_load(f)
         if data is None:
-            raise ValueError(f"配置文件为空: {filepath}")
-        return cls(**data)
+            raise ValueError(f"配置文件为空: {path}")
+        return cls(**data, base_dir=path.resolve().parent)

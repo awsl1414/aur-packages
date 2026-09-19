@@ -51,3 +51,4 @@ htmlcov/
 /graphify-out/*
 !/graphify-out/graph.json
 !/graphify-out/GRAPH_REPORT.md
+.zcode/

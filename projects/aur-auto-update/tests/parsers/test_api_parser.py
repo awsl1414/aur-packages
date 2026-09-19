@@ -6,7 +6,7 @@
 
 import json
 
-from parsers.api_parser import ApiParser
+from aur_auto_update.parsers.api_parser import ApiParser
 
 # 完整合法的 API 响应：含 code / message / data(version + urls + hashes)
 API_RESPONSE: dict = {

@@ -5,7 +5,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
-from constants.constants import HashAlgorithmEnum
+from aur_auto_update.constants.constants import HashAlgorithmEnum
 
 
 @runtime_checkable

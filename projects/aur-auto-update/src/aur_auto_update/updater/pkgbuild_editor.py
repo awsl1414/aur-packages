@@ -3,7 +3,7 @@
 import re
 from pathlib import Path
 
-from constants.constants import HashAlgorithmEnum
+from aur_auto_update.constants.constants import HashAlgorithmEnum
 
 # shell 变量引用：匹配 ${VAR} 或 $VAR / $_VAR（无花括号形式）
 _SHELL_VAR_RE = re.compile(r"\$\{|\$[A-Za-z_]")

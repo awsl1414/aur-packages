@@ -1,6 +1,6 @@
 """版本比较工具单元测试"""
 
-from utils.version_utils import compare_versions, parse_version
+from aur_auto_update.utils.version_utils import compare_versions, parse_version
 
 
 class TestParseVersion:

@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from constants.constants import ArchEnum
-from loaders.config_loader import ConfigLoader, PackageConfig
+from aur_auto_update.constants.constants import ArchEnum
+from aur_auto_update.loaders.config_loader import ConfigLoader, PackageConfig
 
 
 class TestPackageConfig:
@@ -66,48 +66,98 @@ class TestPackageConfig:
 
 
 class TestConfigLoader:
-    def test_load_from_yaml(self) -> None:
-        loader = ConfigLoader.load_from_yaml()
-        assert "linuxqq-nt" in loader.packages
-        assert "navicat" in loader.packages
-        assert "trae" in loader.packages
-        # name 现在是 helper 包名
-        assert loader.packages["linuxqq-nt"].name == "qq"
-        assert loader.packages["navicat"].name == "navicat"
+    """基于 tmp_path 合成配置的自包含测试，不依赖仓库真实 config.yaml"""
 
-    def test_api_base_url_loaded(self) -> None:
+    @staticmethod
+    def _write_config(tmp_path: Path, content: str) -> Path:
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text(content, encoding="utf-8")
+        return config_file
+
+    def test_load_from_yaml(self, tmp_path: Path) -> None:
+        self._write_config(
+            tmp_path,
+            """
+settings:
+  api:
+    base_url: https://example.com/api/v1/packages
+packages:
+  test-pkg:
+    name: test
+    pkgbuild: packages/test/PKGBUILD
+""",
+        )
+        loader = ConfigLoader.load_from_yaml(tmp_path / "config.yaml")
+        assert "test-pkg" in loader.packages
+        assert loader.packages["test-pkg"].name == "test"
+
+    def test_base_dir_is_config_parent(self, tmp_path: Path) -> None:
+        """base_dir 为配置文件所在目录，配置内相对路径以此为基准"""
+        nested = tmp_path / "conf"
+        nested.mkdir()
+        self._write_config(
+            nested,
+            """
+settings:
+  api:
+    base_url: https://example.com/api/v1/packages
+""",
+        )
+        loader = ConfigLoader.load_from_yaml(nested / "config.yaml")
+        assert loader.base_dir == nested
+
+    def test_api_base_url_loaded(self, tmp_path: Path) -> None:
         """全局 api.base_url 正确加载"""
-        loader = ConfigLoader.load_from_yaml()
-        assert loader.settings.api.base_url.startswith("https://")
+        self._write_config(
+            tmp_path,
+            """
+settings:
+  api:
+    base_url: https://example.com/api/v1/packages
+""",
+        )
+        loader = ConfigLoader.load_from_yaml(tmp_path / "config.yaml")
+        assert loader.settings.api.base_url == "https://example.com/api/v1/packages"
 
-    def test_navicat_update_source_url_disabled(self) -> None:
-        """navicat URL 静态写死在 PKGBUILD，update_source_url 为 False"""
-        loader = ConfigLoader.load_from_yaml()
-        assert loader.packages["navicat"].update_source_url is False
-
-    def test_settings_hash_algorithm_default(self) -> None:
+    def test_settings_hash_algorithm_default(self, tmp_path: Path) -> None:
         """全局默认 hash_algorithm 为 b2"""
-        loader = ConfigLoader.load_from_yaml()
+        self._write_config(
+            tmp_path,
+            """
+settings:
+  api:
+    base_url: https://example.com/api/v1/packages
+""",
+        )
+        loader = ConfigLoader.load_from_yaml(tmp_path / "config.yaml")
         assert loader.settings.hash_algorithm == "b2"
 
-    def test_ignore_ssl_errors_default(self) -> None:
+    def test_ignore_ssl_errors_default(self, tmp_path: Path) -> None:
         """全局默认不忽略 SSL 错误（证书校验开启）"""
-        loader = ConfigLoader.load_from_yaml()
+        self._write_config(
+            tmp_path,
+            """
+settings:
+  api:
+    base_url: https://example.com/api/v1/packages
+""",
+        )
+        loader = ConfigLoader.load_from_yaml(tmp_path / "config.yaml")
         assert loader.settings.ignore_ssl_errors is False
 
-    def test_zen_browser_uses_global_default(self) -> None:
-        """zen-browser 使用全局默认 b2（无需包级覆盖）"""
-        loader = ConfigLoader.load_from_yaml()
-        zen = loader.packages["zen-browser"]
-        assert zen.hash_algorithm is None
-        assert zen.get_effective_hash_algorithm("b2") == "b2"
-
-    def test_qq_default_hash_algorithm(self) -> None:
-        """linuxqq-nt 包未设置 hash_algorithm，使用全局默认"""
-        loader = ConfigLoader.load_from_yaml()
-        qq = loader.packages["linuxqq-nt"]
-        assert qq.hash_algorithm is None
-        assert qq.get_effective_hash_algorithm("b2") == "b2"
+    def test_unknown_fields_ignored(self, tmp_path: Path) -> None:
+        """settings 内的未知字段被忽略"""
+        self._write_config(
+            tmp_path,
+            """
+settings:
+  api:
+    base_url: https://example.com/api/v1/packages
+  legacy_field: ignored
+""",
+        )
+        loader = ConfigLoader.load_from_yaml(tmp_path / "config.yaml")
+        assert loader.settings.api.base_url == "https://example.com/api/v1/packages"
 
     def test_load_empty_yaml(self, tmp_path: Path) -> None:
         """空 YAML 文件抛出 ValueError"""
