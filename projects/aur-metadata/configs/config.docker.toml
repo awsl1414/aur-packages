@@ -44,4 +44,4 @@ misfire_grace_seconds = 300
 # 单包两次采集的最小间隔（秒）：限制手动刷新 / 后台刷新触发频率，防止频繁下载消耗资源
 min_collect_interval_seconds = 300
 # 服务启动时是否立即采集一次（仅 interval 模式；false 时首次采集在一个间隔之后）
-run_on_startup = true
+run_on_startup = false
