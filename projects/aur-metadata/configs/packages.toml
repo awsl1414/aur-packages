@@ -7,7 +7,7 @@
 #
 # 字段说明：
 # - name / parser_type / fetch_url / archs 必填；parser_type 须已在
-#   app/parsers/registry.py 注册，archs 取值见 ArchEnum
+#   src/aur_metadata/parsers/registry.py 的 _PARSER_REGISTRY 注册，archs 取值见 ArchEnum
 # - 调度二选一：interval_seconds 或 cron_expr 恰好填一个，schedule_type 由其派生
 # - parser_config 为 parser 构造参数表（可省略），落库时序列化为 JSON；
 #   其子表头（如 [packages.parser_config]）按 TOML 语义绑定到**最近的**

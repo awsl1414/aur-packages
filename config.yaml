@@ -8,7 +8,8 @@ settings:
   # 客户端通过 GET {base_url}/{name}?algorithm={algo} 获取 version/urls/hashes
   api:
     base_url: "https://aur.llz.asia/api/v1/packages"
-  # 下载设置（仅当 metadata API 未返回 hashes 时回退本地下载计算才使用）
+  # 下载设置：timeout/max_retries/retry_wait 同时作用于 metadata API 的 HTTP 客户端
+  # （Fetcher），connections/show_progress 仅在 API 未返回 hashes 时回退本地下载使用
   download:
     # 下载重试次数
     max_retries: 3

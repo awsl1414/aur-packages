@@ -115,7 +115,7 @@ GET /api/v1/packages/{name}
 
 | 参数 | 类型 | 默认 | 说明 |
 | --- | --- | --- | --- |
-| `algorithm` | `string` | `b2` | hash 算法：`b2`（BLAKE2b）/ `sha256` / `sha512` |
+| `algorithm` | `string` | `b2` | hash 算法：`b2`（BLAKE2b）/ `sha256` / `sha512`；不校验枚举，传不支持的值不会报错，只是查不到对应 hash 行、各架构 hash 均为 `null` |
 
 **数据来源（纯 DB 读 + 后台异步刷新）**：接口只读数据库，立即返回最新成功版本快照与所请求算法的各架构 hash，**永不触发网络下载**——因此响应快且不会因上游下载失败而 502。若版本快照年龄超过 `[database].version_stale_seconds`，接口会在返回后 fire-and-forget 触发一次后台采集（受节流与并发锁约束），使下次轮询拿到新鲜数据；首次查询尚无任何成功快照的包时返回 `503`（数据未就绪）。
 
@@ -218,7 +218,7 @@ POST /api/v1/packages/reload
 
 - **包配置**以 SQLite 数据库 `packages` 表为唯一来源；新增包只需插入一行（`parser_type` / `fetch_url` / `archs` / `schedule_type` / `interval_seconds` / `cron_expr`），重启或调用 reload 即生效。
 - **调度模式**：`interval`（按 `interval_seconds` 固定间隔）或 `cron`（标准 5 字段 `cron_expr`，按 `[scheduler].timezone` 求值）。二选一。
-- **启动即采集**：`[scheduler].run_on_startup` 控制 interval 模式启动时是否立即采集一次（当前配置为 `true`；设为 `false` 时首次采集推迟一个间隔，避免每次重启都跑全量）；cron 模式始终从下一个表达式匹配时刻触发。
+- **启动即采集**：`[scheduler].run_on_startup` 控制 interval 模式启动时是否立即采集一次（当前配置为 `false`，首次采集推迟一个间隔，避免每次重启都跑全量；设为 `true` 则启动即采集一次）；cron 模式始终从下一个表达式匹配时刻触发。
 - **采集结果**分两域独立落库：`package_versions`（版本快照，状态 `success` / `failed`，仅反映版本抓取）与 `package_hashes`（架构 × 算法粒度，含逐架构 `status` / `error`）。两者各自独立事务，版本先行落库、永不被 hash 下载失败回滚。
 - **最新版本**可通过视图 `v_latest_versions` 查询（取每个包最新 `success` 版本行，含 `urls`）；aur-packages 批量读取建议直连 SQLite 查该视图，无需走 HTTP。
 - `GET /packages/{name}` 为**纯 DB 读**：只返回快照、不下载；版本过期时后台异步刷新，不影响响应。

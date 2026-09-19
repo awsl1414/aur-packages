@@ -27,8 +27,8 @@ class Downloader:
     特性：
     - 多连接分片下载（aria2c -x/-s）
     - 断点续传（aria2c -c）
-    - 内置重试与指数退避（aria2c --max-tries / --retry-wait）
-    - 单实例批量下载（--input-file），进度输出整洁
+    - 内置重试（aria2c --max-tries / --retry-wait，固定间隔等待）
+    - 单实例批量下载（--input-file）；show_progress=False 时静默执行（输出被丢弃）
     """
 
     def __init__(

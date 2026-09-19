@@ -45,6 +45,4 @@ docs: update packaging guide
 
 ## 添加新软件包
 
-1. 在 `packages/` 目录中创建以包名命名的子目录，编写 `PKGBUILD` 文件，遵守 [Arch Wiki - Creating packages](https://wiki.archlinux.org/title/Creating_packages) 与 [打包规范](docs/packaging-guide.md)
-2. 在 `projects/aur-metadata/configs/packages.toml` 中添加包采集定义（版本源、架构、调度周期）——服务启动时会幂等同步进 DB `packages` 表，此即包注册；如需新的解析方式，在 `projects/aur-metadata/src/aur_metadata/parsers/` 实现解析器并注册进 `_PARSER_REGISTRY`
-3. 在 `config.yaml`（仓库根）中添加包配置（`name` 填 metadata 注册的包名）
+完整三步流程（PKGBUILD → packages.toml 注册 → config.yaml 配置，含解析器选型与验证命令）见 [docs/adding-a-package.md](docs/adding-a-package.md)，PKGBUILD 编写规范见 [docs/packaging-guide.md](docs/packaging-guide.md)。

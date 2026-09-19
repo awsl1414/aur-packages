@@ -50,34 +50,16 @@ uv run ty check projects/
 
 ## 添加新软件包
 
-1. 在 `packages/` 目录中创建以包名命名的子目录，编写 PKGBUILD（须遵守打包规范，见下文注意事项）
-2. 在 `projects/aur-metadata/configs/packages.toml` 中添加包采集定义（版本源、架构、调度周期）——服务启动时会幂等同步进 DB `packages` 表，此即包注册。简单数据源（HTML/JSON 的单点提取）优先用 `parser_type = "rule"` 的声明式规则（xpath/css/jmespath/re，见 `src/aur_metadata/parsers/rule.py`）；版本取自 deb 安装包头部、URL 规则提取的组合用 `parser_type = "rule-deb"`。两者都表达不了（鉴权下载、跨架构一致性校验等）才在 `src/aur_metadata/parsers/` 实现专属解析器并注册进 `_PARSER_REGISTRY`，可用 `uv run aur-metadata debug-extract <包名>` 试提取调试
-3. 在 `config.yaml`（仓库根）中添加包配置（`name` 填 metadata 注册的包名，含 `pkgbuild` 路径与 `arch`）
+完整三步流程（PKGBUILD → packages.toml 注册 → config.yaml 配置）见 @docs/adding-a-package.md，为该流程的唯一来源，不在本文件重复。
 
 ## Commit 规范
 
-项目使用 [Conventional Commits 1.0.0](https://www.conventionalcommits.org/) 规范，通过 `.githooks/commit-msg` 自动校验。
-
-格式：`<type>(<scope>): <description>`
-
-| 类型 | 用途 |
-| ------ | ------ |
-| `feat` | 新功能 |
-| `fix` | 修复 bug |
-| `docs` | 文档变更 |
-| `style` | 代码格式（不影响逻辑） |
-| `refactor` | 重构（非新功能、非修复） |
-| `perf` | 性能优化 |
-| `test` | 测试相关 |
-| `build` | 构建系统或外部依赖 |
-| `ci` | CI 配置 |
-| `chore` | 其他不修改 src 或 test 的变更 |
-| `revert` | 回退提交 |
+项目使用 [Conventional Commits 1.0.0](https://www.conventionalcommits.org/) 规范，通过 `.githooks/commit-msg` 自动校验。格式与类型表见 [CONTRIBUTING.md](CONTRIBUTING.md)，不在本文件重复。
 
 ## 注意事项
 
 - **编辑或创建 PKGBUILD 时必须遵守 @docs/packaging-guide.md 中的规范**
-- **修改 `packages/` 中的本地源文件（如 `.sh`、`.desktop`、`.install`）后，必须同步更新 PKGBUILD 中对应的校验和（如 `b2sums`、`sha512sums`）**。本地文件被列入 `source=()` 数组，makepkg 会校验其哈希，修改内容但不更新哈希会导致构建失败
+- **修改 `packages/` 中的本地源文件（如 `.sh`、`.desktop`、`.install`）后，必须同步更新 PKGBUILD 中对应的校验和（如 `b2sums`、`sha512sums`）**，否则 makepkg 校验哈希失败、构建中断（机制与案例见 @docs/troubleshooting.md「通用」节）
 - **包运行时/构建问题参见 @docs/troubleshooting.md**，包含已知的捆绑库冲突、缓存问题等及其解决方案
 - 运行配置锚定原则：配置内的相对路径一律相对配置文件所在目录解析（updater 的 `config.yaml` 在仓库根；metadata 的 `configs/config.toml` 在成员内）；包内静态资源（如 schema.sql）用 `importlib.resources` 加载，禁止 `__file__` 上溯定位
 - 模块导入不得产生副作用：运行配置经构造函数显式注入，禁止模块级读配置/建应用

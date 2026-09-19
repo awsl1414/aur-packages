@@ -25,6 +25,7 @@ uv run aur-metadata                                       # 本成员目录内
 uv run --package aur-metadata aur-metadata                # 仓库根
 uv run aur-metadata --config configs/config.docker.toml   # 指定配置
 uv run aur-metadata --host 0.0.0.0 --port 9000            # 覆盖监听地址
+uv run aur-metadata debug-extract qq                      # 按包配置试提取版本（调试 packages.toml 规则用）
 ```
 
 默认配置路径解析顺序：`--config` 参数 > 环境变量 `APP_CONFIG` > 依次探测

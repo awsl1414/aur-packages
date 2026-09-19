@@ -150,10 +150,10 @@ class BaseParser(ABC):
     def get_request_headers(self) -> dict[str, str] | None:
         """返回抓取本 parser 数据源时使用的完整请求头。
 
-        设计契约：**完整替换** ``Fetcher.DEFAULT_HEADERS``，不与任何默认头
-        合并。返回的字典必须自包含所有需要发送的 header（``User-Agent``、
-        ``Accept`` 等通用字段由 parser 自己负责，Fetcher 不会自动补齐）。
-        返回 ``None`` 表示使用 ``Fetcher.DEFAULT_HEADERS`` 即可。
+        设计契约：**完整替换** Fetcher 的默认请求头（``_default_headers``），
+        不与任何默认头合并。返回的字典必须自包含所有需要发送的 header
+        （``User-Agent``、``Accept`` 等通用字段由 parser 自己负责，Fetcher
+        不会自动补齐）。返回 ``None`` 表示使用 Fetcher 默认请求头即可。
 
         典型用例：QQ 的 CDN 要求 ``Origin``/``Referer`` 指向 im.qq.com 并
         携带 Chrome Client Hints（``sec-ch-ua-*``、``sec-fetch-*``）才会

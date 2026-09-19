@@ -34,14 +34,18 @@ uv run --package aur-metadata aur-metadata
 
 服务启动后访问 `http://127.0.0.1:8000/docs` 查看交互式 API 文档。
 
-## 开发
+## 文档导航
 
-```bash
-cd projects/aur-auto-update && uv run pytest   # 更新工具测试
-cd projects/aur-metadata && uv run pytest      # 元数据服务测试
-uv run ruff check projects/                    # 代码规范
-uv run ty check projects/                      # 类型检查
-```
+| 文档 | 职责 |
+| ---- | ---- |
+| [`projects/aur-metadata`](projects/aur-metadata/) / [`projects/aur-auto-update`](projects/aur-auto-update/) | 各成员的使用、配置与部署 |
+| [`projects/aur-metadata/docs/api.md`](projects/aur-metadata/docs/api.md) | HTTP API 契约（路由、响应、业务码） |
+| [`docs/adding-a-package.md`](docs/adding-a-package.md) | 添加新软件包的完整流程 |
+| [`docs/packaging-guide.md`](docs/packaging-guide.md) | PKGBUILD 打包规范 |
+| [`docs/troubleshooting.md`](docs/troubleshooting.md) | 各包已知运行时问题与处理 |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | 贡献流程（分支、commit 规范） |
+
+开发命令速查与 agent 工作规范见 [AGENTS.md](AGENTS.md)。
 
 ## 贡献
 

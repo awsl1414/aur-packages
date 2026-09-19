@@ -15,7 +15,8 @@
 ```
 structure/
 ├── README.md
-└── navicat17-premium-zh-cn.txt
+├── navicat17-premium-zh-cn.txt
+└── z-code.txt
 ```
 
 ## 添加新包快照
