@@ -95,7 +95,7 @@ class BaseParser(ABC):
         """架构 → 映射表 key 查找；不支持的架构记普通警告并返回 None。
 
         不支持的架构是配置/调用错误而非上游结构变更，故走普通日志；
-        与 trae/zen/qq 三处的映射查找保持同一行为与格式。
+        与 trae/zen 两处的映射查找保持同一行为与格式。
         """
         arch_value: str = self._arch_value(arch)
         key: str | None = mapping.get(arch_value)

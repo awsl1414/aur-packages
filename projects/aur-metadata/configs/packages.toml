@@ -20,30 +20,52 @@
 [[packages]]
 name = "qq"
 parser_type = "qq"
-# 版本信息源：QQ NT 客户端 PC 配置 JSON，下载链接经 GetSign 换签名
+# 版本信息源：QQ NT 客户端 PC 配置 JSON——URL 按下方 jmespath 规则提取
+# （"字段.deb || 字段" 兼容 dict 与裸字符串两种形态），版本从 deb 头部
+# 权威提取；下载链接经 GetSign 换签名（签名钩子在专属类 QQParser）
 fetch_url = "https://qq-web.cdn-go.cn/im.qq.com_new/latest/rainbow/pcConfig.json"
 archs = ["x86_64", "aarch64", "loong64"]
 interval_seconds = 14400
 
-# Navicat：版本取自 release-note HTML，下载 URL 为固定 AppImage 直链，经 parser_config.urls 注入
+[packages.parser_config.url]
+x86_64 = { kind = "jmespath", expr = "Linux.x64DownloadUrl.deb || Linux.x64DownloadUrl" }
+aarch64 = { kind = "jmespath", expr = "Linux.armDownloadUrl.deb || Linux.armDownloadUrl" }
+loong64 = { kind = "jmespath", expr = "Linux.loongarchDownloadUrl.deb || Linux.loongarchDownloadUrl" }
+
+# Navicat：rule 解析器——版本取自 release-note HTML（platform=L 表首个
+# note-title），下载 URL 为固定 AppImage 直链，经 parser_config.url 注入
 [[packages]]
 name = "navicat"
-parser_type = "navicat"
+parser_type = "rule"
 fetch_url = "https://www.navicat.com.cn/products/navicat-premium-release-note#L"
 archs = ["x86_64", "aarch64"]
 interval_seconds = 14400
 
-[packages.parser_config.urls]
+[packages.parser_config.version]
+kind = "xpath"
+expr = '//table[@platform="L"]//div[@class="note-title"]/b/text()'
+regex = 'version\s+(\d+\.\d+\.\d+)'
+group = 1
+
+[packages.parser_config.url]
 x86_64 = "https://dn.navicat.com/download/navicat17-premium-cs-x86_64.AppImage"
 aarch64 = "https://dn.navicat.com/download/navicat17-premium-cs-aarch64.AppImage"
 
-# bt-dualboot-ng：PyPI sdist（纯 Python，arch=any）
+# bt-dualboot-ng：rule 解析器——PyPI JSON API（sdist 与架构无关，arch=any）
 [[packages]]
 name = "bt-dualboot-ng"
-parser_type = "pypi"
+parser_type = "rule"
 fetch_url = "https://pypi.org/pypi/bt-dualboot-ng/json"
 archs = ["any"]
 interval_seconds = 14400
+
+[packages.parser_config.version]
+kind = "jmespath"
+expr = "info.version"
+
+[packages.parser_config.url."any"]
+kind = "jmespath"
+expr = "urls[?packagetype=='sdist'] | [0].url"
 
 # Trae 国际版：同一 API，按 region 选不同机房 CDN（cn / sg / va）
 [[packages]]

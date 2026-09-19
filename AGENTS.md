@@ -51,7 +51,7 @@ uv run ty check projects/
 ## 添加新软件包
 
 1. 在 `packages/` 目录中创建以包名命名的子目录，编写 PKGBUILD（须遵守打包规范，见下文注意事项）
-2. 在 `projects/aur-metadata/configs/packages.toml` 中添加包采集定义（版本源、架构、调度周期）——服务启动时会幂等同步进 DB `packages` 表，此即包注册；如需新的解析方式，在 `src/aur_metadata/parsers/` 实现解析器并注册进 `_PARSER_REGISTRY`
+2. 在 `projects/aur-metadata/configs/packages.toml` 中添加包采集定义（版本源、架构、调度周期）——服务启动时会幂等同步进 DB `packages` 表，此即包注册。简单数据源（HTML/JSON 的单点提取）优先用 `parser_type = "rule"` 的声明式规则（xpath/css/jmespath/re，见 `src/aur_metadata/parsers/rule.py`）；版本取自 deb 安装包头部、URL 规则提取的组合用 `parser_type = "rule-deb"`。两者都表达不了（鉴权下载、跨架构一致性校验等）才在 `src/aur_metadata/parsers/` 实现专属解析器并注册进 `_PARSER_REGISTRY`，可用 `uv run aur-metadata debug-extract <包名>` 试提取调试
 3. 在 `config.yaml`（仓库根）中添加包配置（`name` 填 metadata 注册的包名，含 `pkgbuild` 路径与 `arch`）
 
 ## Commit 规范

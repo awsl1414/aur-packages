@@ -1,7 +1,7 @@
 """解析器类型注册表：parser_type 字符串 → BaseParser 实例的工厂。
 
 新增 parser 时在此注册即可，调度器/注册表加载器通过 ``get_parser`` 按名取实例。
-parser 的构造参数（如 TraeParser 的 region、NavicatParser 的 urls）由
+parser 的构造参数（如 TraeParser 的 region、RuleParser 的提取规则）由
 ``packages.parser_config``（JSON）注入，``get_parser`` 用 ``cls(**config)`` 实例化。
 """
 
@@ -10,9 +10,8 @@ from typing import Any
 from aur_metadata.config import AppConfig
 from aur_metadata.parsers.base import BaseParser
 from aur_metadata.parsers.deb import DebParser
-from aur_metadata.parsers.navicat import NavicatParser
-from aur_metadata.parsers.pypi import PyPIParser
 from aur_metadata.parsers.qq import QQParser
+from aur_metadata.parsers.rule import RuleDebParser, RuleParser
 from aur_metadata.parsers.trae import TraeParser
 from aur_metadata.parsers.zen import ZenParser
 
@@ -20,11 +19,11 @@ from aur_metadata.parsers.zen import ZenParser
 # （见 BaseParser._parse_json_dict），无其他跨请求状态
 _PARSER_REGISTRY: dict[str, type[BaseParser]] = {
     "qq": QQParser,
-    "navicat": NavicatParser,
-    "pypi": PyPIParser,
     "trae": TraeParser,
     "zen": ZenParser,
     "deb": DebParser,
+    "rule": RuleParser,
+    "rule-deb": RuleDebParser,
 }
 
 

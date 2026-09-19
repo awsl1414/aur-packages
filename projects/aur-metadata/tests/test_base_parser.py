@@ -88,7 +88,7 @@ def test_cache_bad_json_not_reparsed() -> None:
 
 
 def test_subclass_without_init_inherits_cache() -> None:
-    """无自定义 __init__ 的子类继承缓存槽（QQParser/PyPIParser/ZenParser 即如此）"""
+    """无自定义 __init__ 的子类继承缓存槽（QQParser/ZenParser 即如此）"""
     parser = _Concrete(_APP_CONFIG)
     assert parser._cached_response is None
     parser._parse_json_dict('{"a": 1}')

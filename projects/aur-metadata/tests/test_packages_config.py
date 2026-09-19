@@ -37,13 +37,20 @@ def test_load_default_packages_file() -> None:
     assert {p.name for p in packages} == _DEFAULT_PACKAGE_NAMES
     assert all(p.schedule_type == "interval" for p in packages)
     navicat = next(p for p in packages if p.name == "navicat")
-    assert navicat.parser_config["urls"]["x86_64"].endswith(".AppImage")
+    assert navicat.parser_config["version"]["kind"] == "xpath"
+    assert navicat.parser_config["url"]["x86_64"].endswith(".AppImage")
     by_name: dict[str, PackageConfig] = {p.name: p for p in packages}
+    qq_url = by_name["qq"].parser_config["url"]
+    assert qq_url["x86_64"]["kind"] == "jmespath"
+    assert "x64DownloadUrl.deb ||" in qq_url["x86_64"]["expr"]
     assert by_name["trae"].parser_config == {"region": "cn"}
     assert by_name["trae-sg"].parser_config == {"region": "sg"}
     assert by_name["trae-us"].parser_config == {"region": "va"}
     assert by_name["trae-cn"].parser_config == {"region": "cn"}
-    assert by_name["bt-dualboot-ng"].parser_config == {}
+    assert by_name["bt-dualboot-ng"].parser_config["version"] == {
+        "kind": "jmespath",
+        "expr": "info.version",
+    }
     assert by_name["zen-browser"].parser_config == {}
 
 
@@ -65,14 +72,14 @@ def test_load_parses_fields_with_defaults(tmp_path: Path) -> None:
         """
         [[packages]]
         name = "demo"
-        parser_type = "pypi"
+        parser_type = "rule"
         fetch_url = "https://pypi.org/pypi/demo/json"
         archs = ["any"]
         interval_seconds = 60
         """,
     )
     (pkg,) = load_packages(path)
-    assert pkg.parser_type == "pypi"
+    assert pkg.parser_type == "rule"
     assert pkg.archs == ["any"]
     assert pkg.parser_config == {}
     assert pkg.enabled is True

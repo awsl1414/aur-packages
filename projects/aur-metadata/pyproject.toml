@@ -9,6 +9,7 @@ dependencies = [
     "apscheduler>=4.0.0a6",
     "fastapi[standard]>=0.139.0",
     "httpx>=0.28.1",
+    "parsel>=1.11.0",
     "tortoise-orm>=1.1.7",
     "zstandard>=0.25.0",
 ]

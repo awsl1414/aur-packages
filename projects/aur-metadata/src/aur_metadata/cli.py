@@ -1,6 +1,7 @@
 """aur-metadata 服务入口：FastAPI 应用工厂与命令行入口"""
 
 import argparse
+import asyncio
 import logging
 import sys
 from collections.abc import AsyncGenerator
@@ -17,6 +18,8 @@ from aur_metadata.api.v1.router import api_router as v1_router
 from aur_metadata.config import AppConfig, PackageConfig, load_config, load_packages
 from aur_metadata.db import close_db, init_db
 from aur_metadata.fetcher import Fetcher
+from aur_metadata.parsers.base import PackageFileVersionParser
+from aur_metadata.parsers.registry import get_parser
 from aur_metadata.response import register_exception_handlers
 from aur_metadata.services.package_seeder import sync_packages_from_config
 from aur_metadata.services.package_service import PackageService
@@ -113,8 +116,45 @@ def create_app(config: AppConfig, packages: list[PackageConfig]) -> FastAPI:
     return app
 
 
+def _debug_extract(
+    config: AppConfig, packages: list[PackageConfig], name: str
+) -> int:
+    """按包配置拉取版本源并试提取，打印结果（调试 packages.toml 规则用）。
+
+    走与采集一致的 Fetcher + parser 路径，但不落库、不下载安装包。
+    """
+    pkg: PackageConfig | None = next((p for p in packages if p.name == name), None)
+    if pkg is None:
+        known: str = "、".join(p.name for p in packages)
+        print(f"未找到包 {name!r}；可用包：{known}", file=sys.stderr)
+        return 1
+    parser = get_parser(pkg.parser_type, pkg.parser_config, app_config=config)
+
+    async def _run() -> None:
+        async with httpx.AsyncClient(
+            timeout=config.http.default_timeout, follow_redirects=True
+        ) as client:
+            fetcher: Fetcher = Fetcher(client, config.http, config.github)
+            text: str | None = await fetcher.fetch_text(
+                pkg.fetch_url, parser.get_request_headers()
+            )
+        if text is None:
+            print(f"版本源抓取失败: {pkg.fetch_url}", file=sys.stderr)
+            return
+        if isinstance(parser, PackageFileVersionParser):
+            # 版本来自安装包文件头部（下载后提取），文本响应无版本可解析
+            print("version: （安装包头部提取，本命令仅验证 URL 定位）")
+        else:
+            print(f"version: {parser.parse_version(text)}")
+        for arch in pkg.archs:
+            print(f"url[{arch}]: {parser.parse_url(arch, text)}")
+
+    asyncio.run(_run())
+    return 0
+
+
 def main() -> int:
-    """CLI 入口：加载配置并启动 uvicorn 服务"""
+    """CLI 入口：默认启动 uvicorn 服务；``debug-extract <name>`` 试提取指定包"""
     _configure_logging()
 
     parser = argparse.ArgumentParser(description="aur-metadata 元数据服务")
@@ -134,10 +174,25 @@ def main() -> int:
     )
     parser.add_argument("--host", default=None, help="覆盖配置文件的监听地址")
     parser.add_argument("--port", type=int, default=None, help="覆盖配置文件的监听端口")
+    parser.add_argument(
+        "command",
+        nargs="?",
+        choices=("serve", "debug-extract"),
+        default="serve",
+        help="serve 启动服务（默认）；debug-extract 按包配置试提取版本与 URL",
+    )
+    parser.add_argument("package", nargs="?", default=None, help="debug-extract 的包名")
     args = parser.parse_args()
 
     config = load_config(args.config)
     packages = load_packages(args.packages)
+
+    if args.command == "debug-extract":
+        if args.package is None:
+            parser.error("debug-extract 需要提供包名（可用包见 packages.toml）")
+        return _debug_extract(config, packages, args.package)
+    if args.package is not None:
+        parser.error(f"未知命令 {args.package!r}（用法：aur-metadata debug-extract <包名>）")
 
     uvicorn.run(
         create_app(config, packages),

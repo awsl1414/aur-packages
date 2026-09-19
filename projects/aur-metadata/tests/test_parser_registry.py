@@ -6,9 +6,9 @@ import pytest
 
 from aur_metadata.parsers.base import BaseParser
 from aur_metadata.parsers.deb import DebParser
-from aur_metadata.parsers.navicat import NavicatParser
 from aur_metadata.parsers.qq import QQParser
 from aur_metadata.parsers.registry import _PARSER_REGISTRY, get_parser, register_parser
+from aur_metadata.parsers.rule import RuleDebParser, RuleParser
 from aur_metadata.parsers.trae import TraeParser
 from tests.fakes import make_app_config
 
@@ -44,11 +44,33 @@ def test_get_parser_trae_with_region_config() -> None:
     assert parser._region == "sg"
 
 
-def test_get_parser_navicat_with_urls_config() -> None:
-    urls = {"x86_64": "https://x/n.AppImage"}
-    parser = get_parser("navicat", {"urls": urls}, app_config=_APP_CONFIG)
-    assert isinstance(parser, NavicatParser)
-    assert parser._urls == urls
+def test_get_parser_rule_with_rules_config() -> None:
+    parser = get_parser(
+        "rule",
+        {"version": {"kind": "jmespath", "expr": "info.version"}},
+        app_config=_APP_CONFIG,
+    )
+    assert isinstance(parser, RuleParser)
+
+
+def test_get_parser_rule_invalid_config_raises() -> None:
+    """rule 规则配置错误构造期抛 ValueError（fail-fast）"""
+    with pytest.raises(ValueError):
+        get_parser("rule", {"version": {"kind": "bogus"}}, app_config=_APP_CONFIG)
+
+
+def test_get_parser_rule_requires_version_config() -> None:
+    """纯 rule 解析器缺 version 规则构造期即失败"""
+    with pytest.raises(ValueError):
+        get_parser("rule", {}, app_config=_APP_CONFIG)
+
+
+def test_get_parser_rule_deb_needs_no_version_config() -> None:
+    """rule-deb 版本来自 deb 头部，仅 url 规则即可构造"""
+    parser = get_parser(
+        "rule-deb", {"url": {"x86_64": "https://x/a.deb"}}, app_config=_APP_CONFIG
+    )
+    assert isinstance(parser, RuleDebParser)
 
 
 def test_get_parser_deb_with_urls_config() -> None:

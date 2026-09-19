@@ -1,4 +1,8 @@
-"""aur_metadata.parsers.qq 单元测试（纯解析逻辑，不触网络）"""
+"""aur_metadata.parsers.qq 单元测试（纯解析逻辑，不触网络）
+
+URL 提取已规则化（jmespath，与 packages.toml 中 qq 的 parser_config.url
+同构），本文件规则即真实配置的镜像；签名走网络，不在单测范围。
+"""
 
 from __future__ import annotations
 
@@ -10,12 +14,28 @@ from unittest.mock import patch
 import pytest
 
 from aur_metadata.constants import ArchEnum
-from aur_metadata.parsers import qq as qq_mod
+from aur_metadata.parsers import base as base_mod
 from aur_metadata.parsers.qq import QQParser
 from tests.fakes import build_deb, make_app_config
 
 _APP_CONFIG = make_app_config()
-_PARSER = QQParser(_APP_CONFIG)
+
+# 与 configs/packages.toml 的 qq parser_config.url 保持一致
+_URL_RULES: dict[str, dict[str, Any] | str] = {
+    "x86_64": {
+        "kind": "jmespath",
+        "expr": "Linux.x64DownloadUrl.deb || Linux.x64DownloadUrl",
+    },
+    "aarch64": {
+        "kind": "jmespath",
+        "expr": "Linux.armDownloadUrl.deb || Linux.armDownloadUrl",
+    },
+    "loong64": {
+        "kind": "jmespath",
+        "expr": "Linux.loongarchDownloadUrl.deb || Linux.loongarchDownloadUrl",
+    },
+}
+_PARSER = QQParser(_APP_CONFIG, url=_URL_RULES)
 
 
 def _payload(**linux_overrides: Any) -> str:
@@ -50,13 +70,7 @@ def test_version_from_package_head_bad_structure(
     assert "疑似上游结构变更" in caplog.text
 
 
-# ── parse_url ────────────────────────────────────────────────────────────────
-
-
-def test_parse_url_non_str_deb_value() -> None:
-    """deb 值非字符串（如嵌套 dict）→ None（防垃圾 URL 流入签名/下载环节）"""
-    payload = _payload(x64DownloadUrl={"deb": {"url": "https://x/QQ.deb"}})
-    assert _PARSER.parse_url(ArchEnum.X86_64, payload) is None
+# ── parse_url（规则化提取）────────────────────────────────────────────────────
 
 
 def test_parse_url_each_arch(qq_response: str) -> None:
@@ -74,17 +88,37 @@ def test_parse_url_accepts_string_arch(qq_response: str) -> None:
     assert url is not None and url.endswith("_arm64_01.deb")
 
 
-def test_parse_url_unsupported_arch(qq_response: str) -> None:
-    assert _PARSER.parse_url("mips64el", qq_response) is None
+def test_parse_url_unsupported_arch(
+    qq_response: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    """未配置规则的架构 → None（配置错误走普通日志）"""
+    with caplog.at_level(logging.WARNING, logger="aur_metadata.parsers.rule"):
+        assert _PARSER.parse_url("mips64el", qq_response) is None
+    assert "url 规则中无 mips64el 架构" in caplog.text
 
 
-def test_parse_url_missing_arm_field() -> None:
+def test_parse_url_missing_arm_field(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """上游缺字段 → None 且走统一结构变更日志"""
     payload = _payload(armDownloadUrl=None)
-    assert _PARSER.parse_url(ArchEnum.AARCH64, payload) is None
+    with caplog.at_level(logging.WARNING, logger="aur_metadata.parsers.rule"):
+        assert _PARSER.parse_url(ArchEnum.AARCH64, payload) is None
+    assert "疑似上游结构变更" in caplog.text
+
+
+def test_parse_url_non_str_deb_value(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """deb 值非字符串（dict 含 deb 键但值非 str）→ None（防垃圾 URL 流入签名环节）"""
+    payload = _payload(x64DownloadUrl={"deb": {"url": "https://x/QQ.deb"}})
+    with caplog.at_level(logging.WARNING, logger="aur_metadata.parsers.rule"):
+        assert _PARSER.parse_url(ArchEnum.X86_64, payload) is None
+    assert "疑似上游结构变更" in caplog.text
 
 
 def test_parse_url_loongarch_as_plain_string() -> None:
-    """loongarchDownloadUrl 既可能是 dict 也可能是裸字符串 URL"""
+    """loongarchDownloadUrl 裸字符串形态：|| 兜底直接取整值"""
     payload = _payload(loongarchDownloadUrl="https://x/loong.deb")
     assert _PARSER.parse_url(ArchEnum.LOONG64, payload) == "https://x/loong.deb"
 
@@ -99,9 +133,9 @@ def test_parse_url_x64_as_plain_string() -> None:
 
 
 def test_urls_share_single_parse(qq_response: str) -> None:
-    """QQ 复用基类 _parse_json_dict 缓存，同一响应只 json 解析一次"""
-    parser = QQParser(_APP_CONFIG)
-    with patch.object(qq_mod.json, "loads", wraps=json.loads) as spy:
+    """jmespath 规则复用基类 _parse_json_dict 缓存，同一响应只 json 解析一次"""
+    parser = QQParser(_APP_CONFIG, url=_URL_RULES)
+    with patch.object(base_mod.json, "loads", wraps=json.loads) as spy:
         parser.parse_url(ArchEnum.X86_64, qq_response)
         parser.parse_url(ArchEnum.AARCH64, qq_response)
     assert spy.call_count == 1

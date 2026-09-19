@@ -42,6 +42,9 @@ ignore = [
     "INT001",
     "INT002",
     "INT003",
+    # 配置/参数校验错误统一抛 ValueError（与 load_packages 的收集式校验一致），
+    # 不因「类型不符」细分 TypeError——调用方只需捕获一种配置错误类型
+    "TRY004",
 ]
 
 [tool.ty]
