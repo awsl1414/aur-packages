@@ -1,8 +1,12 @@
-"""QQ Linux 版本解析器"""
+"""QQ Linux 版本解析器
+
+版本号经 ``DebControlVersionMixin`` 从 deb 文件头部 control 段统一提取
+（替代早期「API version + 文件名 build 正则」双源拼接方案）；安装包 URL
+来自 pcConfig 响应，须再经 im.qq.com GetSign 签名方可下载。
+"""
 
 import json
 import logging
-import re
 from typing import Any
 
 import httpx
@@ -16,7 +20,7 @@ from app.constants.qq import (
     QQ_SIGN_URL,
 )
 
-from .base import BaseParser
+from .deb import DebControlVersionMixin
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +33,12 @@ _ARCH_FIELD_MAP: dict[str, str] = {
 }
 
 
-class QQParser(BaseParser):
-    """QQ Linux 版本解析器：URL 需经 im.qq.com GetSign 签名方可下载"""
+class QQParser(DebControlVersionMixin):
+    """QQ Linux 版本解析器：版本取自 deb control 段，URL 需 GetSign 签名
+
+    安装包 URL 无静态配置（``package_download_urls`` 保持默认 ``None``），
+    服务层先 ``fetch_text`` pcConfig 响应再逐架构 ``parse_url`` 定位。
+    """
 
     def _get_deb_url(
         self, linux_section: dict[str, Any], arch_value: str
@@ -38,8 +46,7 @@ class QQParser(BaseParser):
         """取指定架构的 deb 下载 URL；字段值为 dict 取 ``deb`` 键，为裸字符串直接用。
 
         归一化后强制 str 校验并落结构变更日志——非字符串值（如嵌套 dict）
-        若放行，会在 parse_version 的 re.search 抛 TypeError 逃逸采集流程，
-        或作为垃圾 URL 流入签名/下载环节。
+        若放行，会作为垃圾 URL 流入签名/下载环节。
         """
         field: str | None = _ARCH_FIELD_MAP.get(arch_value)
         if field is None:
@@ -53,50 +60,6 @@ class QQParser(BaseParser):
             linux_section,
         )
         return None
-
-    def parse_version(self, response_data: str) -> str | None:
-        """从 QQ 响应数据中提取版本号（含构建号），并交叉验证 API 与 URL 版本。
-
-        步骤：
-        1. 读取 API 字段 ``Linux.version``（基础版本号）
-        2. 从 x86_64 的 deb URL 提取 build number（URL 必须含 ``_amd64``）
-        3. 交叉验证：API 版本必须与 URL 中的版本号一致（防 API/资源脱节）
-        4. 拼接为 ``<api_version>_<build_number>`` 形式返回
-        """
-        linux_section: dict[str, Any] | None = self._json_section(
-            response_data, "Linux"
-        )
-        if linux_section is None:
-            return None
-
-        # 从 API 字段获取基础版本号
-        api_version: str | None = linux_section.get("version")
-        if not api_version:
-            self._log_structure_change("缺少 Linux.version 字段", linux_section)
-            return None
-
-        # 从 deb URL 提取完整版本信息（形态异常已由 _get_deb_url 记结构日志）
-        url: str | None = self._get_deb_url(linux_section, ArchEnum.X86_64.value)
-        if not url:
-            return None
-
-        url_match: re.Match[str] | None = re.search(r"QQ_([\d.]+)_(\d+)_amd64", url)
-        if not url_match:
-            self._log_structure_change(
-                "x64 deb URL 不含 QQ_<version>_<build>_amd64 模式", url
-            )
-            return None
-        url_base_version, build_number = url_match.group(1), url_match.group(2)
-
-        # 交叉验证：API 版本必须与 URL 基础版本一致
-        # （值不一致属资源脱节而非结构变更，走普通日志）
-        if url_base_version != api_version:
-            logger.warning(
-                "QQ 版本不匹配: API=%s, URL=%s", api_version, url_base_version
-            )
-            return None
-
-        return f"{api_version}_{build_number}"
 
     def parse_url(self, arch: ArchEnum | str, response_data: str) -> str | None:
         """从 QQ 响应数据中提取指定架构的下载 URL（原始未签名链接）"""

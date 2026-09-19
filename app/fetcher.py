@@ -176,6 +176,43 @@ class Fetcher:
                     logger.error("  响应体(截断): %s", body[:_LOG_BODY_MAX_LENGTH])
             return None
 
+    async def fetch_head(
+        self, url: str, max_bytes: int, headers: dict[str, str] | None = None
+    ) -> bytes | None:
+        """只读取响应体前 ``max_bytes`` 字节（安装包版本提取用，避免全量下载）。
+
+        请求带 ``Range`` 头（服务端支持则只传前缀），并流式读取、凑满即主动断开，
+        两道保险确保不传输剩余大文件体。瞬时网络错误自动重试（见 ``_retry``）。
+
+        ``max_bytes`` 须为正整数。
+        """
+        if max_bytes <= 0:
+            raise ValueError(f"max_bytes 须为正整数，得到 {max_bytes}")
+        request_headers: dict[str, str] = _with_github_auth(
+            url, headers if headers is not None else DEFAULT_HEADERS
+        ) | {"Range": f"bytes=0-{max_bytes - 1}"}
+
+        async def _attempt() -> bytes:
+            buffer = bytearray()
+            async with self.client.stream(
+                "GET", url, headers=request_headers
+            ) as response:
+                response.raise_for_status()
+                async for chunk in response.aiter_bytes(CHUNK_SIZE):
+                    buffer.extend(chunk)
+                    if len(buffer) >= max_bytes:
+                        break
+            # 服务端可能整段返回，超出部分不参与解析，直接截掉
+            return bytes(buffer[:max_bytes])
+
+        try:
+            return await self._retry(url, _attempt)
+        except HTTPError as e:
+            logger.error("从 %s 读取文件头部失败: %s", url, _describe_http_error(e))
+            if isinstance(e, httpx.HTTPStatusError) and e.response is not None:
+                logger.error("  状态码: %d", e.response.status_code)
+            return None
+
     async def fetch_and_hash_multi(
         self,
         url: str,

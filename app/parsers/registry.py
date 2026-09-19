@@ -8,6 +8,7 @@ parser 的构造参数（如 TraeParser 的 region、NavicatParser 的 urls）�
 from typing import Any
 
 from app.parsers.base import BaseParser
+from app.parsers.deb import DebParser
 from app.parsers.navicat import NavicatParser
 from app.parsers.pypi import PyPIParser
 from app.parsers.qq import QQParser
@@ -22,6 +23,7 @@ _PARSER_REGISTRY: dict[str, type[BaseParser]] = {
     "pypi": PyPIParser,
     "trae": TraeParser,
     "zen": ZenParser,
+    "deb": DebParser,
 }
 
 
@@ -35,6 +37,11 @@ def get_parser(parser_type: str, config: dict[str, Any] | None = None) -> BasePa
     if cls is None:
         raise ValueError(f"未知的 parser_type: {parser_type}")
     return cls(**config) if config else cls()
+
+
+def get_parser_types() -> list[str]:
+    """返回所有已注册的 parser_type（供包配置校验使用）"""
+    return list(_PARSER_REGISTRY)
 
 
 def register_parser(parser_type: str, cls: type[BaseParser]) -> None:

@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 from unittest.mock import patch
+
+import pytest
 
 from app.constants import ArchEnum
 from app.parsers import qq as qq_mod
 from app.parsers.qq import QQParser
+from tests.fakes import build_deb
 
 _PARSER = QQParser()
 
@@ -27,54 +31,31 @@ def _payload(**linux_overrides: Any) -> str:
     return json.dumps({"Linux": linux})
 
 
-# ── parse_version ────────────────────────────────────────────────────────────
+# ── version_from_package_head（统一 deb 机制）────────────────────────────────
 
 
-def test_parse_version_success(qq_response: str) -> None:
-    """合法响应返回 <api_version>_<build_number>"""
-    assert _PARSER.parse_version(qq_response) == "3.2.29_260528"
+def test_version_from_package_head_success() -> None:
+    """deb control 段 Version 归一化：<upstream>_<revision>"""
+    head = build_deb(version="3.2.29-260528")
+    assert _PARSER.version_from_package_head(head) == "3.2.29_260528"
 
 
-def test_parse_version_invalid_json() -> None:
-    assert _PARSER.parse_version("{not json") is None
-
-
-def test_parse_version_non_str_deb_value() -> None:
-    """deb 值非字符串（如嵌套 dict）→ None 且不抛 TypeError 逃逸采集流程"""
-    payload = _payload(x64DownloadUrl={"deb": {"url": "https://x/QQ.deb"}})
-    assert _PARSER.parse_version(payload) is None
-    assert _PARSER.parse_url(ArchEnum.X86_64, payload) is None
-
-
-def test_parse_version_missing_linux_section() -> None:
-    assert _PARSER.parse_version(json.dumps({"foo": {}})) is None
-
-
-def test_parse_version_missing_version_field() -> None:
-    assert _PARSER.parse_version(json.dumps({"Linux": {}})) is None
-
-
-def test_parse_version_url_mismatch_returns_none() -> None:
-    """API 版本与 deb URL 内版本不一致 → None（防 API/资源脱节）"""
-    payload = _payload(
-        version="9.9.9",  # 与 URL 中的 3.2.29 不一致
-    )
-    assert _PARSER.parse_version(payload) is None
-
-
-def test_parse_version_url_without_amd64_pattern() -> None:
-    """x64 deb URL 不含 _amd64 段 → 无法提取 build → None"""
-    payload = _payload(
-        x64DownloadUrl={"deb": "https://x/QQ_linux_x86_64.deb"},
-    )
-    assert _PARSER.parse_version(payload) is None
-
-
-def test_parse_version_missing_x64_url() -> None:
-    assert _PARSER.parse_version(_payload(x64DownloadUrl=None)) is None
+def test_version_from_package_head_bad_structure(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """头部非 deb 结构 → None 且走统一结构变更日志"""
+    with caplog.at_level(logging.WARNING, logger="app.parsers.qq"):
+        assert _PARSER.version_from_package_head(b"garbage not a deb") is None
+    assert "疑似上游结构变更" in caplog.text
 
 
 # ── parse_url ────────────────────────────────────────────────────────────────
+
+
+def test_parse_url_non_str_deb_value() -> None:
+    """deb 值非字符串（如嵌套 dict）→ None（防垃圾 URL 流入签名/下载环节）"""
+    payload = _payload(x64DownloadUrl={"deb": {"url": "https://x/QQ.deb"}})
+    assert _PARSER.parse_url(ArchEnum.X86_64, payload) is None
 
 
 def test_parse_url_each_arch(qq_response: str) -> None:
@@ -113,14 +94,13 @@ def test_parse_url_x64_as_plain_string() -> None:
     assert _PARSER.parse_url(ArchEnum.X86_64, payload) == "https://x/QQQ.deb"
 
 
-# ── 跨方法缓存：parse_version + 多架构 parse_url 同一响应只解析一次 ─────────
+# ── 跨方法缓存：多架构 parse_url 同一响应只解析一次 ─────────────────────────
 
 
-def test_version_and_urls_share_single_parse(qq_response: str) -> None:
+def test_urls_share_single_parse(qq_response: str) -> None:
     """QQ 复用基类 _parse_json_dict 缓存，同一响应只 json 解析一次"""
     parser = QQParser()
     with patch.object(qq_mod.json, "loads", wraps=json.loads) as spy:
-        parser.parse_version(qq_response)
         parser.parse_url(ArchEnum.X86_64, qq_response)
         parser.parse_url(ArchEnum.AARCH64, qq_response)
     assert spy.call_count == 1

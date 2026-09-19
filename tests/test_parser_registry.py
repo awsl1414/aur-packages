@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from app.parsers.base import BaseParser
+from app.parsers.deb import DebParser
 from app.parsers.navicat import NavicatParser
 from app.parsers.qq import QQParser
 from app.parsers.registry import _PARSER_REGISTRY, get_parser, register_parser
@@ -45,6 +46,12 @@ def test_get_parser_navicat_with_urls_config() -> None:
     parser = get_parser("navicat", {"urls": urls})
     assert isinstance(parser, NavicatParser)
     assert parser._urls == urls
+
+
+def test_get_parser_deb_with_urls_config() -> None:
+    parser = get_parser("deb", {"urls": {"amd64": "https://x/a.deb"}})
+    assert isinstance(parser, DebParser)
+    assert parser._urls == {"x86_64": "https://x/a.deb"}
 
 
 def test_get_parser_empty_config_is_no_arg() -> None:

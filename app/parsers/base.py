@@ -32,6 +32,10 @@ class BaseParser(ABC):
 
     结构性校验失败（期望的字段/列表/条目缺失或形态不符）统一走
     ``_log_structure_change`` 打日志，便于跨 parser 检索上游改版事件。
+
+    安装包文件自带权威版本元数据的解析器（deb 等）不适用上述 ``parse_version``
+    契约，应继承 ``PackageFileVersionParser``：版本经服务层下载安装包头部后由
+    ``version_from_package_head`` 提取。
     """
 
     def __init__(self) -> None:
@@ -150,4 +154,43 @@ class BaseParser(ABC):
         携带 Chrome Client Hints（``sec-ch-ua-*``、``sec-fetch-*``）才会
         返回数据。Fetcher 不预置这些特殊头，由本方法按需提供。
         """
+        return None
+
+
+class PackageFileVersionParser(BaseParser):
+    """安装包文件版本解析器基类：版本号从安装包文件本身提取。
+
+    适用场景：安装包（deb 等）自带权威版本元数据，比在文件名/页面上做正则
+    稳健。采集流程由 ``PackageService.collect_version`` 按类型检测（isinstance）
+    切换到「下载安装包头部 → ``version_from_package_head``」路径，**不走**
+    ``parse_version``。
+
+    安装包 URL 有两种来源，子类按需选择：
+
+    - 静态配置：重写 ``package_download_urls`` 返回 arch→URL 映射
+      （如 DebParser，``parser_config.urls`` 注入），版本域无需版本源响应；
+    - 动态定位：默认实现返回 ``None``，服务层先 ``fetch_text`` 版本源响应、
+      再逐架构 ``parse_url`` 定位安装包 URL（如 QQ 的 pcConfig）。
+
+    拿到 URL 后统一走 ``resolve_raw_url``（鉴权/签名钩子）下载头部。
+    """
+
+    # 版本提取所需读取的安装包文件头部最大字节数，服务层据此流式下载。
+    # deb 的 control 段恒在文件头部（实测通常 <64KB），留出余量取 256KB
+    PACKAGE_HEAD_MAX_BYTES: int = 256 * 1024
+
+    def package_download_urls(self) -> dict[str, str] | None:
+        """静态配置的各架构安装包 URL（arch_value → 原始 URL，未鉴权）。
+
+        返回 ``None`` 表示无静态配置，由服务层经版本源响应 + ``parse_url``
+        动态定位（见类 docstring）。
+        """
+        return None
+
+    @abstractmethod
+    def version_from_package_head(self, head: bytes) -> str | None:
+        """从安装包文件头部字节提取版本号；结构不符返回 None 并记结构变更日志"""
+
+    def parse_version(self, response_data: str) -> str | None:
+        """版本不来自文本响应，恒返回 None（实际提取走 ``version_from_package_head``）"""
         return None

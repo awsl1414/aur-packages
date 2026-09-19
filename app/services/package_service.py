@@ -17,7 +17,7 @@ from tortoise.transactions import in_transaction
 from app.constants import ArchEnum, HashAlgorithmEnum
 from app.fetcher import Fetcher
 from app.models import Package, PackageHash, PackageVersion
-from app.parsers.base import BaseParser
+from app.parsers.base import BaseParser, PackageFileVersionParser
 from app.registry import PackageEntry, PackageRegistry
 from app.schemas import PackageInfo
 
@@ -280,11 +280,18 @@ class PackageService:
     async def collect_version(
         self, pkg: Package, entry: PackageEntry
     ) -> _VersionSnapshot | None:
-        """版本域：fetch_text → parse_version + 逐 arch parse_url → 落库。
+        """版本域：按解析器类型分派。
+
+        - 安装包解析器（``PackageFileVersionParser``，如 deb/QQ）：定位安装包
+          URL → 流式下载头部 → 从文件内容（deb control 段）提取版本；
+        - 其余：fetch_text 版本源响应 → parse_version。
 
         失败（抓取/解析）落 failed 审计行并返回 None；成功落 success 行并返回快照。
         """
         parser: BaseParser = entry.parser
+        if isinstance(parser, PackageFileVersionParser):
+            return await self._collect_version_from_package(pkg, entry, parser)
+
         response_data: str | None = await self.fetcher.fetch_text(
             entry.fetch_url, parser.get_request_headers()
         )
@@ -310,6 +317,137 @@ class PackageService:
         version_row: PackageVersion = await self.persist_version(pkg, version, urls)
         logger.info("采集 %s 版本完成：version=%s", pkg.name, version)
         return _VersionSnapshot(version_row, version, urls)
+
+    async def _collect_version_from_package(
+        self,
+        pkg: Package,
+        entry: PackageEntry,
+        parser: PackageFileVersionParser,
+    ) -> _VersionSnapshot | None:
+        """安装包路径版本域：定位安装包 URL → 下载头部 → 提取版本 → 落库。
+
+        各架构提取到的版本必须一致才落库（防上游部分发布——否则 hash 会挂到
+        与 URL 不符的版本号下，与 TraeParser 的一致性契约相同）；个别架构
+        定位/下载/提取失败仅告警跳过，不连坐其他架构。
+        """
+        urls: dict[str, str]
+        error: str | None
+        urls, error = await self._resolve_package_urls(pkg, entry, parser)
+        if error is not None:
+            await self.persist_version_failure(pkg, error)
+            return None
+
+        versions: set[str] = set()
+        if urls:
+            # 逐架构并发提取（与 hash 域 gather 并发风格一致；QQ 多架构串行
+            # 签名+下载会成倍放大采集延迟）
+            extracted: list[str | None] = await asyncio.gather(
+                *[
+                    self._version_from_package(pkg.name, arch_value, raw, parser)
+                    for arch_value, raw in urls.items()
+                ]
+            )
+            versions = {v for v in extracted if v is not None}
+
+        if not versions:
+            await self.persist_version_failure(pkg, "无法从安装包文件提取版本号")
+            return None
+        if len(versions) > 1:
+            await self.persist_version_failure(
+                pkg, f"各架构安装包版本不一致: {sorted(versions)}"
+            )
+            return None
+
+        version = versions.pop()
+        version_row: PackageVersion = await self.persist_version(pkg, version, urls)
+        logger.info("采集 %s 版本完成（安装包提取）：version=%s", pkg.name, version)
+        return _VersionSnapshot(version_row, version, urls)
+
+    async def _resolve_package_urls(
+        self,
+        pkg: Package,
+        entry: PackageEntry,
+        parser: PackageFileVersionParser,
+    ) -> tuple[dict[str, str], str | None]:
+        """定位各架构安装包 URL：静态配置优先，否则经版本源响应 parse_url。
+
+        返回 ``(urls, error)``：error 非 None 表示整体失败（无法获取版本源或
+        一个架构都未定位到），须走版本失败落库；仅缺个别架构则告警跳过。
+        urls 以 entry.archs 为键集，与文本路径口径一致。
+        """
+        static_urls: dict[str, str] | None = parser.package_download_urls()
+        if static_urls is not None:
+            urls: dict[str, str] = {}
+            for arch in entry.archs:
+                url: str | None = static_urls.get(arch.value)
+                if url:
+                    urls[arch.value] = url
+                else:
+                    logger.warning(
+                        "无法获取 %s 的 %s 架构下载 URL", pkg.name, arch.value
+                    )
+            error: str | None = (
+                None if urls else "静态配置未提供任何已配置架构的安装包 URL"
+            )
+            return urls, error
+
+        response_data: str | None = await self.fetcher.fetch_text(
+            entry.fetch_url, parser.get_request_headers()
+        )
+        if response_data is None:
+            return {}, f"无法获取版本源: {entry.fetch_url}"
+
+        urls = {}
+        for arch in entry.archs:
+            url = parser.parse_url(arch, response_data)
+            if url:
+                urls[arch.value] = url
+            else:
+                logger.warning("无法获取 %s 的 %s 架构下载 URL", pkg.name, arch.value)
+        error = None if urls else "无法从版本源解析任何架构的安装包 URL"
+        return urls, error
+
+    async def _version_from_package(
+        self,
+        pkg_name: str,
+        arch_value: str,
+        raw_url: str,
+        parser: PackageFileVersionParser,
+    ) -> str | None:
+        """单架构安装包版本提取：resolve_raw_url（鉴权钩子）→ 下载头部 → 解析。
+
+        任一环节失败仅告警返回 None，不抛出（与 hash 域逐架构独立失败同风格）。
+        """
+        try:
+            resolved: str | None = await parser.resolve_raw_url(arch_value, raw_url)
+        except Exception:
+            logger.exception("%s 的 %s 架构 resolve_raw_url 异常", pkg_name, arch_value)
+            return None
+        if resolved is None:
+            logger.warning(
+                "%s 的 %s 架构无法获取可下载 URL，跳过版本提取", pkg_name, arch_value
+            )
+            return None
+
+        head: bytes | None = await self.fetcher.fetch_head(
+            resolved, parser.PACKAGE_HEAD_MAX_BYTES
+        )
+        if head is None:
+            logger.warning(
+                "%s 的 %s 架构安装包头部下载失败，跳过版本提取", pkg_name, arch_value
+            )
+            return None
+
+        try:
+            version: str | None = parser.version_from_package_head(head)
+        except Exception:
+            # 「任一环节失败不抛出」契约的兜底：parser 实现若漏捕获解析异常，
+            # 在此拦下转逐架构跳过，不让整个采集逃逸失败
+            logger.exception("%s 的 %s 架构安装包版本解析异常", pkg_name, arch_value)
+            return None
+        if version is None:
+            logger.warning("%s 的 %s 架构安装包版本提取失败", pkg_name, arch_value)
+        return version
 
     async def collect_hashes(
         self,
