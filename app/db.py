@@ -2,7 +2,8 @@
 
 schema.sql 是数据库结构的事实来源（含 STRICT 表、视图、跨字段 CHECK），
 不使用 Tortoise.generate_schema（对 STRICT 表 + 视图生成不可靠）。
-首次启动检测到 packages 表缺失时，逐条执行 schema.sql 完成建库与种子。
+首次启动检测到 packages 表缺失时，逐条执行 schema.sql 完成建库；
+包定义的种子由 package_seeder 从 packages.toml 同步，本文件不含数据。
 """
 
 import logging

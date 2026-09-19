@@ -11,11 +11,12 @@ from apscheduler import AsyncScheduler
 from fastapi import FastAPI
 
 from app.api.v1.router import api_router as v1_router
-from app.config import config
+from app.config import config, load_packages
 from app.constants import DEFAULT_TIMEOUT
 from app.db import close_db, init_db
 from app.fetcher import Fetcher
 from app.response import register_exception_handlers
+from app.services.package_seeder import sync_packages_from_config
 from app.services.package_service import PackageService
 from app.services.registry_loader import load_registry_from_db
 from app.services.schedule_service import ScheduleService
@@ -31,47 +32,53 @@ def _configure_logging() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    """应用生命周期：初始化 DB、加载注册表、构造服务、启停调度器
+    """应用生命周期：初始化 DB、同步包配置、加载注册表、启停调度器
 
-    包配置以 DB 为唯一来源——启动时从 packages 表加载构建注册表，
-    不再硬编码。调度器（APScheduler）与 httpx client 的生命周期均在 yield 前后管理。
+    包配置以 DB 为运行时唯一来源——启动时先执行 schema.sql 建库，
+    再把 packages.toml 的包定义 upsert 进 packages 表，最后从表加载
+    构建注册表。调度器（APScheduler）与 httpx client 的生命周期均在
+    yield 前后管理。
     """
     _configure_logging()
 
-    # 1. 初始化数据库（首启执行 schema.sql + 种子）
+    # 1. 初始化数据库（首启执行 schema.sql 建库，不含种子数据）
     await init_db(config.database.sqlite_path)
-    # 2. 从 DB 加载包注册表与有效包列表（调度同步复用，不重复查库）
-    registry, pkgs = await load_registry_from_db()
+    try:
+        # 2. 同步包定义：packages.toml → packages 表（幂等 upsert，每次启动执行）
+        await sync_packages_from_config(load_packages())
+        # 3. 从 DB 加载包注册表与有效包列表（调度同步复用，不重复查库）
+        registry, pkgs = await load_registry_from_db()
 
-    # follow_redirects：GitHub release 等 CDN 会 302 到带签名的临时下载链接，
-    # 不跟随则流式下载在重定向处直接失败
-    async with httpx.AsyncClient(
-        timeout=DEFAULT_TIMEOUT, follow_redirects=True
-    ) as client:
-        fetcher: Fetcher = Fetcher(client)
-        package_service: PackageService = PackageService(
-            fetcher,
-            registry,
-            min_collect_interval_seconds=config.scheduler.min_collect_interval_seconds,
-            version_stale_seconds=config.database.version_stale_seconds,
-        )
-        app.state.package_service = package_service
+        # follow_redirects：GitHub release 等 CDN 会 302 到带签名的临时下载链接，
+        # 不跟随则流式下载在重定向处直接失败
+        async with httpx.AsyncClient(
+            timeout=DEFAULT_TIMEOUT, follow_redirects=True
+        ) as client:
+            fetcher: Fetcher = Fetcher(client)
+            package_service: PackageService = PackageService(
+                fetcher,
+                registry,
+                min_collect_interval_seconds=config.scheduler.min_collect_interval_seconds,
+                version_stale_seconds=config.database.version_stale_seconds,
+            )
+            app.state.package_service = package_service
 
-        if config.scheduler.enabled:
-            # scheduler 由 async with 管理生命周期（__aexit__ 自动 stop）
-            async with AsyncScheduler() as scheduler:
-                schedule_service: ScheduleService = ScheduleService(
-                    scheduler, package_service, config.scheduler
-                )
-                app.state.schedule_service = schedule_service
-                await schedule_service.start(pkgs)
+            if config.scheduler.enabled:
+                # scheduler 由 async with 管理生命周期（__aexit__ 自动 stop）
+                async with AsyncScheduler() as scheduler:
+                    schedule_service: ScheduleService = ScheduleService(
+                        scheduler, package_service, config.scheduler
+                    )
+                    app.state.schedule_service = schedule_service
+                    await schedule_service.start(pkgs)
+                    yield
+                    await schedule_service.stop()
+            else:
+                app.state.schedule_service = None
                 yield
-                await schedule_service.stop()
-        else:
-            app.state.schedule_service = None
-            yield
-
-    await close_db()
+    finally:
+        # 覆盖配置同步/加载等早期失败路径，确保连接不随异常泄漏
+        await close_db()
 
 
 def create_app() -> FastAPI:
