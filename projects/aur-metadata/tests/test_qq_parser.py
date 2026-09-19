@@ -1,4 +1,4 @@
-"""app.parsers.qq 单元测试（纯解析逻辑，不触网络）"""
+"""aur_metadata.parsers.qq 单元测试（纯解析逻辑，不触网络）"""
 
 from __future__ import annotations
 
@@ -9,12 +9,13 @@ from unittest.mock import patch
 
 import pytest
 
-from app.constants import ArchEnum
-from app.parsers import qq as qq_mod
-from app.parsers.qq import QQParser
-from tests.fakes import build_deb
+from aur_metadata.constants import ArchEnum
+from aur_metadata.parsers import qq as qq_mod
+from aur_metadata.parsers.qq import QQParser
+from tests.fakes import build_deb, make_app_config
 
-_PARSER = QQParser()
+_APP_CONFIG = make_app_config()
+_PARSER = QQParser(_APP_CONFIG)
 
 
 def _payload(**linux_overrides: Any) -> str:
@@ -44,7 +45,7 @@ def test_version_from_package_head_bad_structure(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """头部非 deb 结构 → None 且走统一结构变更日志"""
-    with caplog.at_level(logging.WARNING, logger="app.parsers.qq"):
+    with caplog.at_level(logging.WARNING, logger="aur_metadata.parsers.qq"):
         assert _PARSER.version_from_package_head(b"garbage not a deb") is None
     assert "疑似上游结构变更" in caplog.text
 
@@ -99,7 +100,7 @@ def test_parse_url_x64_as_plain_string() -> None:
 
 def test_urls_share_single_parse(qq_response: str) -> None:
     """QQ 复用基类 _parse_json_dict 缓存，同一响应只 json 解析一次"""
-    parser = QQParser()
+    parser = QQParser(_APP_CONFIG)
     with patch.object(qq_mod.json, "loads", wraps=json.loads) as spy:
         parser.parse_url(ArchEnum.X86_64, qq_response)
         parser.parse_url(ArchEnum.AARCH64, qq_response)

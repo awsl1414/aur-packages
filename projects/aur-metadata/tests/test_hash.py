@@ -1,4 +1,4 @@
-"""app.utils.hash 单元测试"""
+"""aur_metadata.utils.hash 单元测试"""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from app.utils.hash import get_hash_builder
+from aur_metadata.utils.hash import get_hash_builder
 
 # 算法名 → 对应的 hashlib 参考构造器
 _REFERENCE: dict[str, Callable[[], Any]] = {

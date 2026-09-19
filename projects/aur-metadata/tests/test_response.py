@@ -1,11 +1,11 @@
-"""app.response 单元测试：成功响应构造与全局异常处理器接线。"""
+"""aur_metadata.response 单元测试：成功响应构造与全局异常处理器接线。"""
 
 from __future__ import annotations
 
 from fastapi import FastAPI
 from starlette.testclient import TestClient
 
-from app.response import (
+from aur_metadata.response import (
     _HTTP_STATUS,
     ApiResponse,
     BizError,
@@ -14,7 +14,7 @@ from app.response import (
     register_exception_handlers,
     success,
 )
-from app.schemas import PackageList
+from aur_metadata.schemas import PackageList
 
 
 def test_success_envelope() -> None:

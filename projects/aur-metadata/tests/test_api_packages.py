@@ -1,4 +1,4 @@
-"""app.api.v1.packages 路由测试：异常 → 业务码映射。
+"""aur_metadata.api.v1.packages 路由测试：异常 → 业务码映射。
 
 直接调用路由处理函数（绕过 FastAPI 依赖注入），用 Fake 服务控制异常，验证
 GET 的 PackageNotFoundError / DataNotReadyError 与 refresh 的
@@ -11,21 +11,21 @@ from typing import Any, cast
 
 import pytest
 
-from app.api.v1.packages import (
+from aur_metadata.api.v1.packages import (
     get_package,
     list_packages,
     refresh_package,
     reload_packages,
 )
-from app.response import BizError, ErrorCode
-from app.schemas import PackageInfo
-from app.services.package_service import (
+from aur_metadata.response import BizError, ErrorCode
+from aur_metadata.schemas import PackageInfo
+from aur_metadata.services.package_service import (
     CollectThrottledError,
     DataNotReadyError,
     PackageNotFoundError,
     PackageService,
 )
-from app.services.schedule_service import ScheduleService
+from aur_metadata.services.schedule_service import ScheduleService
 
 
 class FakePackageService:

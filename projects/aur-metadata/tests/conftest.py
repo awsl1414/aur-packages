@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 from tortoise import Tortoise
 
-from app.models import Package
+from aur_metadata.models import Package
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DB 夹具
@@ -29,7 +29,7 @@ async def db(tmp_path: Path) -> AsyncGenerator[None]:
     db_url: str = f"sqlite://{tmp_path / 'test.db'}"
     await Tortoise.init(
         db_url=db_url,
-        modules={"models": ["app.models"]},
+        modules={"models": ["aur_metadata.models"]},
         _enable_global_fallback=True,
     )
     await Tortoise.generate_schemas()

@@ -1,4 +1,4 @@
-"""app.parsers.zen 单元测试"""
+"""aur_metadata.parsers.zen 单元测试"""
 
 from __future__ import annotations
 
@@ -7,10 +7,12 @@ from typing import Any
 
 import pytest
 
-from app.constants import ArchEnum
-from app.parsers.zen import ZenParser
+from aur_metadata.constants import ArchEnum
+from aur_metadata.parsers.zen import ZenParser
+from tests.fakes import make_app_config
 
-_PARSER = ZenParser()
+_APP_CONFIG = make_app_config()
+_PARSER = ZenParser(_APP_CONFIG)
 
 
 def _payload(

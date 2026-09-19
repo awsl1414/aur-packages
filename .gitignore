@@ -19,6 +19,9 @@ src/
 # Downloaded package files
 /downloads/
 
+# aur-metadata 本地运行数据（SQLite）
+projects/aur-metadata/data/
+
 # aria2c control files
 *.aria2
 

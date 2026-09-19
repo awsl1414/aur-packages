@@ -1,4 +1,4 @@
-"""app.services.package_service 集成测试（DB + Fake 桩）。
+"""aur_metadata.services.package_service 集成测试（DB + Fake 桩）。
 
 覆盖解耦后的新契约：
 - 节流 / 运行时清理（纯逻辑）
@@ -18,9 +18,9 @@ from typing import cast
 
 import pytest
 
-from app.constants import ArchEnum
-from app.models import PackageHash, PackageVersion
-from app.services.package_service import (
+from aur_metadata.constants import ArchEnum
+from aur_metadata.models import PackageHash, PackageVersion
+from aur_metadata.services.package_service import (
     CollectThrottledError,
     DataNotReadyError,
     PackageNotFoundError,

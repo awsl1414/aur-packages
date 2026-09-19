@@ -1,4 +1,4 @@
-"""app.utils.deb 单元测试：ar 解析、control.tar 解压与版本归一化。"""
+"""aur_metadata.utils.deb 单元测试：ar 解析、control.tar 解压与版本归一化。"""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import tarfile
 
 import pytest
 
-from app.utils.deb import (
+from aur_metadata.utils.deb import (
     _CONTROL_TAR_MAX_BYTES,
     DebParseError,
     _version_from_control_tar,

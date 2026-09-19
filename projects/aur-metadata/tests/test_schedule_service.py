@@ -1,4 +1,4 @@
-"""app.services.schedule_service 测试。
+"""aur_metadata.services.schedule_service 测试。
 
 覆盖：trigger 构造、schedule 签名、collect_now 的节流/并发互斥/未找到、
 _collect 落库与失败兜底、reload 的签名跳过与内存清理。
@@ -18,16 +18,16 @@ import pytest
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
-from app.config import SchedulerConfig
-from app.constants import ArchEnum
-from app.models import PackageVersion
-from app.services.package_service import (
+from aur_metadata.config import SchedulerConfig
+from aur_metadata.constants import ArchEnum
+from aur_metadata.models import PackageVersion
+from aur_metadata.services.package_service import (
     CollectThrottledError,
     PackageNotFoundError,
     PackageService,
 )
-from app.services.schedule_service import ScheduleService
-from tests.fakes import FakeFetcher, make_qq_registry
+from aur_metadata.services.schedule_service import ScheduleService
+from tests.fakes import FakeFetcher, make_app_config, make_qq_registry
 
 _PKG_ID = 1
 
@@ -83,7 +83,7 @@ def _svc(fetcher: FakeFetcher | None = None) -> PackageService:
 
 def _build_service(svc: PackageService, scheduler: FakeScheduler) -> ScheduleService:
     # FakeScheduler 与 AsyncScheduler 同构（鸭子类型），用 type: ignore 绕过 ty 静态检查
-    return ScheduleService(scheduler, svc, _cfg())  # type: ignore
+    return ScheduleService(scheduler, svc, _cfg(), make_app_config())  # type: ignore
 
 
 def _pkg(**kw: Any) -> Any:

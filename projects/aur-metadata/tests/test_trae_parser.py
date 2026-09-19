@@ -1,4 +1,4 @@
-"""app.parsers.trae 单元测试"""
+"""aur_metadata.parsers.trae 单元测试"""
 
 from __future__ import annotations
 
@@ -8,12 +8,15 @@ from unittest.mock import patch
 
 import pytest
 
-from app.constants import ArchEnum
-from app.parsers import base as base_mod
-from app.parsers.trae import TraeParser
+from aur_metadata.constants import ArchEnum
+from aur_metadata.parsers import base as base_mod
+from aur_metadata.parsers.trae import TraeParser
+from tests.fakes import make_app_config
 
 # 上游当前结构：manifest.linux 无 version 字段，版本号内嵌于链接路径
 _VERSION = "2.3.77497"
+
+_APP_CONFIG = make_app_config()
 
 
 def _entry(region: str, host: str) -> dict[str, Any]:
@@ -46,7 +49,7 @@ def _payload(downloads: list[dict[str, Any]] | None = None) -> str:
 
 
 def test_default_region_is_cn() -> None:
-    assert TraeParser()._region == "cn"
+    assert TraeParser(_APP_CONFIG)._region == "cn"
 
 
 # ── parse_version ────────────────────────────────────────────────────────────
@@ -54,7 +57,7 @@ def test_default_region_is_cn() -> None:
 
 def test_parse_version_from_url() -> None:
     """从 download 链接路径提取版本号（上游无独立 version 字段）"""
-    assert TraeParser().parse_version(_payload()) == _VERSION
+    assert TraeParser(_APP_CONFIG).parse_version(_payload()) == _VERSION
 
 
 @pytest.mark.parametrize(
@@ -84,7 +87,7 @@ def test_parse_version_cross_arch_consistency(
         "arm64.tar.gz": arm64_url,
     }
     resp = json.dumps({"data": {"manifest": {"linux": {"download": [entry]}}}})
-    assert TraeParser().parse_version(resp) == expected
+    assert TraeParser(_APP_CONFIG).parse_version(resp) == expected
 
 
 def test_parse_version_ignores_non_arch_fields() -> None:
@@ -96,7 +99,7 @@ def test_parse_version_ignores_non_arch_fields() -> None:
         "arm64.tar.gz": f"https://cn/releases/stable/{_VERSION}/arm64.tar.gz",
     }
     resp = json.dumps({"data": {"manifest": {"linux": {"download": [entry]}}}})
-    assert TraeParser().parse_version(resp) == _VERSION
+    assert TraeParser(_APP_CONFIG).parse_version(resp) == _VERSION
 
 
 def test_parse_version_version_last_segment() -> None:
@@ -107,7 +110,7 @@ def test_parse_version_version_last_segment() -> None:
         "arm64.tar.gz": f"https://cn/releases/stable/{_VERSION}/arm64.tar.gz",
     }
     resp = json.dumps({"data": {"manifest": {"linux": {"download": [entry]}}}})
-    assert TraeParser().parse_version(resp) == _VERSION
+    assert TraeParser(_APP_CONFIG).parse_version(resp) == _VERSION
 
 
 def test_parse_version_no_version_segment_in_urls() -> None:
@@ -125,20 +128,20 @@ def test_parse_version_no_version_segment_in_urls() -> None:
             }
         }
     )
-    assert TraeParser().parse_version(resp) is None
+    assert TraeParser(_APP_CONFIG).parse_version(resp) is None
 
 
 def test_parse_version_missing_download() -> None:
     resp = json.dumps({"data": {"manifest": {"linux": {}}}})
-    assert TraeParser().parse_version(resp) is None
+    assert TraeParser(_APP_CONFIG).parse_version(resp) is None
 
 
 def test_parse_version_missing_linux_section() -> None:
-    assert TraeParser().parse_version(json.dumps({"data": {"manifest": {}}})) is None
+    assert TraeParser(_APP_CONFIG).parse_version(json.dumps({"data": {"manifest": {}}})) is None
 
 
 def test_parse_version_invalid_json() -> None:
-    assert TraeParser().parse_version("{not json") is None
+    assert TraeParser(_APP_CONFIG).parse_version("{not json") is None
 
 
 # ── parse_url：region 选择 ───────────────────────────────────────────────────
@@ -151,13 +154,13 @@ def test_parse_version_invalid_json() -> None:
 def test_parse_url_region_selection(region: str, expected_host: str) -> None:
     """不同 region 取对应机房 CDN 链接"""
     resp = _payload()
-    url: str | None = TraeParser(region=region).parse_url(ArchEnum.X86_64, resp)
+    url: str | None = TraeParser(_APP_CONFIG, region=region).parse_url(ArchEnum.X86_64, resp)
     assert url is not None and url.startswith(f"https://{expected_host}/")
 
 
 def test_parse_url_each_arch() -> None:
     resp = _payload()
-    parser = TraeParser(region="cn")
+    parser = TraeParser(_APP_CONFIG, region="cn")
     assert (
         parser.parse_url(ArchEnum.X86_64, resp)
         == f"https://cn-cdn/obj/pkg/app/releases/stable/{_VERSION}/linux/TraeCode_CN-linux-x64.tar.gz"
@@ -171,11 +174,11 @@ def test_parse_url_each_arch() -> None:
 def test_parse_url_region_not_present() -> None:
     """download[] 中无该 region → None"""
     resp = _payload(downloads=[_entry("cn", "cn-cdn")])
-    assert TraeParser(region="va").parse_url(ArchEnum.X86_64, resp) is None
+    assert TraeParser(_APP_CONFIG, region="va").parse_url(ArchEnum.X86_64, resp) is None
 
 
 def test_parse_url_unsupported_arch() -> None:
-    assert TraeParser().parse_url("mips64el", _payload()) is None
+    assert TraeParser(_APP_CONFIG).parse_url("mips64el", _payload()) is None
 
 
 def test_parse_url_download_not_list() -> None:
@@ -186,14 +189,14 @@ def test_parse_url_download_not_list() -> None:
             }
         }
     )
-    assert TraeParser().parse_url(ArchEnum.X86_64, resp) is None
+    assert TraeParser(_APP_CONFIG).parse_url(ArchEnum.X86_64, resp) is None
 
 
 # ── 跨方法缓存：parse_version + 多架构 parse_url 同一响应只解析一次 ─────────
 
 
 def test_version_and_urls_share_single_parse() -> None:
-    parser = TraeParser(region="cn")
+    parser = TraeParser(_APP_CONFIG, region="cn")
     resp = _payload()
     with patch.object(base_mod.json, "loads", wraps=json.loads) as spy:
         parser.parse_version(resp)

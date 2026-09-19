@@ -1,0 +1,49 @@
+[server]
+# 监听地址。容器内运行需改为 "0.0.0.0"，或用 host 网络模式（docker run --network host），
+# 否则端口仅绑定容器 loopback，宿主机无法访问
+host = "127.0.0.1"
+port = 8000
+
+[http]
+user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
+default_timeout = 30.0
+chunk_size = 4096
+max_concurrent_downloads = 5
+log_body_max_length = 500
+# 瞬时网络错误（连接超时/TLS 重置/对端中断等）的总尝试次数（含首次），1 表示不重试
+retry_max_attempts = 3
+# 指数退避基数（秒）：第 n 次重试前等待 backoff * 2^(n-1)
+retry_backoff_seconds = 1.0
+
+[qq]
+origin = "https://im.qq.com"
+cookie_url = "https://im.qq.com/index/"
+sign_url = "https://im.qq.com/http2rpc/gotrpc/noauth/trpc.qqntv2.urlsign.UrlSign/GetSign"
+oidb_command = "0x9b8e"
+oidb_service_type = 1
+
+[database]
+# SQLite 数据库文件路径，相对本配置文件所在目录（configs/）解析，
+# "../data/" 即成员项目根；生产/容器环境建议直接写绝对路径
+sqlite_path = "../data/aur_packages.db"
+# GET /{name} 命中 DB 快照的最大年龄（秒），超过则触发后台异步刷新；建议 ≥ 定时采集间隔
+version_stale_seconds = 7200
+
+[github]
+# GitHub 认证 token（应对匿名调用 api.github.com 的 60 次/时限流）
+# 留空则匿名请求；优先级：环境变量 GITHUB_TOKEN > 本字段
+token = ""
+
+[scheduler]
+# 定时采集总开关
+enabled = true
+# cron 表达式求值时区（interval 模式不受时区影响）
+timezone = "Asia/Shanghai"
+# 触发时刻的随机抖动上限（秒），错峰避免多包同时打上游
+jitter_seconds = 60
+# 误火宽限期（秒），超过则丢弃迟到的触发
+misfire_grace_seconds = 300
+# 单包两次采集的最小间隔（秒）：限制手动刷新 / 后台刷新触发频率，防止频繁下载消耗资源
+min_collect_interval_seconds = 300
+# 服务启动时是否立即采集一次（仅 interval 模式；false 时首次采集在一个间隔之后）
+run_on_startup = true

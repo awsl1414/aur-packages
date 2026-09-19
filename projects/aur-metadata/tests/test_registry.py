@@ -1,4 +1,4 @@
-"""app.registry 单元测试"""
+"""aur_metadata.registry 单元测试"""
 
 from __future__ import annotations
 
@@ -6,16 +6,17 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from app.constants import ArchEnum
-from app.parsers.base import BaseParser
-from app.parsers.qq import QQParser
-from app.registry import PackageEntry, PackageRegistry
+from aur_metadata.constants import ArchEnum
+from aur_metadata.parsers.base import BaseParser
+from aur_metadata.parsers.qq import QQParser
+from aur_metadata.registry import PackageEntry, PackageRegistry
+from tests.fakes import make_app_config
 
 
 def _entry(name: str) -> PackageEntry:
     return PackageEntry(
         name=name,
-        parser=QQParser(),
+        parser=QQParser(make_app_config()),
         fetch_url="https://example.com",
         archs=[ArchEnum.X86_64],
     )

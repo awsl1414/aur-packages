@@ -13,14 +13,16 @@ from typing import Any, cast
 
 import pytest
 
-from app.constants import ArchEnum
-from app.models import Package, PackageHash, PackageVersion
-from app.parsers.deb import DebControlVersionMixin, DebParser
-from app.registry import PackageEntry, PackageRegistry
-from app.services.package_service import PackageService
-from tests.fakes import FakeFetcher, build_deb
+from aur_metadata.constants import ArchEnum
+from aur_metadata.models import Package, PackageHash, PackageVersion
+from aur_metadata.parsers.deb import DebControlVersionMixin, DebParser
+from aur_metadata.registry import PackageEntry, PackageRegistry
+from aur_metadata.services.package_service import PackageService
+from tests.fakes import FakeFetcher, build_deb, make_app_config
 
 _DEB_HEAD: bytes = build_deb(version="2.0.0-100")
+_APP_CONFIG = make_app_config()
+
 _DEB_URLS: dict[str, str] = {
     "x86_64": "https://x/app_amd64.deb",
     "aarch64": "https://x/app_arm64.deb",
@@ -62,7 +64,8 @@ def _deb_service(
     )
     if parser is None:
         parser = DebParser(
-            urls={"amd64": _DEB_URLS["x86_64"], "arm64": _DEB_URLS["aarch64"]}
+            _APP_CONFIG,
+            urls={"amd64": _DEB_URLS["x86_64"], "arm64": _DEB_URLS["aarch64"]},
         )
     return PackageService(fetcher.as_fetcher(), _registry(parser))
 
@@ -139,7 +142,7 @@ async def test_collect_deb_cross_arch_version_mismatch(db, make_package) -> None
 async def test_collect_deb_partial_arch_urls_still_succeeds(db, make_package) -> None:
     """仅部分架构配置了 URL → 可用架构照常落库，缺失架构 hash 行失败"""
     pkg = await _make_deb_package(make_package)
-    svc = _deb_service(parser=DebParser(urls={"amd64": _DEB_URLS["x86_64"]}))
+    svc = _deb_service(parser=DebParser(_APP_CONFIG, urls={"amd64": _DEB_URLS["x86_64"]}))
     info = await svc.collect("app")
     assert info.version == "2.0.0_100"
     assert info.urls == {"x86_64": _DEB_URLS["x86_64"]}
@@ -185,7 +188,8 @@ async def test_collect_deb_resolve_raw_url_exception_swallowed(
 
     pkg = await _make_deb_package(make_package)
     raising_parser = _RaisingResolveParser(
-        urls={"amd64": _DEB_URLS["x86_64"], "arm64": _DEB_URLS["aarch64"]}
+        _APP_CONFIG,
+        urls={"amd64": _DEB_URLS["x86_64"], "arm64": _DEB_URLS["aarch64"]},
     )
     with pytest.raises(RuntimeError, match="采集 app 版本失败"):
         await _deb_service(parser=raising_parser).collect("app")
@@ -205,7 +209,7 @@ async def test_collect_deb_dynamic_urls_fetch_text_once(db, make_package) -> Non
             hashes={"x86_64": "h1", "aarch64": "h2"},
             head=_DEB_HEAD,
         ).as_fetcher(),
-        _registry(_DynamicDebParser()),
+        _registry(_DynamicDebParser(_APP_CONFIG)),
     )
     info = await svc.collect("app")
     assert info.version == "2.0.0_100"
@@ -222,7 +226,7 @@ async def test_collect_deb_dynamic_url_source_failure(db, make_package) -> None:
     pkg = await _make_deb_package(make_package, parser_config=None)
     svc = PackageService(
         FakeFetcher(text=None, head=_DEB_HEAD).as_fetcher(),
-        _registry(_DynamicDebParser()),
+        _registry(_DynamicDebParser(_APP_CONFIG)),
     )
     with pytest.raises(RuntimeError):
         await svc.collect("app")

@@ -1,4 +1,4 @@
-"""app.parsers.pypi 单元测试"""
+"""aur_metadata.parsers.pypi 单元测试"""
 
 from __future__ import annotations
 
@@ -6,11 +6,13 @@ import json
 from typing import Any
 from unittest.mock import patch
 
-from app.constants import ArchEnum
-from app.parsers import base as base_mod
-from app.parsers.pypi import PyPIParser
+from aur_metadata.constants import ArchEnum
+from aur_metadata.parsers import base as base_mod
+from aur_metadata.parsers.pypi import PyPIParser
+from tests.fakes import make_app_config
 
-_PARSER = PyPIParser()
+_APP_CONFIG = make_app_config()
+_PARSER = PyPIParser(_APP_CONFIG)
 
 
 def _payload(**overrides: Any) -> str:
@@ -99,7 +101,7 @@ def test_parse_url_invalid_json() -> None:
 
 
 def test_version_and_url_share_single_parse() -> None:
-    parser = PyPIParser()
+    parser = PyPIParser(_APP_CONFIG)
     resp = _payload()
     with patch.object(base_mod.json, "loads", wraps=json.loads) as spy:
         parser.parse_version(resp)

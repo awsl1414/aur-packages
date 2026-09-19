@@ -6,11 +6,14 @@ from typing import Any
 import pytest
 from tortoise import Tortoise, connections
 
-from app.config import PackageConfig, load_packages
-from app.db import _SCHEMA_PATH, _split_sql
-from app.models import Package
-from app.services.package_seeder import sync_packages_from_config
-from app.services.registry_loader import load_registry_from_db
+from aur_metadata.config import PackageConfig, load_packages
+from aur_metadata.db import _load_schema_sql, _split_sql
+from aur_metadata.models import Package
+from aur_metadata.services.package_seeder import sync_packages_from_config
+from aur_metadata.services.registry_loader import load_registry_from_db
+from tests.fakes import make_app_config
+
+_APP_CONFIG = make_app_config()
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _DEFAULT_PACKAGE_NAMES: set[str] = {
@@ -174,23 +177,23 @@ async def test_full_pipeline_with_real_schema_and_config(tmp_path: Path) -> None
     """
     await Tortoise.init(
         db_url=f"sqlite://{tmp_path / 'full.db'}",
-        modules={"models": ["app.models"]},
+        modules={"models": ["aur_metadata.models"]},
         _enable_global_fallback=True,
     )
     try:
         conn = connections.get("default")
         await conn.execute_query("PRAGMA foreign_keys = ON;")
-        for stmt in _split_sql(_SCHEMA_PATH.read_text(encoding="utf-8")):
+        for stmt in _split_sql(_load_schema_sql()):
             await conn.execute_query(stmt)
 
         report = await sync_packages_from_config(
-            load_packages(_PROJECT_ROOT / "packages.toml")
+            load_packages(_PROJECT_ROOT / "configs" / "packages.toml")
         )
         assert set(report.created) == _DEFAULT_PACKAGE_NAMES
         assert report.updated == []
         assert report.orphans == []
 
-        registry, pkgs = await load_registry_from_db()
+        registry, pkgs = await load_registry_from_db(_APP_CONFIG)
         assert {e.name for e in registry.list_all()} == _DEFAULT_PACKAGE_NAMES
         assert {p.name for p in pkgs} == _DEFAULT_PACKAGE_NAMES
     finally:

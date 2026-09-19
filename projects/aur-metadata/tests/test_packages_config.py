@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from app.config import PackageConfig, load_packages
+from aur_metadata.config import PackageConfig, load_packages
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -33,7 +33,7 @@ def test_load_default_packages_file() -> None:
     逐一断言各 trae 的 region：[[packages]] 的子表按 TOML 语义绑定到最近的
     条目，条目顺序被打乱时会静默挂错包，靠这里的断言兜底。
     """
-    packages: list[PackageConfig] = load_packages(_PROJECT_ROOT / "packages.toml")
+    packages: list[PackageConfig] = load_packages(_PROJECT_ROOT / "configs" / "packages.toml")
     assert {p.name for p in packages} == _DEFAULT_PACKAGE_NAMES
     assert all(p.schedule_type == "interval" for p in packages)
     navicat = next(p for p in packages if p.name == "navicat")

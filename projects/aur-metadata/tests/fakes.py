@@ -10,14 +10,59 @@ import gzip
 import io
 import lzma
 import tarfile
+from pathlib import Path
 from typing import cast
 
 import zstandard
 
-from app.constants import ArchEnum
-from app.fetcher import Fetcher
-from app.parsers.base import BaseParser
-from app.registry import PackageEntry, PackageRegistry
+from aur_metadata.config import (
+    AppConfig,
+    DatabaseConfig,
+    GithubConfig,
+    HttpConfig,
+    QQConfig,
+    SchedulerConfig,
+    ServerConfig,
+)
+from aur_metadata.constants import ArchEnum
+from aur_metadata.fetcher import Fetcher
+from aur_metadata.parsers.base import BaseParser
+from aur_metadata.registry import PackageEntry, PackageRegistry
+
+
+def make_app_config() -> AppConfig:
+    """构造测试用 AppConfig：合理默认值，QQ 签名等网络参数仅为占位"""
+    return AppConfig(
+        server=ServerConfig(host="127.0.0.1", port=8000),
+        http=HttpConfig(
+            user_agent="test-agent",
+            default_timeout=5.0,
+            chunk_size=1024,
+            max_concurrent_downloads=2,
+            log_body_max_length=200,
+            retry_max_attempts=1,
+            retry_backoff_seconds=0.0,
+        ),
+        qq=QQConfig(
+            origin="https://im.qq.com",
+            cookie_url="https://im.qq.com/index/",
+            sign_url="https://im.qq.com/sign",
+            oidb_command="0x9b8e",
+            oidb_service_type=1,
+        ),
+        database=DatabaseConfig(
+            sqlite_path=Path("test.db"), version_stale_seconds=7200
+        ),
+        github=GithubConfig(token=None),
+        scheduler=SchedulerConfig(
+            enabled=True,
+            timezone="Asia/Shanghai",
+            jitter_seconds=0,
+            misfire_grace_seconds=300,
+            min_collect_interval_seconds=300,
+            run_on_startup=False,
+        ),
+    )
 
 
 class FakeParser(BaseParser):
@@ -27,7 +72,9 @@ class FakeParser(BaseParser):
         self,
         version: str | None = "1.0.0",
         url_by_arch: dict[str, str] | None = None,
+        app_config: AppConfig | None = None,
     ) -> None:
+        super().__init__(app_config or make_app_config())
         self._version = version
         self._url_by_arch = url_by_arch or {}
 
