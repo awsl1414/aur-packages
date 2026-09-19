@@ -66,20 +66,15 @@ docker compose build && docker compose up -d
 
 ## 数据持久化
 
-compose 默认把宿主的 `./data` 绑定挂载到容器的 `/app/data`（SQLite 落盘处），
-docker 与 podman、rootful 与 rootless 均可用：容器入口脚本以 root 启动，先把
-数据目录调整为 `PUID`/`PGID`（默认 1000）属主，再经 gosu 降权运行服务，规避
-rootless podman 下容器 uid 与宿主目录属主不一致导致的
-`unable to open database file`。需要匹配宿主账号时在 compose 中设置：
+SQLite 通过具名卷 `metadata-data` 持久化（挂载到容器 `/app/data`）：镜像内已
+将该目录属主预置为容器运行用户（uid 1000），引擎首次挂载空卷时自动继承属主，
+rootful/rootless 下均可写。不要改为宿主目录绑定挂载——rootless 运行时
+（docker 与 podman 均然）的 user namespace 会把容器 uid 映射到子 uid，对宿主
+目录没有写权限（表现为 `unable to open database file`）。查看数据：
 
-```yaml
-environment:
-  PUID: 1000
-  PGID: 1000
+```bash
+docker volume inspect aur-metadata_metadata-data   # 宿主侧实际存储路径
 ```
-
-注意 rootless podman 下宿主侧 DB 文件属主显示为子 uid（如 100999），属正常
-映射现象；改用具名卷（`metadata-data:/app/data`）则无此现象。
 
 ## 开发
 

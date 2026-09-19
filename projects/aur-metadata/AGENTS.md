@@ -54,5 +54,5 @@ uv run pytest tests/     # 运行指定目录
 - 运行配置经构造函数显式注入（`AppConfig`/`HttpConfig`/`QQConfig` 等），禁止模块级读配置、禁止 import 即有副作用
 - 配置路径解析：`--config` 参数 > `APP_CONFIG` 环境变量 > 默认搜索路径（成员目录 `configs/config.toml` → 仓库根 `projects/aur-metadata/configs/config.toml`，`packages.toml` 同理）；配置内的相对路径（如 `sqlite_path`）以命中的配置文件所在目录为基准解析
 - Docker 构建**上下文必须是仓库根**（Dockerfile 需 COPY 根 `uv.lock` 与各成员 pyproject）：仓库根执行 `docker build -f projects/aur-metadata/Dockerfile .`，或成员目录内 `docker build -f Dockerfile ../..`；在成员目录内直接 `docker build .` 会因上下文缺根 `uv.lock` 而失败
-- 数据目录走绑定挂载（`./data:/app/data`）时，容器以 root 启动、由 `docker-entrypoint.sh` 按 `PUID`/`PGID` 调整属主后经 gosu 降权运行——**不要**在 Dockerfile 里固定 `USER`（会破坏 rootless podman 的 uid 映射兼容），属主调整逻辑只在 entrypoint 中做
+- 数据持久化使用具名卷 `metadata-data`（镜像内已预置 `/app/data` 属主为容器运行用户 uid 1000，引擎首挂自动继承）；**不要**改为宿主目录绑定挂载——rootless 运行时（docker/podman 均然）的 user namespace 会把容器 uid 映射为子 uid，导致 `unable to open database file`
 - schema 演进采用**删库重建**：采集结果可由定时任务再生，升级 schema 时直接删除数据文件重启，不做增量迁移；修改 `db/schema.sql` 时须同步对齐 `models/` 的 ORM 字段
