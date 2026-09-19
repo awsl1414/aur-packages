@@ -2,6 +2,7 @@
 
 import re
 from pathlib import Path
+from typing import Self
 
 from aur_auto_update.constants.constants import HashAlgorithmEnum
 
@@ -21,11 +22,11 @@ class PKGBUILDEditor:
         self.content = ""
         self._load_content()
 
-    def __enter__(self) -> "PKGBUILDEditor":
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(
-        self, exc_type: type | None, exc_val: BaseException | None, exc_tb: object
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: object
     ) -> None:
         if exc_type is None:
             self.save()

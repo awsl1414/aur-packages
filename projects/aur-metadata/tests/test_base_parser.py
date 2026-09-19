@@ -14,7 +14,6 @@ from aur_metadata.parsers import base as base_mod
 from aur_metadata.parsers.base import _STRUCTURE_SNIPPET_MAX_LENGTH, BaseParser
 from tests.fakes import make_app_config
 
-
 _APP_CONFIG = make_app_config()
 
 

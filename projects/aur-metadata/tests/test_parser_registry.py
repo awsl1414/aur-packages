@@ -9,9 +9,8 @@ from aur_metadata.parsers.deb import DebParser
 from aur_metadata.parsers.navicat import NavicatParser
 from aur_metadata.parsers.qq import QQParser
 from aur_metadata.parsers.registry import _PARSER_REGISTRY, get_parser, register_parser
-from tests.fakes import make_app_config
 from aur_metadata.parsers.trae import TraeParser
-
+from tests.fakes import make_app_config
 
 _APP_CONFIG = make_app_config()
 

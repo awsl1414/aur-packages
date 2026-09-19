@@ -93,12 +93,12 @@ class Downloader:
         if not downloads:
             return {}
 
-        for _arch, (url, file_path) in downloads.items():
+        for url, file_path in downloads.values():
             file_path.parent.mkdir(parents=True, exist_ok=True)
 
         # 写入 aria2c input file
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
-            for _arch, (url, file_path) in downloads.items():
+            for url, file_path in downloads.values():
                 f.write(f"{url}\n")
                 f.write(f"  dir={file_path.parent}\n")
                 f.write(f"  out={file_path.name}\n\n")
@@ -113,7 +113,8 @@ class Downloader:
                 stdout=asyncio.subprocess.PIPE if pipe_output else None,
                 stderr=asyncio.subprocess.PIPE if pipe_output else None,
             )
-            stdout, stderr = await proc.communicate()
+            # 仅需等待进程退出并排空管道，输出本身不使用
+            await proc.communicate()
 
             results: dict[str, DownloadResult] = {}
             for arch, (url, file_path) in downloads.items():
