@@ -5,6 +5,7 @@ import logging
 import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 import httpx
@@ -84,6 +85,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         await close_db()
 
 
+def _app_version() -> str:
+    """从包元数据读取版本，与 pyproject.toml 单一来源；未安装时回退开发占位"""
+    try:
+        return version("aur-metadata")
+    except PackageNotFoundError:
+        return "0.0.0.dev0"
+
+
 def create_app(config: AppConfig, packages: list[PackageConfig]) -> FastAPI:
     """构造 FastAPI 应用
 
@@ -94,7 +103,7 @@ def create_app(config: AppConfig, packages: list[PackageConfig]) -> FastAPI:
     app: FastAPI = FastAPI(
         title="aur-metadata",
         description="为 aur-auto-update 提供应用版本、文件 hash 等元数据的服务",
-        version="0.1.0",
+        version=_app_version(),
         lifespan=lifespan,
     )
     app.state.config = config

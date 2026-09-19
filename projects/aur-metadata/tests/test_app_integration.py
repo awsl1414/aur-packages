@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from importlib.metadata import version
 from pathlib import Path
 
 import pytest
@@ -73,3 +74,9 @@ def test_lifespan_assembles_services_and_seeds(
 
     # 4. 生命周期结束：DB 文件落在配置指定的绝对路径
     assert (tmp_path / "data" / "aur_packages.db").exists()
+
+
+def test_openapi_version_from_package_metadata(tmp_path: Path) -> None:
+    """OpenAPI 版本取自包元数据（pyproject 单一来源），非硬编码"""
+    app = create_app(_config(tmp_path), [])
+    assert app.version == version("aur-metadata")
