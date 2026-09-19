@@ -21,6 +21,30 @@ _NAVICAT_HTML: str = (
     .read_text(encoding="utf-8")
 )
 
+# 真实 ZCode 官网下载区片段（含 Linux x64 .deb/.rpm/AppImage 直链）
+_ZCODE_HTML: str = (
+    Path(__file__).parent.joinpath("fixtures", "zcode_cn_download.html")
+    .read_text(encoding="utf-8")
+)
+
+# packages.toml 中 zcode 包的生产规则（rule-deb：URL 以自校验的文件名为锚，
+# 版本走 deb 头部权威提取，不配 version 规则）
+_ZCODE_URL_X86_64_RULE: dict[str, Any] = {
+    "kind": "re",
+    "expr": r"https://[^\"<>\s]+/ZCode-[0-9]+(?:\.[0-9]+)+-linux-x64\.deb",
+}
+_ZCODE_URL_AARCH64_RULE: dict[str, Any] = {
+    "kind": "re",
+    "expr": r"https://[^\"<>\s]+/ZCode-[0-9]+(?:\.[0-9]+)+-linux-arm64\.deb",
+}
+
+
+def _zcode_parser() -> RuleDebParser:
+    return RuleDebParser(
+        _APP_CONFIG,
+        url={"x86_64": _ZCODE_URL_X86_64_RULE, "aarch64": _ZCODE_URL_AARCH64_RULE},
+    )
+
 
 def _rule(**overrides: Any) -> dict[str, Any]:
     """基础 xpath + 正则变换规则，可按字段覆盖"""
@@ -248,6 +272,43 @@ def test_rule_deb_parser_version_rule_not_required() -> None:
 def test_rule_deb_parser_version_from_package_head() -> None:
     """版本经 DebControlVersionMixin 从 deb 头部提取并归一化"""
     parser = RuleDebParser(_APP_CONFIG)
+    assert (
+        parser.version_from_package_head(build_deb(version="3.14.0-7681"))
+        == "3.14.0_7681"
+    )
+
+# ── ZCode 生产规则（packages.toml，rule-deb）：官网直链文件名锚定 ─────────────
+
+
+def test_zcode_url_rules_extract_both_archs() -> None:
+    """两架构 URL 各自按文件名锚点提取，互不干扰；文本响应无版本（deb 头部提取）"""
+    parser = _zcode_parser()
+    assert parser.parse_version(_ZCODE_HTML) is None
+    assert parser.parse_url(ArchEnum.X86_64, _ZCODE_HTML) == (
+        "https://cdn-zcode.z.ai/zcode/electron/releases/3.14.0/linux-x64/"
+        "ZCode-3.14.0-linux-x64.deb"
+    )
+    assert parser.parse_url(ArchEnum.AARCH64, _ZCODE_HTML) == (
+        "https://cdn-zcode.z.ai/zcode/electron/releases/3.14.0/linux-arm64/"
+        "ZCode-3.14.0-linux-arm64.deb"
+    )
+
+
+def test_zcode_url_rule_fails_on_renamed_artifact() -> None:
+    """上游改名（文件名失配）时走结构变更告警返回 None，而非提取错值；
+    失配只影响对应架构，另一架构定位不受牵连"""
+    html = _ZCODE_HTML.replace("ZCode-3.14.0-linux-x64.deb", "zcode_3.14.0_amd64.deb")
+    parser = _zcode_parser()
+    assert parser.parse_url(ArchEnum.X86_64, html) is None
+    assert parser.parse_url(ArchEnum.AARCH64, html) == (
+        "https://cdn-zcode.z.ai/zcode/electron/releases/3.14.0/linux-arm64/"
+        "ZCode-3.14.0-linux-arm64.deb"
+    )
+
+
+def test_zcode_version_from_package_head() -> None:
+    """版本经 DebControlVersionMixin 从 deb 头部提取并归一化（build 号转 _ 连接）"""
+    parser = _zcode_parser()
     assert (
         parser.version_from_package_head(build_deb(version="3.14.0-7681"))
         == "3.14.0_7681"

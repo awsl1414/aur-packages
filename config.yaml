@@ -102,3 +102,12 @@ packages:
     enable: true
     arch:
       - any
+
+  z-code:
+    name: zcode
+    pkgbuild: "packages/z-code/PKGBUILD"
+    update_source_url: true
+    enable: true
+    arch:
+      - x86_64
+      - aarch64

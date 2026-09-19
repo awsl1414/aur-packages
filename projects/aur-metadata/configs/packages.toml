@@ -117,3 +117,23 @@ parser_type = "zen"
 fetch_url = "https://api.github.com/repos/zen-browser/desktop/releases/tags/twilight-1"
 archs = ["x86_64", "aarch64"]
 interval_seconds = 14400
+
+# ZCode：官网（/ 与 /cn 同源同构）为单行静态 HTML，内嵌当前版本各平台下载直链，
+# 且全页各链接仅出现一次。URL 以自校验的文件名 ZCode-<ver>-linux-<arch>.deb 为
+# 锚点（对 CDN 域名/路径层级变更不敏感；上游改名时整体失配走结构变更告警而非
+# 静默提取错值）。版本走 rule-deb 的 deb 头部权威提取（dpkg Version，含 build
+# 号，归一化为 3.14.0_7681），并免费获得跨架构版本一致性校验。
+[[packages]]
+name = "zcode"
+parser_type = "rule-deb"
+fetch_url = "https://zcode.z.ai/cn"
+archs = ["x86_64", "aarch64"]
+interval_seconds = 14400
+
+[packages.parser_config.url.x86_64]
+kind = "re"
+expr = 'https://[^"<>\s]+/ZCode-[0-9]+(?:\.[0-9]+)+-linux-x64\.deb'
+
+[packages.parser_config.url.aarch64]
+kind = "re"
+expr = 'https://[^"<>\s]+/ZCode-[0-9]+(?:\.[0-9]+)+-linux-arm64\.deb'

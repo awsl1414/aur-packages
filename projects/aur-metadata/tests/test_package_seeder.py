@@ -25,6 +25,7 @@ _DEFAULT_PACKAGE_NAMES: set[str] = {
     "trae-us",
     "trae-cn",
     "zen-browser",
+    "zcode",
 }
 
 
