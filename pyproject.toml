@@ -6,9 +6,7 @@ version = "0.1.0"
 description = "AUR packages monorepo"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = [
-    "fastapi>=0.141.1",
-]
+dependencies = []
 
 [tool.uv]
 package = false
