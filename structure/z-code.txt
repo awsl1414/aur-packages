@@ -1,0 +1,853 @@
+# ZCode deb 包解包目录结构快照
+# 来源: ZCode-3.14.0-linux-x64.deb(control: Package zcode / Version 3.14.0-7681)
+# 提取: ar x <deb> && tar -xJf data.tar.xz -C data,再对 data/ 生成 tree 快照(2026-09-20)
+# 架构: amd64(x86_64);deb 另有 linux-arm64 变体,目录结构相同
+
+data/
+├── opt/
+│   └── ZCode/
+│       ├── chrome-sandbox*
+│       ├── chrome_100_percent.pak
+│       ├── chrome_200_percent.pak
+│       ├── chrome_crashpad_handler*
+│       ├── icudtl.dat
+│       ├── libEGL.so*
+│       ├── libffmpeg.so*
+│       ├── libGLESv2.so*
+│       ├── libvk_swiftshader.so*
+│       ├── libvulkan.so.1*
+│       ├── LICENSE.electron.txt
+│       ├── LICENSES.chromium.html
+│       ├── locales/
+│       │   ├── en-US.pak
+│       │   └── zh-CN.pak
+│       ├── resources/
+│       │   ├── app-update.yml
+│       │   ├── app.asar
+│       │   ├── app.asar.unpacked/
+│       │   │   └── node_modules/
+│       │   │       ├── node-pty/
+│       │   │       │   └── prebuilds/
+│       │   │       │       └── linux-x64/
+│       │   │       │           └── pty.node
+│       │   │       └── ssh2/
+│       │   │           └── lib/
+│       │   │               └── protocol/
+│       │   │                   └── crypto/
+│       │   │                       └── build/
+│       │   │                           └── Release/
+│       │   │                               └── sshcrypto.node
+│       │   ├── apparmor-profile
+│       │   ├── config/
+│       │   │   ├── default.json
+│       │   │   └── provider/
+│       │   │       └── zcode-builtin.json
+│       │   ├── glm/
+│       │   │   ├── .node-bundle-meta.json
+│       │   │   ├── packages/
+│       │   │   │   ├── android-emulator-plugin/
+│       │   │   │   │   ├── .mcp.json
+│       │   │   │   │   ├── .zcode-plugin/
+│       │   │   │   │   │   └── plugin.json
+│       │   │   │   │   ├── commands/
+│       │   │   │   │   │   └── android-dev.md
+│       │   │   │   │   ├── dist/
+│       │   │   │   │   │   ├── lib/
+│       │   │   │   │   │   │   ├── path.d.ts
+│       │   │   │   │   │   │   ├── path.js
+│       │   │   │   │   │   │   ├── result.d.ts
+│       │   │   │   │   │   │   ├── result.js
+│       │   │   │   │   │   │   ├── run.d.ts
+│       │   │   │   │   │   │   └── run.js
+│       │   │   │   │   │   ├── mcp/
+│       │   │   │   │   │   │   ├── server.d.ts
+│       │   │   │   │   │   │   └── server.js*
+│       │   │   │   │   │   └── providers/
+│       │   │   │   │   │       ├── app.d.ts
+│       │   │   │   │   │       ├── app.js
+│       │   │   │   │   │       ├── avd.d.ts
+│       │   │   │   │   │       ├── avd.js
+│       │   │   │   │   │       ├── build.d.ts
+│       │   │   │   │   │       ├── build.js
+│       │   │   │   │   │       ├── config.d.ts
+│       │   │   │   │   │       ├── config.js
+│       │   │   │   │   │       ├── device.d.ts
+│       │   │   │   │   │       ├── device.js
+│       │   │   │   │   │       ├── logs.d.ts
+│       │   │   │   │   │       ├── logs.js
+│       │   │   │   │   │       ├── preflight.d.ts
+│       │   │   │   │   │       ├── preflight.js
+│       │   │   │   │   │       ├── project-template.d.ts
+│       │   │   │   │   │       ├── project-template.js
+│       │   │   │   │   │       ├── project.d.ts
+│       │   │   │   │   │       ├── project.js
+│       │   │   │   │   │       ├── screenshot.d.ts
+│       │   │   │   │   │       ├── screenshot.js
+│       │   │   │   │   │       ├── sdk.d.ts
+│       │   │   │   │   │       ├── sdk.js
+│       │   │   │   │   │       ├── ui.d.ts
+│       │   │   │   │   │       └── ui.js
+│       │   │   │   │   ├── hooks/
+│       │   │   │   │   │   └── hooks.json
+│       │   │   │   │   ├── package.json
+│       │   │   │   │   ├── README.md
+│       │   │   │   │   ├── scripts/
+│       │   │   │   │   │   └── build-mcp.mjs
+│       │   │   │   │   ├── skills/
+│       │   │   │   │   │   └── android-dev/
+│       │   │   │   │   │       ├── INSTALL_ENVIRONMENT.md
+│       │   │   │   │   │       └── SKILL.md
+│       │   │   │   │   └── templates/
+│       │   │   │   │       └── compose-app/
+│       │   │   │   │           └── README.md
+│       │   │   │   ├── browser-use-plugin/
+│       │   │   │   │   ├── .zcode-plugin/
+│       │   │   │   │   │   └── plugin.json
+│       │   │   │   │   ├── docs/
+│       │   │   │   │   │   ├── all-tabs-cleanup.md
+│       │   │   │   │   │   ├── api.json
+│       │   │   │   │   │   ├── browser-troubleshooting.md
+│       │   │   │   │   │   ├── documents.json
+│       │   │   │   │   │   ├── overview.md
+│       │   │   │   │   │   ├── playwright.md
+│       │   │   │   │   │   ├── recording.md
+│       │   │   │   │   │   ├── safety.md
+│       │   │   │   │   │   ├── screenshot.md
+│       │   │   │   │   │   ├── tab-claiming-iab.md
+│       │   │   │   │   │   ├── tab-cleanup-iab-internal.md
+│       │   │   │   │   │   ├── tab-cleanup-iab.md
+│       │   │   │   │   │   ├── viewport.md
+│       │   │   │   │   │   ├── visibility.md
+│       │   │   │   │   │   └── workflow.md
+│       │   │   │   │   ├── node_modules/
+│       │   │   │   │   │   ├── @img/
+│       │   │   │   │   │   │   ├── colour/
+│       │   │   │   │   │   │   │   ├── color.cjs
+│       │   │   │   │   │   │   │   ├── index.cjs
+│       │   │   │   │   │   │   │   └── package.json
+│       │   │   │   │   │   │   ├── sharp-libvips-linux-x64/
+│       │   │   │   │   │   │   │   ├── lib/
+│       │   │   │   │   │   │   │   │   ├── glib-2.0/
+│       │   │   │   │   │   │   │   │   │   └── include/
+│       │   │   │   │   │   │   │   │   │       └── glibconfig.h
+│       │   │   │   │   │   │   │   │   ├── index.js
+│       │   │   │   │   │   │   │   │   └── libvips-cpp.so.8.17.3
+│       │   │   │   │   │   │   │   ├── package.json
+│       │   │   │   │   │   │   │   └── versions.json
+│       │   │   │   │   │   │   └── sharp-linux-x64/
+│       │   │   │   │   │   │       ├── lib/
+│       │   │   │   │   │   │       │   └── sharp-linux-x64.node
+│       │   │   │   │   │   │       ├── LICENSE
+│       │   │   │   │   │   │       └── package.json
+│       │   │   │   │   │   ├── detect-libc/
+│       │   │   │   │   │   │   ├── lib/
+│       │   │   │   │   │   │   │   ├── detect-libc.js
+│       │   │   │   │   │   │   │   ├── elf.js
+│       │   │   │   │   │   │   │   ├── filesystem.js
+│       │   │   │   │   │   │   │   └── process.js
+│       │   │   │   │   │   │   ├── LICENSE
+│       │   │   │   │   │   │   └── package.json
+│       │   │   │   │   │   ├── semver/
+│       │   │   │   │   │   │   ├── bin/
+│       │   │   │   │   │   │   │   └── semver.js*
+│       │   │   │   │   │   │   ├── classes/
+│       │   │   │   │   │   │   │   ├── comparator.js
+│       │   │   │   │   │   │   │   ├── index.js
+│       │   │   │   │   │   │   │   ├── range.js
+│       │   │   │   │   │   │   │   └── semver.js
+│       │   │   │   │   │   │   ├── functions/
+│       │   │   │   │   │   │   │   ├── clean.js
+│       │   │   │   │   │   │   │   ├── cmp.js
+│       │   │   │   │   │   │   │   ├── coerce.js
+│       │   │   │   │   │   │   │   ├── compare-build.js
+│       │   │   │   │   │   │   │   ├── compare-loose.js
+│       │   │   │   │   │   │   │   ├── compare.js
+│       │   │   │   │   │   │   │   ├── diff.js
+│       │   │   │   │   │   │   │   ├── eq.js
+│       │   │   │   │   │   │   │   ├── gt.js
+│       │   │   │   │   │   │   │   ├── gte.js
+│       │   │   │   │   │   │   │   ├── inc.js
+│       │   │   │   │   │   │   │   ├── lt.js
+│       │   │   │   │   │   │   │   ├── lte.js
+│       │   │   │   │   │   │   │   ├── major.js
+│       │   │   │   │   │   │   │   ├── minor.js
+│       │   │   │   │   │   │   │   ├── neq.js
+│       │   │   │   │   │   │   │   ├── parse.js
+│       │   │   │   │   │   │   │   ├── patch.js
+│       │   │   │   │   │   │   │   ├── prerelease.js
+│       │   │   │   │   │   │   │   ├── rcompare.js
+│       │   │   │   │   │   │   │   ├── rsort.js
+│       │   │   │   │   │   │   │   ├── satisfies.js
+│       │   │   │   │   │   │   │   ├── sort.js
+│       │   │   │   │   │   │   │   └── valid.js
+│       │   │   │   │   │   │   ├── index.js
+│       │   │   │   │   │   │   ├── internal/
+│       │   │   │   │   │   │   │   ├── constants.js
+│       │   │   │   │   │   │   │   ├── debug.js
+│       │   │   │   │   │   │   │   ├── identifiers.js
+│       │   │   │   │   │   │   │   ├── lrucache.js
+│       │   │   │   │   │   │   │   ├── parse-options.js
+│       │   │   │   │   │   │   │   └── re.js
+│       │   │   │   │   │   │   ├── LICENSE
+│       │   │   │   │   │   │   ├── package.json
+│       │   │   │   │   │   │   ├── preload.js
+│       │   │   │   │   │   │   ├── range.bnf
+│       │   │   │   │   │   │   └── ranges/
+│       │   │   │   │   │   │       ├── gtr.js
+│       │   │   │   │   │   │       ├── intersects.js
+│       │   │   │   │   │   │       ├── ltr.js
+│       │   │   │   │   │   │       ├── max-satisfying.js
+│       │   │   │   │   │   │       ├── min-satisfying.js
+│       │   │   │   │   │   │       ├── min-version.js
+│       │   │   │   │   │   │       ├── outside.js
+│       │   │   │   │   │   │       ├── simplify.js
+│       │   │   │   │   │   │       ├── subset.js
+│       │   │   │   │   │   │       ├── to-comparators.js
+│       │   │   │   │   │   │       └── valid.js
+│       │   │   │   │   │   └── sharp/
+│       │   │   │   │   │       ├── install/
+│       │   │   │   │   │       │   ├── build.js
+│       │   │   │   │   │       │   └── check.js
+│       │   │   │   │   │       ├── lib/
+│       │   │   │   │   │       │   ├── channel.js
+│       │   │   │   │   │       │   ├── colour.js
+│       │   │   │   │   │       │   ├── composite.js
+│       │   │   │   │   │       │   ├── constructor.js
+│       │   │   │   │   │       │   ├── index.js
+│       │   │   │   │   │       │   ├── input.js
+│       │   │   │   │   │       │   ├── is.js
+│       │   │   │   │   │       │   ├── libvips.js
+│       │   │   │   │   │       │   ├── operation.js
+│       │   │   │   │   │       │   ├── output.js
+│       │   │   │   │   │       │   ├── resize.js
+│       │   │   │   │   │       │   ├── sharp.js
+│       │   │   │   │   │       │   └── utility.js
+│       │   │   │   │   │       ├── LICENSE
+│       │   │   │   │   │       ├── package.json
+│       │   │   │   │   │       └── src/
+│       │   │   │   │   │           ├── binding.gyp
+│       │   │   │   │   │           ├── common.cc
+│       │   │   │   │   │           ├── common.h
+│       │   │   │   │   │           ├── metadata.cc
+│       │   │   │   │   │           ├── metadata.h
+│       │   │   │   │   │           ├── operations.cc
+│       │   │   │   │   │           ├── operations.h
+│       │   │   │   │   │           ├── pipeline.cc
+│       │   │   │   │   │           ├── pipeline.h
+│       │   │   │   │   │           ├── sharp.cc
+│       │   │   │   │   │           ├── stats.cc
+│       │   │   │   │   │           ├── stats.h
+│       │   │   │   │   │           ├── utilities.cc
+│       │   │   │   │   │           └── utilities.h
+│       │   │   │   │   ├── package.json
+│       │   │   │   │   ├── README.md
+│       │   │   │   │   ├── scripts/
+│       │   │   │   │   │   ├── browser-client.mjs*
+│       │   │   │   │   │   └── build.mjs
+│       │   │   │   │   └── skills/
+│       │   │   │   │       ├── control-browser/
+│       │   │   │   │       │   └── SKILL.md
+│       │   │   │   │       └── web-gui-tester/
+│       │   │   │   │           └── SKILL.md
+│       │   │   │   ├── documents-plugin/
+│       │   │   │   │   ├── .zcode-plugin/
+│       │   │   │   │   │   └── plugin.json
+│       │   │   │   │   ├── agents/
+│       │   │   │   │   │   └── visual-judge.md
+│       │   │   │   │   ├── package.json
+│       │   │   │   │   └── skills/
+│       │   │   │   │       └── docx/
+│       │   │   │   │           ├── env_setup/
+│       │   │   │   │           │   ├── env_check.sh
+│       │   │   │   │           │   ├── font_list.txt
+│       │   │   │   │           │   ├── setup.md
+│       │   │   │   │           │   ├── setup_mac_linux.sh
+│       │   │   │   │           │   └── setup_windows.ps1
+│       │   │   │   │           ├── LICENSE.txt
+│       │   │   │   │           ├── references/
+│       │   │   │   │           │   ├── chart-templates.md
+│       │   │   │   │           │   ├── common-rules.md
+│       │   │   │   │           │   ├── decorations.md
+│       │   │   │   │           │   ├── design-system.md
+│       │   │   │   │           │   ├── docx-js-advanced.md
+│       │   │   │   │           │   ├── docx-js-core.md
+│       │   │   │   │           │   ├── faq.md
+│       │   │   │   │           │   ├── math-formulas.md
+│       │   │   │   │           │   ├── ooxml.md
+│       │   │   │   │           │   └── toc.md
+│       │   │   │   │           ├── routes/
+│       │   │   │   │           │   ├── comment.md
+│       │   │   │   │           │   ├── create.md
+│       │   │   │   │           │   ├── edit.md
+│       │   │   │   │           │   ├── format.md
+│       │   │   │   │           │   └── read.md
+│       │   │   │   │           ├── scenes/
+│       │   │   │   │           │   ├── academic.md
+│       │   │   │   │           │   ├── contract.md
+│       │   │   │   │           │   ├── copywriting.md
+│       │   │   │   │           │   ├── exam.md
+│       │   │   │   │           │   ├── official-doc.md
+│       │   │   │   │           │   ├── report.md
+│       │   │   │   │           │   └── resume.md
+│       │   │   │   │           ├── scripts/
+│       │   │   │   │           │   ├── __init__.py
+│       │   │   │   │           │   ├── add_toc_placeholders.py
+│       │   │   │   │           │   ├── document.py
+│       │   │   │   │           │   ├── fix_footer_fields.py
+│       │   │   │   │           │   ├── postcheck.py
+│       │   │   │   │           │   ├── templates/
+│       │   │   │   │           │   │   ├── comments.xml
+│       │   │   │   │           │   │   ├── commentsExtended.xml
+│       │   │   │   │           │   │   ├── commentsExtensible.xml
+│       │   │   │   │           │   │   ├── commentsIds.xml
+│       │   │   │   │           │   │   └── people.xml
+│       │   │   │   │           │   └── utilities.py
+│       │   │   │   │           ├── setup.sh
+│       │   │   │   │           └── SKILL.md
+│       │   │   │   ├── image-search-plugin/
+│       │   │   │   │   ├── .mcp.json
+│       │   │   │   │   ├── .zcode-plugin/
+│       │   │   │   │   │   └── plugin.json
+│       │   │   │   │   ├── package.json
+│       │   │   │   │   └── README.md
+│       │   │   │   ├── ios-simulator-plugin/
+│       │   │   │   │   ├── .mcp.json
+│       │   │   │   │   ├── .zcode-plugin/
+│       │   │   │   │   │   └── plugin.json
+│       │   │   │   │   ├── commands/
+│       │   │   │   │   │   └── ios-dev.md
+│       │   │   │   │   ├── dist/
+│       │   │   │   │   │   ├── lib/
+│       │   │   │   │   │   │   ├── path.d.ts
+│       │   │   │   │   │   │   ├── path.js
+│       │   │   │   │   │   │   ├── result.d.ts
+│       │   │   │   │   │   │   ├── result.js
+│       │   │   │   │   │   │   ├── run.d.ts
+│       │   │   │   │   │   │   └── run.js
+│       │   │   │   │   │   ├── mcp/
+│       │   │   │   │   │   │   ├── server.d.ts
+│       │   │   │   │   │   │   └── server.js*
+│       │   │   │   │   │   └── providers/
+│       │   │   │   │   │       ├── build.d.ts
+│       │   │   │   │   │       ├── build.js
+│       │   │   │   │   │       ├── logs.d.ts
+│       │   │   │   │   │       ├── logs.js
+│       │   │   │   │   │       ├── preflight.d.ts
+│       │   │   │   │   │       ├── preflight.js
+│       │   │   │   │   │       ├── project.d.ts
+│       │   │   │   │   │       ├── project.js
+│       │   │   │   │   │       ├── screenshot.d.ts
+│       │   │   │   │   │       ├── screenshot.js
+│       │   │   │   │   │       ├── sim.d.ts
+│       │   │   │   │   │       ├── sim.js
+│       │   │   │   │   │       ├── ui.d.ts
+│       │   │   │   │   │       └── ui.js
+│       │   │   │   │   ├── hooks/
+│       │   │   │   │   │   └── hooks.json
+│       │   │   │   │   ├── package.json
+│       │   │   │   │   ├── README.md
+│       │   │   │   │   ├── scripts/
+│       │   │   │   │   │   └── build-mcp.mjs
+│       │   │   │   │   ├── skills/
+│       │   │   │   │   │   └── ios-dev/
+│       │   │   │   │   │       └── SKILL.md
+│       │   │   │   │   └── templates/
+│       │   │   │   │       └── swiftui-app/
+│       │   │   │   │           └── README.md
+│       │   │   │   ├── node-repl-host/
+│       │   │   │   │   ├── .zcode-plugin/
+│       │   │   │   │   │   └── plugin.json
+│       │   │   │   │   ├── dist/
+│       │   │   │   │   │   └── mcp/
+│       │   │   │   │   │       └── server.js
+│       │   │   │   │   ├── node_modules/
+│       │   │   │   │   │   ├── @img/
+│       │   │   │   │   │   │   ├── colour/
+│       │   │   │   │   │   │   │   ├── color.cjs
+│       │   │   │   │   │   │   │   ├── index.cjs
+│       │   │   │   │   │   │   │   └── package.json
+│       │   │   │   │   │   │   ├── sharp-libvips-linux-x64/
+│       │   │   │   │   │   │   │   ├── lib/
+│       │   │   │   │   │   │   │   │   ├── glib-2.0/
+│       │   │   │   │   │   │   │   │   │   └── include/
+│       │   │   │   │   │   │   │   │   │       └── glibconfig.h
+│       │   │   │   │   │   │   │   │   ├── index.js
+│       │   │   │   │   │   │   │   │   └── libvips-cpp.so.8.17.3
+│       │   │   │   │   │   │   │   ├── package.json
+│       │   │   │   │   │   │   │   └── versions.json
+│       │   │   │   │   │   │   └── sharp-linux-x64/
+│       │   │   │   │   │   │       ├── lib/
+│       │   │   │   │   │   │       │   └── sharp-linux-x64.node
+│       │   │   │   │   │   │       ├── LICENSE
+│       │   │   │   │   │   │       └── package.json
+│       │   │   │   │   │   ├── detect-libc/
+│       │   │   │   │   │   │   ├── lib/
+│       │   │   │   │   │   │   │   ├── detect-libc.js
+│       │   │   │   │   │   │   │   ├── elf.js
+│       │   │   │   │   │   │   │   ├── filesystem.js
+│       │   │   │   │   │   │   │   └── process.js
+│       │   │   │   │   │   │   ├── LICENSE
+│       │   │   │   │   │   │   └── package.json
+│       │   │   │   │   │   ├── semver/
+│       │   │   │   │   │   │   ├── bin/
+│       │   │   │   │   │   │   │   └── semver.js*
+│       │   │   │   │   │   │   ├── classes/
+│       │   │   │   │   │   │   │   ├── comparator.js
+│       │   │   │   │   │   │   │   ├── index.js
+│       │   │   │   │   │   │   │   ├── range.js
+│       │   │   │   │   │   │   │   └── semver.js
+│       │   │   │   │   │   │   ├── functions/
+│       │   │   │   │   │   │   │   ├── clean.js
+│       │   │   │   │   │   │   │   ├── cmp.js
+│       │   │   │   │   │   │   │   ├── coerce.js
+│       │   │   │   │   │   │   │   ├── compare-build.js
+│       │   │   │   │   │   │   │   ├── compare-loose.js
+│       │   │   │   │   │   │   │   ├── compare.js
+│       │   │   │   │   │   │   │   ├── diff.js
+│       │   │   │   │   │   │   │   ├── eq.js
+│       │   │   │   │   │   │   │   ├── gt.js
+│       │   │   │   │   │   │   │   ├── gte.js
+│       │   │   │   │   │   │   │   ├── inc.js
+│       │   │   │   │   │   │   │   ├── lt.js
+│       │   │   │   │   │   │   │   ├── lte.js
+│       │   │   │   │   │   │   │   ├── major.js
+│       │   │   │   │   │   │   │   ├── minor.js
+│       │   │   │   │   │   │   │   ├── neq.js
+│       │   │   │   │   │   │   │   ├── parse.js
+│       │   │   │   │   │   │   │   ├── patch.js
+│       │   │   │   │   │   │   │   ├── prerelease.js
+│       │   │   │   │   │   │   │   ├── rcompare.js
+│       │   │   │   │   │   │   │   ├── rsort.js
+│       │   │   │   │   │   │   │   ├── satisfies.js
+│       │   │   │   │   │   │   │   ├── sort.js
+│       │   │   │   │   │   │   │   └── valid.js
+│       │   │   │   │   │   │   ├── index.js
+│       │   │   │   │   │   │   ├── internal/
+│       │   │   │   │   │   │   │   ├── constants.js
+│       │   │   │   │   │   │   │   ├── debug.js
+│       │   │   │   │   │   │   │   ├── identifiers.js
+│       │   │   │   │   │   │   │   ├── lrucache.js
+│       │   │   │   │   │   │   │   ├── parse-options.js
+│       │   │   │   │   │   │   │   └── re.js
+│       │   │   │   │   │   │   ├── LICENSE
+│       │   │   │   │   │   │   ├── package.json
+│       │   │   │   │   │   │   ├── preload.js
+│       │   │   │   │   │   │   ├── range.bnf
+│       │   │   │   │   │   │   └── ranges/
+│       │   │   │   │   │   │       ├── gtr.js
+│       │   │   │   │   │   │       ├── intersects.js
+│       │   │   │   │   │   │       ├── ltr.js
+│       │   │   │   │   │   │       ├── max-satisfying.js
+│       │   │   │   │   │   │       ├── min-satisfying.js
+│       │   │   │   │   │   │       ├── min-version.js
+│       │   │   │   │   │   │       ├── outside.js
+│       │   │   │   │   │   │       ├── simplify.js
+│       │   │   │   │   │   │       ├── subset.js
+│       │   │   │   │   │   │       ├── to-comparators.js
+│       │   │   │   │   │   │       └── valid.js
+│       │   │   │   │   │   └── sharp/
+│       │   │   │   │   │       ├── install/
+│       │   │   │   │   │       │   ├── build.js
+│       │   │   │   │   │       │   └── check.js
+│       │   │   │   │   │       ├── lib/
+│       │   │   │   │   │       │   ├── channel.js
+│       │   │   │   │   │       │   ├── colour.js
+│       │   │   │   │   │       │   ├── composite.js
+│       │   │   │   │   │       │   ├── constructor.js
+│       │   │   │   │   │       │   ├── index.js
+│       │   │   │   │   │       │   ├── input.js
+│       │   │   │   │   │       │   ├── is.js
+│       │   │   │   │   │       │   ├── libvips.js
+│       │   │   │   │   │       │   ├── operation.js
+│       │   │   │   │   │       │   ├── output.js
+│       │   │   │   │   │       │   ├── resize.js
+│       │   │   │   │   │       │   ├── sharp.js
+│       │   │   │   │   │       │   └── utility.js
+│       │   │   │   │   │       ├── LICENSE
+│       │   │   │   │   │       ├── package.json
+│       │   │   │   │   │       └── src/
+│       │   │   │   │   │           ├── binding.gyp
+│       │   │   │   │   │           ├── common.cc
+│       │   │   │   │   │           ├── common.h
+│       │   │   │   │   │           ├── metadata.cc
+│       │   │   │   │   │           ├── metadata.h
+│       │   │   │   │   │           ├── operations.cc
+│       │   │   │   │   │           ├── operations.h
+│       │   │   │   │   │           ├── pipeline.cc
+│       │   │   │   │   │           ├── pipeline.h
+│       │   │   │   │   │           ├── sharp.cc
+│       │   │   │   │   │           ├── stats.cc
+│       │   │   │   │   │           ├── stats.h
+│       │   │   │   │   │           ├── utilities.cc
+│       │   │   │   │   │           └── utilities.h
+│       │   │   │   │   ├── package.json
+│       │   │   │   │   ├── README.md
+│       │   │   │   │   └── scripts/
+│       │   │   │   │       └── build.mjs
+│       │   │   │   ├── pdf-plugin/
+│       │   │   │   │   ├── .zcode-plugin/
+│       │   │   │   │   │   └── plugin.json
+│       │   │   │   │   ├── agents/
+│       │   │   │   │   │   └── visual-judge.md
+│       │   │   │   │   ├── package.json
+│       │   │   │   │   └── skills/
+│       │   │   │   │       └── pdf/
+│       │   │   │   │           ├── briefs/
+│       │   │   │   │           │   ├── academic.md
+│       │   │   │   │           │   ├── creative-fixed-canvas.md
+│       │   │   │   │           │   ├── creative-flow.md
+│       │   │   │   │           │   ├── creative.md
+│       │   │   │   │           │   ├── poster.md
+│       │   │   │   │           │   ├── process-advanced.md
+│       │   │   │   │           │   ├── process.md
+│       │   │   │   │           │   ├── report.md
+│       │   │   │   │           │   └── resume.md
+│       │   │   │   │           ├── configs/
+│       │   │   │   │           │   ├── components.md
+│       │   │   │   │           │   ├── fonts.md
+│       │   │   │   │           │   └── visual_framework.md
+│       │   │   │   │           ├── env_setup/
+│       │   │   │   │           │   ├── env_check.sh
+│       │   │   │   │           │   ├── font_list.txt
+│       │   │   │   │           │   ├── setup.md
+│       │   │   │   │           │   ├── setup_mac_linux.sh
+│       │   │   │   │           │   └── setup_windows.ps1
+│       │   │   │   │           ├── LICENSE.txt
+│       │   │   │   │           ├── references/
+│       │   │   │   │           │   ├── resume-academic.tex
+│       │   │   │   │           │   └── resume-altacv.tex
+│       │   │   │   │           ├── scripts/
+│       │   │   │   │           │   ├── cover_render.py
+│       │   │   │   │           │   ├── cover_validate.js
+│       │   │   │   │           │   ├── design_engine.py
+│       │   │   │   │           │   ├── html2pdf-next.js
+│       │   │   │   │           │   ├── html2poster.js
+│       │   │   │   │           │   ├── pdf.py
+│       │   │   │   │           │   ├── pdf_qa.py
+│       │   │   │   │           │   ├── poster_validate.py
+│       │   │   │   │           │   ├── setup.sh
+│       │   │   │   │           │   └── toc_validate.py
+│       │   │   │   │           ├── SKILL.md
+│       │   │   │   │           └── typesetting/
+│       │   │   │   │               ├── charts.md
+│       │   │   │   │               ├── cover-backgrounds.md
+│       │   │   │   │               ├── cover.md
+│       │   │   │   │               ├── fill-engine.md
+│       │   │   │   │               ├── geometry.md
+│       │   │   │   │               ├── overflow.md
+│       │   │   │   │               ├── pagination.md
+│       │   │   │   │               ├── palette.md
+│       │   │   │   │               └── typography.md
+│       │   │   │   ├── plugin-creator-plugin/
+│       │   │   │   │   ├── .zcode-plugin/
+│       │   │   │   │   │   └── plugin.json
+│       │   │   │   │   ├── package.json
+│       │   │   │   │   └── skills/
+│       │   │   │   │       └── plugin-creator/
+│       │   │   │   │           ├── references/
+│       │   │   │   │           │   ├── installing-and-updating.md
+│       │   │   │   │           │   └── plugin-json-spec.md
+│       │   │   │   │           ├── scripts/
+│       │   │   │   │           │   ├── create-basic-plugin.mjs
+│       │   │   │   │           │   ├── marketplace-files.mjs
+│       │   │   │   │           │   ├── scaffold-files.mjs
+│       │   │   │   │           │   ├── upsert-dev-marketplace.mjs
+│       │   │   │   │           │   └── validate-plugin.mjs
+│       │   │   │   │           └── SKILL.md
+│       │   │   │   ├── presentations-plugin/
+│       │   │   │   │   ├── .zcode-plugin/
+│       │   │   │   │   │   └── plugin.json
+│       │   │   │   │   ├── agents/
+│       │   │   │   │   │   └── visual-judge.md
+│       │   │   │   │   ├── package.json
+│       │   │   │   │   └── skills/
+│       │   │   │   │       └── pptx/
+│       │   │   │   │           ├── LICENSE.txt
+│       │   │   │   │           └── SKILL.md
+│       │   │   │   ├── restore-legacy-sessions-plugin/
+│       │   │   │   │   ├── .zcode-plugin/
+│       │   │   │   │   │   └── plugin.json
+│       │   │   │   │   ├── commands/
+│       │   │   │   │   │   └── restore-legacy-sessions.md
+│       │   │   │   │   ├── package.json
+│       │   │   │   │   ├── README.md
+│       │   │   │   │   └── skills/
+│       │   │   │   │       └── restore-legacy-sessions/
+│       │   │   │   │           ├── scripts/
+│       │   │   │   │           │   ├── restore-conversation.mjs*
+│       │   │   │   │           │   └── scan-legacy-sessions.mjs*
+│       │   │   │   │           └── SKILL.md
+│       │   │   │   ├── skill-creator-plugin/
+│       │   │   │   │   ├── .zcode-plugin/
+│       │   │   │   │   │   └── plugin.json
+│       │   │   │   │   ├── package.json
+│       │   │   │   │   └── skills/
+│       │   │   │   │       └── skill-creator/
+│       │   │   │   │           └── SKILL.md
+│       │   │   │   ├── spreadsheets-plugin/
+│       │   │   │   │   ├── .zcode-plugin/
+│       │   │   │   │   │   └── plugin.json
+│       │   │   │   │   ├── agents/
+│       │   │   │   │   │   └── visual-judge.md
+│       │   │   │   │   ├── package.json
+│       │   │   │   │   └── skills/
+│       │   │   │   │       └── xlsx/
+│       │   │   │   │           ├── engines/
+│       │   │   │   │           │   ├── chart-templates.md
+│       │   │   │   │           │   ├── chart.md
+│       │   │   │   │           │   ├── design.md
+│       │   │   │   │           │   └── vba-templates.md
+│       │   │   │   │           ├── env_setup/
+│       │   │   │   │           │   ├── env_check.sh
+│       │   │   │   │           │   ├── font_list.txt
+│       │   │   │   │           │   ├── setup.md
+│       │   │   │   │           │   ├── setup_mac_linux.sh
+│       │   │   │   │           │   └── setup_windows.ps1
+│       │   │   │   │           ├── LICENSE.txt
+│       │   │   │   │           ├── quality/
+│       │   │   │   │           │   └── pipeline.md
+│       │   │   │   │           ├── scenes/
+│       │   │   │   │           │   ├── advanced.md
+│       │   │   │   │           │   ├── analyze-recipes.md
+│       │   │   │   │           │   ├── analyze.md
+│       │   │   │   │           │   ├── convert.md
+│       │   │   │   │           │   ├── create.md
+│       │   │   │   │           │   ├── edit-patterns.md
+│       │   │   │   │           │   ├── edit.md
+│       │   │   │   │           │   ├── finance.md
+│       │   │   │   │           │   ├── finance_lite.md
+│       │   │   │   │           │   └── vba.md
+│       │   │   │   │           ├── setup.sh
+│       │   │   │   │           ├── SKILL.md
+│       │   │   │   │           ├── templates/
+│       │   │   │   │           │   ├── base.py
+│       │   │   │   │           │   └── palettes.py
+│       │   │   │   │           └── xlsx.py
+│       │   │   │   ├── zcode-cua-plugin/
+│       │   │   │   │   ├── .zcode-plugin/
+│       │   │   │   │   │   └── plugin.json
+│       │   │   │   │   ├── docs/
+│       │   │   │   │   │   └── computer-use.md
+│       │   │   │   │   ├── node_modules/
+│       │   │   │   │   │   ├── @img/
+│       │   │   │   │   │   │   ├── colour/
+│       │   │   │   │   │   │   │   ├── color.cjs
+│       │   │   │   │   │   │   │   ├── index.cjs
+│       │   │   │   │   │   │   │   └── package.json
+│       │   │   │   │   │   │   ├── sharp-libvips-linux-x64/
+│       │   │   │   │   │   │   │   ├── lib/
+│       │   │   │   │   │   │   │   │   ├── glib-2.0/
+│       │   │   │   │   │   │   │   │   │   └── include/
+│       │   │   │   │   │   │   │   │   │       └── glibconfig.h
+│       │   │   │   │   │   │   │   │   ├── index.js
+│       │   │   │   │   │   │   │   │   └── libvips-cpp.so.8.17.3
+│       │   │   │   │   │   │   │   ├── package.json
+│       │   │   │   │   │   │   │   └── versions.json
+│       │   │   │   │   │   │   └── sharp-linux-x64/
+│       │   │   │   │   │   │       ├── lib/
+│       │   │   │   │   │   │       │   └── sharp-linux-x64.node
+│       │   │   │   │   │   │       ├── LICENSE
+│       │   │   │   │   │   │       └── package.json
+│       │   │   │   │   │   ├── detect-libc/
+│       │   │   │   │   │   │   ├── lib/
+│       │   │   │   │   │   │   │   ├── detect-libc.js
+│       │   │   │   │   │   │   │   ├── elf.js
+│       │   │   │   │   │   │   │   ├── filesystem.js
+│       │   │   │   │   │   │   │   └── process.js
+│       │   │   │   │   │   │   ├── LICENSE
+│       │   │   │   │   │   │   └── package.json
+│       │   │   │   │   │   ├── koffi/
+│       │   │   │   │   │   │   ├── build/
+│       │   │   │   │   │   │   │   └── koffi/
+│       │   │   │   │   │   │   │       └── linux_x64/
+│       │   │   │   │   │   │   │           └── koffi.node
+│       │   │   │   │   │   │   ├── index.d.ts
+│       │   │   │   │   │   │   ├── index.js
+│       │   │   │   │   │   │   └── package.json
+│       │   │   │   │   │   ├── semver/
+│       │   │   │   │   │   │   ├── bin/
+│       │   │   │   │   │   │   │   └── semver.js*
+│       │   │   │   │   │   │   ├── classes/
+│       │   │   │   │   │   │   │   ├── comparator.js
+│       │   │   │   │   │   │   │   ├── index.js
+│       │   │   │   │   │   │   │   ├── range.js
+│       │   │   │   │   │   │   │   └── semver.js
+│       │   │   │   │   │   │   ├── functions/
+│       │   │   │   │   │   │   │   ├── clean.js
+│       │   │   │   │   │   │   │   ├── cmp.js
+│       │   │   │   │   │   │   │   ├── coerce.js
+│       │   │   │   │   │   │   │   ├── compare-build.js
+│       │   │   │   │   │   │   │   ├── compare-loose.js
+│       │   │   │   │   │   │   │   ├── compare.js
+│       │   │   │   │   │   │   │   ├── diff.js
+│       │   │   │   │   │   │   │   ├── eq.js
+│       │   │   │   │   │   │   │   ├── gt.js
+│       │   │   │   │   │   │   │   ├── gte.js
+│       │   │   │   │   │   │   │   ├── inc.js
+│       │   │   │   │   │   │   │   ├── lt.js
+│       │   │   │   │   │   │   │   ├── lte.js
+│       │   │   │   │   │   │   │   ├── major.js
+│       │   │   │   │   │   │   │   ├── minor.js
+│       │   │   │   │   │   │   │   ├── neq.js
+│       │   │   │   │   │   │   │   ├── parse.js
+│       │   │   │   │   │   │   │   ├── patch.js
+│       │   │   │   │   │   │   │   ├── prerelease.js
+│       │   │   │   │   │   │   │   ├── rcompare.js
+│       │   │   │   │   │   │   │   ├── rsort.js
+│       │   │   │   │   │   │   │   ├── satisfies.js
+│       │   │   │   │   │   │   │   ├── sort.js
+│       │   │   │   │   │   │   │   └── valid.js
+│       │   │   │   │   │   │   ├── index.js
+│       │   │   │   │   │   │   ├── internal/
+│       │   │   │   │   │   │   │   ├── constants.js
+│       │   │   │   │   │   │   │   ├── debug.js
+│       │   │   │   │   │   │   │   ├── identifiers.js
+│       │   │   │   │   │   │   │   ├── lrucache.js
+│       │   │   │   │   │   │   │   ├── parse-options.js
+│       │   │   │   │   │   │   │   └── re.js
+│       │   │   │   │   │   │   ├── LICENSE
+│       │   │   │   │   │   │   ├── package.json
+│       │   │   │   │   │   │   ├── preload.js
+│       │   │   │   │   │   │   ├── range.bnf
+│       │   │   │   │   │   │   └── ranges/
+│       │   │   │   │   │   │       ├── gtr.js
+│       │   │   │   │   │   │       ├── intersects.js
+│       │   │   │   │   │   │       ├── ltr.js
+│       │   │   │   │   │   │       ├── max-satisfying.js
+│       │   │   │   │   │   │       ├── min-satisfying.js
+│       │   │   │   │   │   │       ├── min-version.js
+│       │   │   │   │   │   │       ├── outside.js
+│       │   │   │   │   │   │       ├── simplify.js
+│       │   │   │   │   │   │       ├── subset.js
+│       │   │   │   │   │   │       ├── to-comparators.js
+│       │   │   │   │   │   │       └── valid.js
+│       │   │   │   │   │   └── sharp/
+│       │   │   │   │   │       ├── install/
+│       │   │   │   │   │       │   ├── build.js
+│       │   │   │   │   │       │   └── check.js
+│       │   │   │   │   │       ├── lib/
+│       │   │   │   │   │       │   ├── channel.js
+│       │   │   │   │   │       │   ├── colour.js
+│       │   │   │   │   │       │   ├── composite.js
+│       │   │   │   │   │       │   ├── constructor.js
+│       │   │   │   │   │       │   ├── index.js
+│       │   │   │   │   │       │   ├── input.js
+│       │   │   │   │   │       │   ├── is.js
+│       │   │   │   │   │       │   ├── libvips.js
+│       │   │   │   │   │       │   ├── operation.js
+│       │   │   │   │   │       │   ├── output.js
+│       │   │   │   │   │       │   ├── resize.js
+│       │   │   │   │   │       │   ├── sharp.js
+│       │   │   │   │   │       │   └── utility.js
+│       │   │   │   │   │       ├── LICENSE
+│       │   │   │   │   │       ├── package.json
+│       │   │   │   │   │       └── src/
+│       │   │   │   │   │           ├── binding.gyp
+│       │   │   │   │   │           ├── common.cc
+│       │   │   │   │   │           ├── common.h
+│       │   │   │   │   │           ├── metadata.cc
+│       │   │   │   │   │           ├── metadata.h
+│       │   │   │   │   │           ├── operations.cc
+│       │   │   │   │   │           ├── operations.h
+│       │   │   │   │   │           ├── pipeline.cc
+│       │   │   │   │   │           ├── pipeline.h
+│       │   │   │   │   │           ├── sharp.cc
+│       │   │   │   │   │           ├── stats.cc
+│       │   │   │   │   │           ├── stats.h
+│       │   │   │   │   │           ├── utilities.cc
+│       │   │   │   │   │           └── utilities.h
+│       │   │   │   │   ├── package.json
+│       │   │   │   │   ├── scripts/
+│       │   │   │   │   │   ├── bump-zcode-cua-producer.mjs
+│       │   │   │   │   │   ├── check-cua-baseline.mjs
+│       │   │   │   │   │   ├── check-sdk.mjs
+│       │   │   │   │   │   ├── check-version-coherence.mjs
+│       │   │   │   │   │   ├── computer-use-client.mjs
+│       │   │   │   │   │   ├── resolve-pnpm-invocation.mjs
+│       │   │   │   │   │   ├── sync-cache.mjs
+│       │   │   │   │   │   └── sync-skill-from-zcode-cua.mjs
+│       │   │   │   │   └── skills/
+│       │   │   │   │       └── computer-use/
+│       │   │   │   │           └── SKILL.md
+│       │   │   │   └── zcode-guide-plugin/
+│       │   │   │       ├── .zcode-plugin/
+│       │   │   │       │   └── plugin.json
+│       │   │   │       ├── commands/
+│       │   │   │       │   └── workflow.md
+│       │   │   │       ├── package.json
+│       │   │   │       ├── README.md
+│       │   │   │       └── skills/
+│       │   │   │           ├── diagnosing-commands/
+│       │   │   │           │   └── SKILL.md
+│       │   │   │           ├── diagnosing-hooks/
+│       │   │   │           │   └── SKILL.md
+│       │   │   │           ├── diagnosing-mcp/
+│       │   │   │           │   └── SKILL.md
+│       │   │   │           ├── diagnosing-plugins/
+│       │   │   │           │   └── SKILL.md
+│       │   │   │           ├── diagnosing-skills/
+│       │   │   │           │   └── SKILL.md
+│       │   │   │           ├── dynamic-workflows/
+│       │   │   │           │   ├── examples.md
+│       │   │   │           │   ├── patterns.md
+│       │   │   │           │   └── SKILL.md
+│       │   │   │           └── zcode-configuration-guide/
+│       │   │   │               └── SKILL.md
+│       │   │   └── zcode.cjs*
+│       │   ├── icon.png
+│       │   ├── icon_512x512.png
+│       │   ├── icon_windows.png
+│       │   ├── package-type
+│       │   └── tools/
+│       │       ├── bfs/
+│       │       │   ├── .bundle-meta.json
+│       │       │   └── bfs*
+│       │       ├── ripgrep/
+│       │       │   ├── .bundle-meta.json
+│       │       │   └── rg*
+│       │       └── ugrep/
+│       │           ├── .bundle-meta.json
+│       │           └── ugrep*
+│       ├── resources.pak
+│       ├── snapshot_blob.bin
+│       ├── v8_context_snapshot.bin
+│       ├── vk_swiftshader_icd.json
+│       └── zcode*
+└── usr/
+    └── share/
+        ├── applications/
+        │   └── zcode.desktop
+        ├── doc/
+        │   └── zcode/
+        │       └── changelog.gz
+        └── icons/
+            └── hicolor/
+                ├── 1024x1024/
+                │   └── apps/
+                │       └── zcode.png
+                ├── 128x128/
+                │   └── apps/
+                │       └── zcode.png
+                ├── 16x16/
+                │   └── apps/
+                │       └── zcode.png
+                ├── 24x24/
+                │   └── apps/
+                │       └── zcode.png
+                ├── 256x256/
+                │   └── apps/
+                │       └── zcode.png
+                ├── 32x32/
+                │   └── apps/
+                │       └── zcode.png
+                ├── 48x48/
+                │   └── apps/
+                │       └── zcode.png
+                ├── 512x512/
+                │   └── apps/
+                │       └── zcode.png
+                └── 64x64/
+                    └── apps/
+                        └── zcode.png
+
+225 directories, 620 files
