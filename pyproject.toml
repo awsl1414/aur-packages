@@ -20,13 +20,29 @@ members = [
 
 [dependency-groups]
 dev = [
-    "ruff>=0.14.10",
+    "ruff>=0.16",
     "ty>=0.0.8",
 ]
 
 [tool.ruff]
 # 与 ty 的检查范围一致，两个成员的源代码与测试
 line-length = 100
+# uv workspace 成员为 src 布局，必须显式声明成员 src 路径，
+# 否则 ruff 解析不到 aur_metadata / aur_auto_update，isort 会把它们
+# 与第三方库混入同一分区（ruff 默认 src 仅含项目根与 <root>/src）
+src = ["projects/aur-metadata/src", "projects/aur-auto-update/src"]
+
+[tool.ruff.lint]
+# ruff 0.16 起默认规则集由 59 条扩展为 413 条（breaking change，
+# 见 https://astral.sh/blog/ruff-v0.16.0）。不显式 select，跟随默认集，
+# 但通过 dev 依赖下界固定基线版本，保证检查行为不随升级静默漂移；
+# 对本项目无意义的规则在 ignore 中逐条说明，其余默认集规则均需通过。
+ignore = [
+    # 项目不做国际化，无 gettext 调用，i18n 检查无意义
+    "INT001",
+    "INT002",
+    "INT003",
+]
 
 [tool.ty]
 # Ty 配置 - Astral 开发的快速 Python 类型检查器
