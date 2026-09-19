@@ -1,0 +1,15 @@
+services:
+  aur-packages-helper:
+    build: .
+    image: aur-packages-helper:latest
+    container_name: aur-packages-helper
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./config.docker.toml:/app/config.docker.toml:ro
+      - ./data:/app/data # 持久化 SQLite 数据库
+    environment:
+      APP_CONFIG: /app/config.docker.toml
+    dns:
+      - "119.29.29.29" # 必须，否则 qq 解析不到内容

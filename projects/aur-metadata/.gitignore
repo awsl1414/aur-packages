@@ -1,0 +1,43 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Database files (Tortoise ORM)
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+*.log.*
+
+# Claude Code local settings (user-specific)
+.claude/settings.local.json
+.claude/plans/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# macOS
+.DS_Store
+
+.trae/

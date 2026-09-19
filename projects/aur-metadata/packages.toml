@@ -1,0 +1,97 @@
+# packages.toml —— 包采集配置（packages 表的声明式定义来源）
+#
+# 启动时与 packages 表同步：按 name upsert 定义字段（parser_type / fetch_url /
+# archs / parser_config / schedule_* / description）；enabled 仅对新增包生效，
+# 已有包的启停属运行期运维操作（改表 + POST /api/v1/packages/reload）。
+# 从本文件删除的包不会自动删行（避免级联清掉采集历史），仅启动时告警。
+#
+# 字段说明：
+# - name / parser_type / fetch_url / archs 必填；parser_type 须已在
+#   app/parsers/registry.py 注册，archs 取值见 ArchEnum
+# - 调度二选一：interval_seconds 或 cron_expr 恰好填一个，schedule_type 由其派生
+# - parser_config 为 parser 构造参数表（可省略），落库时序列化为 JSON；
+#   其子表头（如 [packages.parser_config]）按 TOML 语义绑定到**最近的**
+#   [[packages]]，必须紧跟所属条目，中间插入新条目会静默挂错包
+# - enabled（默认 true）/ description（运维备注）可选
+#
+# 环境变量 APP_PACKAGES 可指定自定义路径（与 APP_CONFIG 对称）。
+# hash 算法不按包配置：每次采集单流计算全部支持算法（b2/sha256/sha512）。
+
+[[packages]]
+name = "qq"
+parser_type = "qq"
+# 版本信息源：QQ NT 客户端 PC 配置 JSON，下载链接经 GetSign 换签名
+fetch_url = "https://qq-web.cdn-go.cn/im.qq.com_new/latest/rainbow/pcConfig.json"
+archs = ["x86_64", "aarch64", "loong64"]
+interval_seconds = 14400
+
+# Navicat：版本取自 release-note HTML，下载 URL 为固定 AppImage 直链，经 parser_config.urls 注入
+[[packages]]
+name = "navicat"
+parser_type = "navicat"
+fetch_url = "https://www.navicat.com.cn/products/navicat-premium-release-note#L"
+archs = ["x86_64", "aarch64"]
+interval_seconds = 14400
+
+[packages.parser_config.urls]
+x86_64 = "https://dn.navicat.com/download/navicat17-premium-cs-x86_64.AppImage"
+aarch64 = "https://dn.navicat.com/download/navicat17-premium-cs-aarch64.AppImage"
+
+# bt-dualboot-ng：PyPI sdist（纯 Python，arch=any）
+[[packages]]
+name = "bt-dualboot-ng"
+parser_type = "pypi"
+fetch_url = "https://pypi.org/pypi/bt-dualboot-ng/json"
+archs = ["any"]
+interval_seconds = 14400
+
+# Trae 国际版：同一 API，按 region 选不同机房 CDN（cn / sg / va）
+[[packages]]
+name = "trae"
+parser_type = "trae"
+fetch_url = "https://icube-normal.trae.ai/icube/api/v1/native/version/trae/latest"
+archs = ["x86_64", "aarch64"]
+interval_seconds = 14400
+
+[packages.parser_config]
+region = "cn"
+
+[[packages]]
+name = "trae-sg"
+parser_type = "trae"
+fetch_url = "https://icube-normal.trae.ai/icube/api/v1/native/version/trae/latest"
+archs = ["x86_64", "aarch64"]
+interval_seconds = 14400
+
+[packages.parser_config]
+region = "sg"
+
+# trae-us 用 region=va（弗吉尼亚机房，上游 download[] 直传该值，非 us→va 映射）
+[[packages]]
+name = "trae-us"
+parser_type = "trae"
+fetch_url = "https://icube-normal.trae.ai/icube/api/v1/native/version/trae/latest"
+archs = ["x86_64", "aarch64"]
+interval_seconds = 14400
+
+[packages.parser_config]
+region = "va"
+
+# Trae 国内版：独立 API（api.trae.cn），与国际版是不同产品
+[[packages]]
+name = "trae-cn"
+parser_type = "trae"
+fetch_url = "https://api.trae.cn/icube/api/v1/native/version/trae/cn/latest"
+archs = ["x86_64", "aarch64"]
+interval_seconds = 14400
+
+[packages.parser_config]
+region = "cn"
+
+# Zen Browser 每夜版：GitHub Releases 固定标签 twilight-1
+[[packages]]
+name = "zen-browser"
+parser_type = "zen"
+fetch_url = "https://api.github.com/repos/zen-browser/desktop/releases/tags/twilight-1"
+archs = ["x86_64", "aarch64"]
+interval_seconds = 14400
