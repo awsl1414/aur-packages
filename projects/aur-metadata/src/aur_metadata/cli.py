@@ -113,13 +113,15 @@ def main() -> int:
         "--config",
         type=Path,
         default=None,
-        help="配置文件路径（默认 configs/config.toml，相对当前目录；可被环境变量 APP_CONFIG 覆盖）",
+        help="配置文件路径（默认搜索 configs/config.toml 与仓库根 "
+        "projects/aur-metadata/configs/config.toml，可被环境变量 APP_CONFIG 覆盖）",
     )
     parser.add_argument(
         "--packages",
         type=Path,
         default=None,
-        help="包采集定义路径（默认 configs/packages.toml，相对当前目录；可被环境变量 APP_PACKAGES 覆盖）",
+        help="包采集定义路径（默认搜索 configs/packages.toml 与仓库根 "
+        "projects/aur-metadata/configs/packages.toml，可被环境变量 APP_PACKAGES 覆盖）",
     )
     parser.add_argument("--host", default=None, help="覆盖配置文件的监听地址")
     parser.add_argument("--port", type=int, default=None, help="覆盖配置文件的监听端口")

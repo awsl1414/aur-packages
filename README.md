@@ -28,8 +28,8 @@ uv sync
 # 更新所有包（仓库根执行）
 uv run --package aur-auto-update aur-auto-update --all
 
-# 启动元数据服务（成员目录内执行，默认 :8000）
-cd projects/aur-metadata && uv run aur-metadata
+# 启动元数据服务（仓库根或成员目录内执行，默认 :8000）
+uv run --package aur-metadata aur-metadata
 ```
 
 服务启动后访问 `http://127.0.0.1:8000/docs` 查看交互式 API 文档。

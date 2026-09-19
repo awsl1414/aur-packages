@@ -7,9 +7,38 @@ from pathlib import Path
 from typing import Any
 
 _CONFIG_ENV_VAR = "APP_CONFIG"
-_DEFAULT_CONFIG_PATH = Path("configs/config.toml")
 _PACKAGES_ENV_VAR = "APP_PACKAGES"
-_DEFAULT_PACKAGES_PATH = Path("configs/packages.toml")
+
+# 默认配置路径按序探测，取首个存在者，兼容两种运行位置：
+# 成员目录内运行 / monorepo 仓库根运行
+_DEFAULT_CONFIG_PATHS: tuple[Path, ...] = (
+    Path("configs/config.toml"),
+    Path("projects/aur-metadata/configs/config.toml"),
+)
+_DEFAULT_PACKAGES_PATHS: tuple[Path, ...] = (
+    Path("configs/packages.toml"),
+    Path("projects/aur-metadata/configs/packages.toml"),
+)
+
+
+def _resolve_path(
+    path: Path | str | None, env_var: str, candidates: tuple[Path, ...]
+) -> Path:
+    """解析配置文件路径：显式参数 > 环境变量 > 依序探测的默认路径。
+
+    默认路径均不存在时抛 ``FileNotFoundError``，并列出已尝试的位置。
+    """
+    if path is not None:
+        return Path(path)
+    if env := os.environ.get(env_var):
+        return Path(env)
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    tried: str = "、".join(str(c) for c in candidates)
+    raise FileNotFoundError(
+        f"未找到配置文件（已尝试：{tried}）；可用命令行参数或环境变量 {env_var} 指定"
+    )
 
 
 @dataclass(frozen=True)
@@ -120,15 +149,12 @@ class AppConfig:
 def load_config(path: Path | str | None = None) -> AppConfig:
     """加载 TOML 配置文件。
 
-    路径解析优先级：显式参数 > 环境变量 ``APP_CONFIG`` > 当前目录
-    ``configs/config.toml``。配置内的相对路径（如 ``sqlite_path``）
-    以配置文件所在目录为基准展开。
+    路径解析优先级：显式参数 > 环境变量 ``APP_CONFIG`` > 默认搜索路径
+    （成员目录 ``configs/config.toml``，其次仓库根
+    ``projects/aur-metadata/configs/config.toml``）。配置内的相对路径
+    （如 ``sqlite_path``）以配置文件所在目录为基准展开。
     """
-    config_path: Path = (
-        Path(path)
-        if path is not None
-        else Path(os.environ.get(_CONFIG_ENV_VAR, _DEFAULT_CONFIG_PATH))
-    )
+    config_path: Path = _resolve_path(path, _CONFIG_ENV_VAR, _DEFAULT_CONFIG_PATHS)
     with open(config_path, "rb") as f:
         data: dict[str, dict[str, Any]] = tomllib.load(f)
 
@@ -194,15 +220,13 @@ def load_config(path: Path | str | None = None) -> AppConfig:
 def load_packages(path: Path | str | None = None) -> list[PackageConfig]:
     """加载包采集配置文件（TOML，``[[packages]]`` 数组）。
 
-    路径解析优先级：显式参数 > 环境变量 ``APP_PACKAGES`` > 当前目录
-    ``configs/packages.toml``。结构错误（缺字段、类型不对、调度字段
-    缺失/双填、name 重复、未知键）统一收集后抛 ``ValueError``，启动即
+    路径解析优先级与 ``load_config`` 一致（环境变量 ``APP_PACKAGES``，
+    默认搜索成员目录与仓库根两处）。结构错误（缺字段、类型不对、调度
+    字段缺失/双填、name 重复、未知键）统一收集后抛 ``ValueError``，启动即
     失败——配置文件是开发者维护的受信来源，错误应显式暴露而非静默跳过。
     """
-    packages_path: Path = (
-        Path(path)
-        if path is not None
-        else Path(os.environ.get(_PACKAGES_ENV_VAR, _DEFAULT_PACKAGES_PATH))
+    packages_path: Path = _resolve_path(
+        path, _PACKAGES_ENV_VAR, _DEFAULT_PACKAGES_PATHS
     )
     with open(packages_path, "rb") as f:
         data: dict[str, Any] = tomllib.load(f)

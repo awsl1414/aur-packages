@@ -20,11 +20,16 @@
 ## 使用
 
 ```bash
-# 在本成员目录内执行（默认配置路径相对当前目录）
-uv run aur-metadata                              # 默认读取 configs/config.toml
-uv run aur-metadata --config configs/config.docker.toml  # 指定配置
-uv run aur-metadata --host 0.0.0.0 --port 9000   # 覆盖监听地址
+# 仓库根或本成员目录内执行均可（默认配置路径自动搜索）
+uv run aur-metadata                                       # 本成员目录内
+uv run --package aur-metadata aur-metadata                # 仓库根
+uv run aur-metadata --config configs/config.docker.toml   # 指定配置
+uv run aur-metadata --host 0.0.0.0 --port 9000            # 覆盖监听地址
 ```
+
+默认配置路径解析顺序：`--config` 参数 > 环境变量 `APP_CONFIG` > 依次探测
+`configs/config.toml`（成员目录）与 `projects/aur-metadata/configs/config.toml`
+（仓库根）。
 
 服务启动后访问 `http://127.0.0.1:8000/docs` 查看交互式 API 文档，路由规范见 [docs/api.md](docs/api.md)。
 

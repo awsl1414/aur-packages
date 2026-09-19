@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import AsyncGenerator, Callable, Coroutine
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,19 @@ import pytest
 from tortoise import Tortoise
 
 from aur_metadata.models import Package
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 环境夹具
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.fixture
+def _clean_config_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """清除配置相关环境变量，隔离宿主机环境对默认路径解析测试的影响"""
+    monkeypatch.delenv("APP_CONFIG", raising=False)
+    monkeypatch.delenv("APP_PACKAGES", raising=False)
+    assert os.environ.get("APP_CONFIG") is None  # noqa: S101 - 防御夹具自身失效
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DB 夹具

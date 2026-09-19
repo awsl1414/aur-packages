@@ -30,13 +30,12 @@ src/aur_metadata/
 ## 开发命令
 
 ```bash
-# 以下命令在本成员目录内执行（uv workspace 成员，依赖由根 uv.lock 管理）
+# uv workspace 成员，依赖由根 uv.lock 管理；
+# 启动服务可在仓库根（uv run --package aur-metadata aur-metadata）或本成员目录内执行
 
-# 启动服务
-uv run aur-metadata
-
-# 测试
-uv run pytest            # 运行所有测试
+# 本成员目录内：
+uv run aur-metadata      # 启动服务
+uv run pytest            # 运行测试
 uv run pytest tests/     # 运行指定目录
 
 # 代码检查（ruff/ty 配置在仓库根 pyproject，仓库根执行）
@@ -53,5 +52,5 @@ uv run pytest tests/     # 运行指定目录
 - Python 版本要求 >= 3.13
 - 所有函数和方法必须包含完整的类型注解（详见 @.claude/rules/type-hints.md）
 - 运行配置经构造函数显式注入（`AppConfig`/`HttpConfig`/`QQConfig` 等），禁止模块级读配置、禁止 import 即有副作用
-- 配置内的相对路径（如 `sqlite_path`）以配置文件所在目录（`configs/`）为基准解析
+- 配置路径解析：`--config` 参数 > `APP_CONFIG` 环境变量 > 默认搜索路径（成员目录 `configs/config.toml` → 仓库根 `projects/aur-metadata/configs/config.toml`，`packages.toml` 同理）；配置内的相对路径（如 `sqlite_path`）以命中的配置文件所在目录为基准解析
 - schema 演进采用**删库重建**：采集结果可由定时任务再生，升级 schema 时直接删除数据文件重启，不做增量迁移；修改 `db/schema.sql` 时须同步对齐 `models/` 的 ORM 字段

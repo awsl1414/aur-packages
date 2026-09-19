@@ -28,8 +28,9 @@ uv run --package aur-auto-update aur-auto-update --all        # 更新所有包
 uv run --package aur-auto-update aur-auto-update -p linuxqq-nt # 更新指定包
 uv run --package aur-auto-update aur-auto-update --list       # 列出所有可用包
 
-# aur-metadata（须在成员目录内执行，默认配置路径相对当前目录）
-cd projects/aur-metadata && uv run aur-metadata   # 启动服务（默认 :8000）
+# aur-metadata（仓库根或成员目录内均可执行，默认配置路径自动搜索）
+uv run --package aur-metadata aur-metadata   # 从仓库根执行
+cd projects/aur-metadata && uv run aur-metadata  # 或从成员目录执行
 
 # 测试（pytest 配置在各成员 pyproject 中，须在成员目录内执行）
 cd projects/aur-auto-update && uv run pytest
@@ -49,10 +50,9 @@ uv run ty check projects/
 
 ## 添加新软件包
 
-1. 在 aur-metadata 的 DB 中注册包（`name`、`parser_type`、`fetch_url`、`archs`、`parser_config`），由服务端完成上游解析；新解析器在 `projects/aur-metadata/src/aur_metadata/parsers/` 实现并注册进 `_PARSER_REGISTRY`
-2. 在 `configs/packages.toml` 中添加包采集定义（调度周期、版本源等）
+1. 在 `packages/` 目录中创建以包名命名的子目录，编写 PKGBUILD（须遵守打包规范，见下文注意事项）
+2. 在 `projects/aur-metadata/configs/packages.toml` 中添加包采集定义（版本源、架构、调度周期）——服务启动时会幂等同步进 DB `packages` 表，此即包注册；如需新的解析方式，在 `src/aur_metadata/parsers/` 实现解析器并注册进 `_PARSER_REGISTRY`
 3. 在 `config.yaml`（仓库根）中添加包配置（`name` 填 metadata 注册的包名，含 `pkgbuild` 路径与 `arch`）
-4. 在 `packages/` 目录中创建对应的 PKGBUILD 文件
 
 ## Commit 规范
 
