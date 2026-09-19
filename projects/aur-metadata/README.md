@@ -45,11 +45,24 @@ uv run aur-metadata --host 0.0.0.0 --port 9000            # 覆盖监听地址
 
 ## Docker 部署
 
+镜像以 **monorepo 仓库根为构建上下文**——Dockerfile 需要 COPY 根 `uv.lock` 与
+各成员 `pyproject.toml` 才能完成 workspace 级 `--locked` 校验。因此必须从仓库
+根构建，或显式指定上下文：
+
 ```bash
-# 在仓库根执行（构建上下文为 monorepo 根）
+# 方式一：在仓库根执行
 docker build -f projects/aur-metadata/Dockerfile -t aur-metadata .
-docker compose -f projects/aur-metadata/compose.yaml up -d
+
+# 方式二：在本成员目录内，显式指定上下文为仓库根
+docker buildx build -f Dockerfile -t aur-metadata ../..
+
+# 方式三：compose 已内置 context: ../..，在本成员目录内执行即可
+docker compose build && docker compose up -d
 ```
+
+注意：在本成员目录内直接 `docker build .` 会因上下文中没有根 `uv.lock` 而报
+`COPY pyproject.toml uv.lock ./: no such file or directory`——这与 uv 会向上
+查找 workspace 根不同，Docker 构建上下文完全由传入路径决定。
 
 ## 开发
 
