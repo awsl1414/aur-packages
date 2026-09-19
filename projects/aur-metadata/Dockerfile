@@ -4,8 +4,7 @@
 
 FROM python:3.13-slim AS builder
 
-# uv 版本与开发环境 lockfile 生成版本一致，保证 --locked 校验稳定可复现
-COPY --from=ghcr.io/astral-sh/uv:0.12.16 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 WORKDIR /app
 

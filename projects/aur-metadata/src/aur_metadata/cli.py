@@ -112,14 +112,14 @@ def main() -> int:
     parser.add_argument(
         "--config",
         type=Path,
-        default=Path("configs/config.toml"),
-        help="配置文件路径（默认 configs/config.toml，相对当前目录）",
+        default=None,
+        help="配置文件路径（默认 configs/config.toml，相对当前目录；可被环境变量 APP_CONFIG 覆盖）",
     )
     parser.add_argument(
         "--packages",
         type=Path,
-        default=Path("configs/packages.toml"),
-        help="包采集定义路径（默认 configs/packages.toml，相对当前目录）",
+        default=None,
+        help="包采集定义路径（默认 configs/packages.toml，相对当前目录；可被环境变量 APP_PACKAGES 覆盖）",
     )
     parser.add_argument("--host", default=None, help="覆盖配置文件的监听地址")
     parser.add_argument("--port", type=int, default=None, help="覆盖配置文件的监听端口")
