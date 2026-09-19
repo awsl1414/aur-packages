@@ -24,7 +24,7 @@ class DownloadSettings(BaseModel):
 
 
 class ApiSettings(BaseModel):
-    """helper API 配置"""
+    """metadata API 配置"""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -39,7 +39,7 @@ class Settings(BaseModel):
     hash_algorithm: str = HashAlgorithmEnum.B2.value
     api: ApiSettings
     download: DownloadSettings = Field(default_factory=DownloadSettings)
-    # 忽略 SSL 证书校验错误（自签名/过期证书的 helper API 或上游下载源），
+    # 忽略 SSL 证书校验错误（metadata 服务自签名/过期证书的 metadata API 或上游下载源），
     # 同时作用于 httpx 客户端与 aria2c 回退下载。仅建议在受控环境中开启
     ignore_ssl_errors: bool = False
 
@@ -47,7 +47,7 @@ class Settings(BaseModel):
 class PackageConfig(BaseModel):
     """单个包的配置。
 
-    ``name`` 为 ``aur-packages-helper`` 中注册的包名（用于拼接 API 查询 URL）。
+    ``name`` 为 ``aur-metadata`` 中注册的包名（用于拼接 API 查询 URL）。
     """
 
     model_config = ConfigDict(extra="ignore")

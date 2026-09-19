@@ -1,6 +1,6 @@
 """ApiParser 单元测试
 
-数据源：``aur-packages-helper`` 的 ``GET /api/v1/packages/{name}`` 接口。
+数据源：``aur-metadata`` 的 ``GET /api/v1/packages/{name}`` 接口。
 响应格式见 ``parsers/api_parser.py`` 模块文档字符串。
 """
 
@@ -128,7 +128,7 @@ class TestApiParseHashes:
         assert parsed.hashes == {}
 
     def test_none_hash_value_skipped(self) -> None:
-        """hash 值为 None（helper schema 允许）时跳过该架构"""
+        """hash 值为 None（metadata schema 允许）时跳过该架构"""
         parser = ApiParser()
         data = {
             "code": 0,

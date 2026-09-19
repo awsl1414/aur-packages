@@ -4,7 +4,7 @@
 - **版本前缀**：`/api/v1`；新增不兼容变更时引入 `/api/v2`
 - **交互式文档**：`/docs`（Swagger UI）、`/redoc`
 
-> 启动服务：`uv run main.py`
+> 启动服务：`uv run aur-metadata`（本成员目录内执行）
 
 ---
 

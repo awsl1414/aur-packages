@@ -1,12 +1,12 @@
-# AUR Packages Helper
+# aur-metadata
 
-> 为 [aur-packages](https://github.com/awsl1414/aur-packages) 提供应用版本、文件 hash 等信息的服务
+> AUR 包元数据服务：追踪上游版本、计算文件 hash，供 [aur-auto-update](../aur-auto-update/) 查询
 
 [![Python](https://img.shields.io/badge/Python-3.13%2B-blue)](https://www.python.org/)
 
 ## 简介
 
-`aur-packages-helper` 是 [aur-packages](https://github.com/awsl1414/aur-packages) 的配套服务，负责获取应用版本、计算文件 hash 等辅助功能，供 `aur-packages` 在更新 PKGBUILD 时调用。
+`aur-metadata` 是本 monorepo 的服务端成员，负责获取应用版本、计算文件 hash，供 `aur-auto-update` 在更新 PKGBUILD 时调用。
 
 支持定时采集各包版本与文件 hash 并落库 SQLite；查询接口纯读数据库（版本与 hash 独立采集、独立落库，版本先行永不被下载失败连坐），快照过期时后台异步刷新，永不阻塞响应。
 
@@ -17,11 +17,37 @@
 - Tortoise ORM（数据持久化，SQLite）
 - APScheduler（定时采集调度）
 
-## 开发
+## 使用
 
 ```bash
-uv sync          # 同步依赖
-uv run main.py   # 启动服务
+# 在本成员目录内执行（默认配置路径相对当前目录）
+uv run aur-metadata                              # 默认读取 configs/config.toml
+uv run aur-metadata --config configs/config.docker.toml  # 指定配置
+uv run aur-metadata --host 0.0.0.0 --port 9000   # 覆盖监听地址
 ```
 
 服务启动后访问 `http://127.0.0.1:8000/docs` 查看交互式 API 文档，路由规范见 [docs/api.md](docs/api.md)。
+
+## 配置文件
+
+| 文件 | 用途 |
+| ---- | ---- |
+| `configs/config.toml` | 本地开发配置（监听地址、HTTP 参数、QQ 签名、数据库、调度器） |
+| `configs/config.docker.toml` | 容器部署配置（`0.0.0.0` 监听 + 卷内数据库路径） |
+| `configs/packages.toml` | 包采集定义（`[[packages]]` 数组，启动时幂等同步进 DB） |
+
+配置内的相对路径以配置文件所在目录为基准解析；环境变量 `APP_CONFIG`/`APP_PACKAGES`/`GITHUB_TOKEN` 可覆盖对应配置。
+
+## Docker 部署
+
+```bash
+# 在仓库根执行（构建上下文为 monorepo 根）
+docker build -f projects/aur-metadata/Dockerfile -t aur-metadata .
+docker compose -f projects/aur-metadata/compose.yaml up -d
+```
+
+## 开发
+
+```bash
+uv run pytest       # 运行测试（本成员目录内）
+```

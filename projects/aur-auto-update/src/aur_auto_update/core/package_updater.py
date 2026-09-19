@@ -4,9 +4,9 @@
 
 架构设计：
 1. 并行更新所有维护的 AUR 包（使用 asyncio.gather）
-2. 所有上游解析统一由 aur-packages-helper 的 API 完成，客户端只消费
+2. 所有上游解析统一由 aur-metadata 的 API 完成，客户端只消费
    {version, urls, hashes} 结构
-3. helper 未提供 hashes（或部分架构缺失）时，回退到按 urls 下载 + 本地计算
+3. metadata 未提供 hashes（或部分架构缺失）时，回退到按 urls 下载 + 本地计算
 """
 
 import asyncio
@@ -38,7 +38,7 @@ class PackageUpdater:
         # 从配置中获取下载设置
         download_settings = self.config.settings.download
 
-        # 初始化 Fetcher（复用下载设置的超时与重试参数；helper API 的
+        # 初始化 Fetcher（复用下载设置的超时与重试参数；metadata API 的
         # 429/5xx 瞬时错误由 Fetcher 指数退避重试）
         self.fetcher = Fetcher(
             timeout=download_settings.timeout,
@@ -47,10 +47,10 @@ class PackageUpdater:
             verify_ssl=not self.config.settings.ignore_ssl_errors,
         )
 
-        # 唯一解析器：消费 helper API 的统一响应
+        # 唯一解析器：消费 metadata API 的统一响应
         self.parser = ApiParser()
 
-        # 初始化下载器（仅在 helper 未提供 hashes 时回退使用）
+        # 初始化下载器（仅在 metadata 未提供 hashes 时回退使用）
         self.downloader = Downloader(
             max_retries=download_settings.max_retries,
             retry_wait=download_settings.retry_wait,
@@ -69,7 +69,7 @@ class PackageUpdater:
         await self.fetcher.client.aclose()
 
     def _build_fetch_url(self, package_name: str, hash_algorithm: str) -> str:
-        """拼接 helper API 查询 URL：{base_url}/{name}?algorithm={algo}"""
+        """拼接 metadata API 查询 URL：{base_url}/{name}?algorithm={algo}"""
         base_url = self.config.settings.api.base_url.rstrip("/")
         return f"{base_url}/{package_name}?algorithm={hash_algorithm}"
 
@@ -136,9 +136,9 @@ class PackageUpdater:
         hash_algorithm: str,
         verify_only: bool = False,
     ) -> tuple[dict[str, str], bool]:
-        """获取各架构校验和：优先用 helper API 提供的 hashes，否则下载计算。
+        """获取各架构校验和：优先用 metadata API 提供的 hashes，否则下载计算。
 
-        helper 通过 ``data.hashes`` 提供校验和时直接采用，跳过本地下载。若 hashes
+        metadata 通过 ``data.hashes`` 提供校验和时直接采用，跳过本地下载。若 hashes
         为空或缺部分架构，按 ``parsed.urls`` 下载缺失架构并在本地计算 hash。
 
         返回 ``(checksums, success)``。``success=False`` 仅在下载路径下有架构失败
@@ -193,7 +193,7 @@ class PackageUpdater:
 
         使用 Downloader 的并发下载功能，并行下载单个包的所有架构
         """
-        # 回退下载目录（helper 未提供 hashes 时本地下载计算），
+        # 回退下载目录（metadata 未提供 hashes 时本地下载计算），
         # 相对配置文件所在目录解析
         download_dir = self.pkgbuild_root / "downloads"
         download_dir.mkdir(exist_ok=True)
@@ -259,7 +259,7 @@ class PackageUpdater:
                 self.config.settings.hash_algorithm
             )
 
-            # 1. 从 helper API 获取最新版本信息
+            # 1. 从 metadata API 获取最新版本信息
             fetch_url = self._build_fetch_url(package_config.name, hash_algorithm)
             logger.info("  1. 从 %s 获取版本信息...", fetch_url)
             response_data = await self.fetcher.fetch_text(fetch_url)

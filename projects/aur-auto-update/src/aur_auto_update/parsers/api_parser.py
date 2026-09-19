@@ -1,7 +1,7 @@
-"""helper API 统一响应解析器（唯一解析器）
+"""metadata API 统一响应解析器（唯一解析器）
 
-数据源：``aur-packages-helper`` 项目的 ``GET /api/v1/packages/{name}`` 接口。
-所有上游（QQ / Navicat / Trae / Zen / PyPI）的源解析均在 helper 服务端完成，
+数据源：``aur-metadata`` 项目的 ``GET /api/v1/packages/{name}`` 接口。
+所有上游（QQ / Navicat / Trae / Zen / PyPI）的源解析均在 metadata 服务端完成，
 客户端只消费统一 JSON 结构::
 
     {
@@ -17,7 +17,7 @@
 
 ``urls`` 为写入 PKGBUILD ``source_<arch>=()`` 的原始链接（如 QQ 的未签名 deb
 链接，签名动作由 PKGBUILD 的 DLAGENTS 在 makepkg 阶段独立完成）。
-``hashes`` 由 helper 服务端计算，可能为空或缺部分架构——此时由
+``hashes`` 由 metadata 服务端计算，可能为空或缺部分架构——此时由
 ``PackageUpdater`` 回退到按 ``urls`` 下载 + 本地计算。
 """
 
@@ -31,12 +31,12 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class ParsedPackage:
-    """helper API 解析结果。
+    """metadata API 解析结果。
 
     - ``version``：语义化版本号
     - ``urls``：``{arch_value: 原始未签名 URL}``，写入 PKGBUILD ``source_<arch>=()``
     - ``hashes``：``{arch_value: checksum}``，已过滤掉 None/空值；可能为空字典，
-      表示 helper 未提供 hash，由调用方回退到本地下载计算
+      表示 metadata 未提供 hash，由调用方回退到本地下载计算
     """
 
     version: str
@@ -45,14 +45,14 @@ class ParsedPackage:
 
 
 class ApiParser:
-    """helper API 统一响应解析器。
+    """metadata API 统一响应解析器。
 
     一次 ``parse`` 返回完整的 ``ParsedPackage``，避免版本/URL/hash 分别解析时
     重复解码同一响应。
     """
 
     def parse(self, response_data: str) -> ParsedPackage | None:
-        """解析 helper API 响应为 ``ParsedPackage``；结构不符返回 None。"""
+        """解析 metadata API 响应为 ``ParsedPackage``；结构不符返回 None。"""
         data = self._parse_response(response_data)
         if data is None:
             return None
@@ -81,7 +81,7 @@ class ApiParser:
             for arch, checksum in hashes_raw.items():
                 if isinstance(arch, str) and isinstance(checksum, str) and checksum:
                     hashes[arch] = checksum
-        # hashes 可能为空（helper 未提供）→ 调用方回退本地计算，不视为解析失败
+        # hashes 可能为空（metadata 未提供）→ 调用方回退本地计算，不视为解析失败
 
         return ParsedPackage(version=version, urls=urls, hashes=hashes)
 

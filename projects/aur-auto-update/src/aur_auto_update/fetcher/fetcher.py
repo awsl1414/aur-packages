@@ -1,9 +1,9 @@
 """HTTP 客户端模块
 
-处理 ``aur-packages-helper`` API 的响应语义：
+处理 ``aur-metadata`` API 的响应语义：
 
 - 成功：HTTP 200，body ``{"code":0,"message":"ok","data":{...}}`` → 返回 body 文本
-- 错误：HTTP 状态码对齐 helper 业务码前三位，body
+- 错误：HTTP 状态码对齐 metadata 业务码前三位，body
   ``{"code":<int>,"message":<str>,"data":null}``
 
 按状态码区分两类错误：
@@ -13,7 +13,7 @@
   指数退避重试，至多 ``max_retries`` 次
 
 错误 body 的 ``message`` 一并记入日志，便于排查（如「包 'xxx' 未注册」）。
-状态码语义参见 ``aur-packages-helper/app/response.py`` 的 ``ErrorCode``。
+状态码语义参见 ``projects/aur-metadata/src/aur_metadata/response.py`` 的 ``ErrorCode``。
 """
 
 import asyncio
@@ -32,24 +32,24 @@ DEFAULT_HEADERS = {
     "Cache-Control": "no-cache",
 }
 
-# 可重试的 HTTP 状态码：helper 的 429（采集过频）/ 5xx（上游错误、数据未就绪、
+# 可重试的 HTTP 状态码：metadata 的 429（采集过频）/ 5xx（上游错误、数据未就绪、
 # 内部错误）属瞬时故障，退避后重试有望成功。其余 4xx（404 包未注册、422 参数
 # 错误）为永久错误，重试无意义。
 _RETRYABLE_STATUS: frozenset[int] = frozenset(
     {
         HTTPStatus.REQUEST_TIMEOUT,  # 408
         HTTPStatus.TOO_EARLY,  # 425
-        HTTPStatus.TOO_MANY_REQUESTS,  # 429 helper 采集节流
+        HTTPStatus.TOO_MANY_REQUESTS,  # 429 metadata 采集节流
         HTTPStatus.INTERNAL_SERVER_ERROR,  # 500
-        HTTPStatus.BAD_GATEWAY,  # 502 helper 上游错误
-        HTTPStatus.SERVICE_UNAVAILABLE,  # 503 helper 数据未就绪
+        HTTPStatus.BAD_GATEWAY,  # 502 metadata 上游错误
+        HTTPStatus.SERVICE_UNAVAILABLE,  # 503 metadata 数据未就绪
         HTTPStatus.GATEWAY_TIMEOUT,  # 504
     }
 )
 
 
 class Fetcher:
-    """HTTP 客户端封装，按 helper API 状态码语义处理请求与重试"""
+    """HTTP 客户端封装，按 metadata API 状态码语义处理请求与重试"""
 
     def __init__(
         self,
@@ -105,7 +105,7 @@ class Fetcher:
                 if response.status_code == HTTPStatus.OK:
                     return response.text
 
-                # helper 错误响应 body 含 message；提取后记入日志便于排查
+                # metadata 错误响应 body 含 message；提取后记入日志便于排查
                 message = self._extract_message(response.text)
                 last_reason = (
                     f"HTTP {response.status_code}: {message or response.reason_phrase}"
@@ -132,7 +132,7 @@ class Fetcher:
 
     @staticmethod
     def _extract_message(body: str | None) -> str | None:
-        """从 helper 错误响应 body 中提取 ``message`` 字段。
+        """从 metadata 错误响应 body 中提取 ``message`` 字段。
 
         非 JSON、非对象或缺字段时返回 None，由调用方回退到 HTTP reason phrase。
         """

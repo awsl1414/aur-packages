@@ -4,11 +4,11 @@
 settings:
   # 全局默认哈希算法（支持 b2、sha512、sha256）
   hash_algorithm: b2
-  # helper API（aur-packages-helper）：所有上游解析统一在服务端完成，
+  # metadata API（projects/aur-metadata）：所有上游解析统一在服务端完成，
   # 客户端通过 GET {base_url}/{name}?algorithm={algo} 获取 version/urls/hashes
   api:
     base_url: "https://aur.llz.asia/api/v1/packages"
-  # 下载设置（仅当 helper 未返回 hashes 时回退本地下载计算才使用）
+  # 下载设置（仅当 metadata API 未返回 hashes 时回退本地下载计算才使用）
   download:
     # 下载重试次数
     max_retries: 3

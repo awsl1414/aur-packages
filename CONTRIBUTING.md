@@ -26,9 +26,14 @@ dev   ← 日常开发，接受 PR 和直接推送
 | `feat` | 新功能 |
 | `fix` | 修复 bug |
 | `docs` | 文档变更 |
-| `refactor` | 重构 |
+| `style` | 代码格式（不影响逻辑） |
+| `refactor` | 重构（非新功能、非修复） |
+| `perf` | 性能优化 |
+| `test` | 测试相关 |
+| `build` | 构建系统或外部依赖 |
 | `ci` | CI 配置 |
 | `chore` | 其他变更 |
+| `revert` | 回退提交 |
 
 示例：
 
@@ -40,7 +45,7 @@ docs: update packaging guide
 
 ## 添加新软件包
 
-1. 在 `packages/` 目录中创建以包名命名的子目录
-2. 编写 `PKGBUILD` 文件，遵守 [Arch Wiki - Creating packages](https://wiki.archlinux.org/title/Creating_packages) 中的规范
-3. 在 `config.yaml`（仓库根）中添加包配置
-4. 在 `scripts/parsers/` 中创建对应的版本解析器
+1. 在 `packages/` 目录中创建以包名命名的子目录，编写 `PKGBUILD` 文件，遵守 [Arch Wiki - Creating packages](https://wiki.archlinux.org/title/Creating_packages) 与 [打包规范](docs/packaging-guide.md)
+2. 在 `projects/aur-metadata/configs/packages.toml` 中添加包采集定义（版本源、架构、调度周期）；如需新的解析方式，在 `projects/aur-metadata/src/aur_metadata/parsers/` 实现解析器并注册进 `_PARSER_REGISTRY`
+3. 在 metadata 服务的 `packages` 表中注册包（服务启动时从 `packages.toml` 幂等同步）
+4. 在 `config.yaml`（仓库根）中添加包配置（`name` 填 metadata 注册的包名）

@@ -40,11 +40,12 @@ jobs:
           cache-dependency-glob: |
             pyproject.toml
             uv.lock
+            projects/*/pyproject.toml
 
       - name: Sync dependencies and update packages
         run: |
-          uv sync
-          uv run scripts/main.py --all
+          uv sync --all-packages
+          uv run --package aur-auto-update aur-auto-update --all
 
       - name: Detect changed packages
         id: detect

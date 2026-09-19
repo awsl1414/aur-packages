@@ -1,40 +1,58 @@
 # AGENTS.md
 
 @README.md
-@scripts/README.md
 @docs/packaging-guide.md
 @.claude/rules/type-hints.md
+@.claude/rules/comments.md
+
+## 项目结构（uv workspace monorepo）
+
+本仓库是 uv workspace monorepo，根 `pyproject.toml` 为虚拟 workspace 根（不构建、不安装），Python 应用统一位于 `projects/` 下，均为 src 布局 + `uv_build` 后端的 packaged application：
+
+| 成员 | 说明 | 入口 |
+| ---- | ---- | ---- |
+| `projects/aur-auto-update` | AUR 包自动更新工具，消费 aur-metadata 的 API 更新 PKGBUILD | `aur_auto_update.cli:main` → `aur-auto-update` |
+| `projects/aur-metadata` | 包元数据服务（FastAPI + Tortoise ORM/SQLite + APScheduler），追踪上游版本、计算文件 hash | `aur_metadata.cli:main` → `aur-metadata` |
+
+非 Python 资产在仓库根：`packages/`（AUR PKGBUILD）、`config.yaml`（updater 配置）、`structure/`、`docs/`。
 
 ## 开发命令
 
 ```bash
-# 以下命令均在仓库根目录执行（uv 项目根 = 仓库根）
+# uv workspace：依赖统一由根 uv.lock 管理
 
-# 运行程序（使用 uv）
-uv run scripts/main.py                    # 更新所有包
-uv run scripts/main.py --package linuxqq-nt  # 更新指定包
-uv run scripts/main.py --list             # 列出所有可用包
+uv sync                                          # 同步依赖（仓库根执行）
 
-# 运行测试
-uv run pytest                                    # 运行所有测试
-uv run pytest scripts/tests/fetcher/test_fetcher.py  # 运行单个测试文件
+# aur-auto-update（仓库根执行）
+uv run --package aur-auto-update aur-auto-update --all        # 更新所有包
+uv run --package aur-auto-update aur-auto-update -p linuxqq-nt # 更新指定包
+uv run --package aur-auto-update aur-auto-update --list       # 列出所有可用包
 
-# 依赖管理
-uv sync                                          # 同步依赖
-uv add <package>                                 # 添加新依赖
-uv remove <package>                              # 移除依赖
+# aur-metadata（须在成员目录内执行，默认配置路径相对当前目录）
+cd projects/aur-metadata && uv run aur-metadata   # 启动服务（默认 :8000）
 
-# 类型检查
-uv run ty check scripts/
+# 测试（pytest 配置在各成员 pyproject 中，须在成员目录内执行）
+cd projects/aur-auto-update && uv run pytest
+cd projects/aur-metadata && uv run pytest
+
+# 代码检查（ruff/ty 配置在根 pyproject，仓库根执行）
+uv run ruff check projects/
+uv run ty check projects/
 ```
 
-**重要**: 项目统一使用 `uv` 管理和运行，禁止显式使用 `python` 命令（特殊情况除外）。
+**重要**:
+
+- 项目统一使用 `uv` 管理和运行，禁止显式使用 `python` 命令（特殊情况除外）
+- 添加依赖：运行依赖进对应成员 `pyproject.toml`（`uv add --package <member> <pkg>`），开发依赖进成员 `dev` 组，ruff/ty 进根 `dev` 组
+- 导入使用带包名前缀的绝对导入（如 `from aur_auto_update.core.package_updater import PackageUpdater`、`from aur_metadata.fetcher import Fetcher`）
+- Python 版本要求 >= 3.13
 
 ## 添加新软件包
 
-1. 在 `aur-packages-helper` 的 DB 中注册包（`name`、`parser_type`、`fetch_url`、`archs`、`parser_config`），由 helper 服务端完成上游解析
-2. 在 `config.yaml` 中添加包配置（`name` 填 helper 注册的包名，含 `pkgbuild` 路径与 `arch`）
-3. 在 `packages/` 目录中创建对应的 PKGBUILD 文件
+1. 在 aur-metadata 的 DB 中注册包（`name`、`parser_type`、`fetch_url`、`archs`、`parser_config`），由服务端完成上游解析；新解析器在 `projects/aur-metadata/src/aur_metadata/parsers/` 实现并注册进 `_PARSER_REGISTRY`
+2. 在 `configs/packages.toml` 中添加包采集定义（调度周期、版本源等）
+3. 在 `config.yaml`（仓库根）中添加包配置（`name` 填 metadata 注册的包名，含 `pkgbuild` 路径与 `arch`）
+4. 在 `packages/` 目录中创建对应的 PKGBUILD 文件
 
 ## Commit 规范
 
@@ -61,11 +79,10 @@ uv run ty check scripts/
 - **编辑或创建 PKGBUILD 时必须遵守 @docs/packaging-guide.md 中的规范**
 - **修改 `packages/` 中的本地源文件（如 `.sh`、`.desktop`、`.install`）后，必须同步更新 PKGBUILD 中对应的校验和（如 `b2sums`、`sha512sums`）**。本地文件被列入 `source=()` 数组，makepkg 会校验其哈希，修改内容但不更新哈希会导致构建失败
 - **包运行时/构建问题参见 @docs/troubleshooting.md**，包含已知的捆绑库冲突、缓存问题等及其解决方案
-- **项目使用 uv 统一管理运行环境，禁止显式使用 `python` 命令**
-- 项目使用绝对导入（`from core.package_updater import PackageUpdater`），而不是相对导入
-- Python 版本要求 >= 3.13
-- **下载器依赖 aria2c**，运行前需确保系统已安装 aria2（`sudo pacman -S aria2`）
-- PKGBUILD 文件路径相对于项目根目录（`aur-packages/`），而非 `scripts/` 目录
+- 运行配置锚定原则：配置内的相对路径一律相对配置文件所在目录解析（updater 的 `config.yaml` 在仓库根；metadata 的 `configs/config.toml` 在成员内）；包内静态资源（如 schema.sql）用 `importlib.resources` 加载，禁止 `__file__` 上溯定位
+- 模块导入不得产生副作用：运行配置经构造函数显式注入，禁止模块级读配置/建应用
+- **aur-auto-update 的下载器依赖 aria2c**，运行前需确保系统已安装 aria2（`sudo pacman -S aria2`）
+- PKGBUILD 文件路径相对于仓库根目录（`aur-packages/`）
 
 ## graphify
 
