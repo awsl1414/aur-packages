@@ -18,8 +18,8 @@
 ```python
 # ✓ 揭示设计取舍与外部库行为，删了读者会踩坑
 # request 级 headers 会与 client 级 headers 合并（httpx 行为），
-# 因此不在 client 级别挂默认头，避免 parser 特殊头被污染
-DEFAULT_HEADERS: dict[str, str] = {...}
+# 因此不在 client 级别挂默认头（实例属性 _default_headers），
+# 避免 parser 特殊头被污染
 
 """对指定 deb 链接换取带 sign 的临时链接。
 
