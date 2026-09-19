@@ -12,9 +12,10 @@
 *.log.*
 *.sig
 
-# AUR build artifacts
-pkg/
-src/
+# AUR build artifacts（makepkg 在 packages/<pkg>/ 下生成；
+# 不能写成裸 src/、pkg/——会静默忽略 projects/*/src/ 下的新建源文件）
+packages/*/pkg/
+packages/*/src/
 
 # Downloaded package files
 /downloads/
