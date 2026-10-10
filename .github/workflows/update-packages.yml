@@ -45,7 +45,7 @@ jobs:
       - name: Sync dependencies and update packages
         run: |
           uv sync --package aur-auto-update
-          uv run --package aur-auto-update aur-auto-update --all
+          uv run --package aur-auto-update aur-auto-update
 
       - name: Detect changed packages
         id: detect
