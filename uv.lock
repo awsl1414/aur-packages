@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.13"
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -124,6 +124,7 @@ dependencies = [
     { name = "apscheduler" },
     { name = "fastapi", extra = ["standard"] },
     { name = "httpx" },
+    { name = "jmespath" },
     { name = "parsel" },
     { name = "tortoise-orm" },
     { name = "zstandard" },
@@ -141,6 +142,7 @@ requires-dist = [
     { name = "apscheduler", specifier = ">=4.0.0a6" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.139.0" },
     { name = "httpx", specifier = ">=0.28.1" },
+    { name = "jmespath", specifier = ">=1.0" },
     { name = "parsel", specifier = ">=1.11.0" },
     { name = "tortoise-orm", specifier = ">=1.1.7" },
     { name = "zstandard", specifier = ">=0.25.0" },

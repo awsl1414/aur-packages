@@ -2,12 +2,11 @@
 
 import hashlib
 from collections.abc import Callable
-from typing import Protocol, runtime_checkable
+from typing import Protocol
 
 from aur_metadata.constants import HashAlgorithmEnum
 
 
-@runtime_checkable
 class _Hash(Protocol):
     def update(self, data: bytes, /) -> None: ...
     def hexdigest(self) -> str: ...

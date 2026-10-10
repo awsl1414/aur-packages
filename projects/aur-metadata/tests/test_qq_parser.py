@@ -4,13 +4,13 @@ URL 提取已规则化（jmespath，与 packages.toml 中 qq 的 parser_config.u
 同构），本文件规则即真实配置的镜像；签名走网络，不在单测范围。
 """
 
-from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import Any, ClassVar, Self
 from unittest.mock import patch
 
+import httpx
 import pytest
 
 from aur_metadata.constants import ArchEnum
@@ -139,3 +139,45 @@ def test_urls_share_single_parse(qq_response: str) -> None:
         parser.parse_url(ArchEnum.X86_64, qq_response)
         parser.parse_url(ArchEnum.AARCH64, qq_response)
     assert spy.call_count == 1
+
+
+# ── _sign_url TTL 缓存 ───────────────────────────────────────────────────────
+
+
+class _FakeAsyncClient:
+    """桩 httpx.AsyncClient：cookie 请求 + 可计数的 GetSign POST"""
+
+    posts: ClassVar[list[str]] = []
+
+    def __init__(self, **_: Any) -> None: ...
+
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(self, *_: object) -> None: ...
+
+    async def get(self, *_: Any, **__: Any) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={"Set-Cookie": "tgw_l7_route=abc; Path=/"},
+            request=httpx.Request("GET", "https://im.qq.com/index/"),
+        )
+
+    async def post(self, *_: Any, **__: Any) -> httpx.Response:
+        type(self).posts.append("sign")
+        return httpx.Response(
+            200,
+            json={"data": {"url": "https://signed/QQ.deb"}},
+            request=httpx.Request("POST", "https://im.qq.com/sign"),
+        )
+
+
+async def test_sign_url_reuses_cache_within_ttl() -> None:
+    """TTL 内同 raw_url 复用签名结果，不重复发起 GetSign RPC"""
+    _FakeAsyncClient.posts.clear()
+    parser = QQParser(_APP_CONFIG, url=_URL_RULES)
+    with patch("aur_metadata.parsers.qq.httpx.AsyncClient", _FakeAsyncClient):
+        first = await parser._sign_url("https://x/QQ.deb")
+        second = await parser._sign_url("https://x/QQ.deb")
+    assert first == second == "https://signed/QQ.deb"
+    assert len(_FakeAsyncClient.posts) == 1  # 第二次命中缓存

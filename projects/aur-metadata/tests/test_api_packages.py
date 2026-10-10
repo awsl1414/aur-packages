@@ -5,7 +5,6 @@ GET 的 PackageNotFoundError / DataNotReadyError 与 refresh 的
 PackageNotFoundError / CollectThrottledError / RuntimeError 分别映射到对应业务码。
 """
 
-from __future__ import annotations
 
 from typing import Any, cast
 
@@ -53,7 +52,7 @@ class FakePackageService:
 
 
 class FakeScheduleService:
-    """可控 ScheduleService：驱动 refresh_package / reload_packages"""
+    """可控服务桩：驱动 refresh_package（collect_now）与 reload_packages"""
 
     def __init__(
         self,
@@ -88,6 +87,11 @@ def _svc_pkg(**kw: Any) -> PackageService:
 
 def _svc_sched(**kw: Any) -> ScheduleService:
     return cast(ScheduleService, FakeScheduleService(**kw))
+
+
+def _svc_refresh(**kw: Any) -> PackageService:
+    """refresh_package 直连 PackageService（collect_now），桩鸭子类型同构"""
+    return cast(PackageService, FakeScheduleService(**kw))
 
 
 # ── list / reload 成功 ──────────────────────────────────────────────────────
@@ -133,28 +137,28 @@ async def test_get_package_success() -> None:
 
 
 async def test_refresh_not_found() -> None:
-    svc = _svc_sched(error=PackageNotFoundError("qq"))
+    svc = _svc_refresh(error=PackageNotFoundError("qq"))
     with pytest.raises(BizError) as exc:
-        await refresh_package("qq", schedule_service=svc)
+        await refresh_package("qq", service=svc)
     assert exc.value.code == ErrorCode.PACKAGE_NOT_FOUND
 
 
 async def test_refresh_throttled() -> None:
-    svc = _svc_sched(error=CollectThrottledError("qq"))
+    svc = _svc_refresh(error=CollectThrottledError("qq"))
     with pytest.raises(BizError) as exc:
-        await refresh_package("qq", schedule_service=svc)
+        await refresh_package("qq", service=svc)
     assert exc.value.code == ErrorCode.TOO_MANY_REQUESTS
 
 
 async def test_refresh_upstream_error() -> None:
-    svc = _svc_sched(error=RuntimeError("upstream down"))
+    svc = _svc_refresh(error=RuntimeError("upstream down"))
     with pytest.raises(BizError) as exc:
-        await refresh_package("qq", schedule_service=svc)
+        await refresh_package("qq", service=svc)
     assert exc.value.code == ErrorCode.UPSTREAM_ERROR
 
 
 async def test_refresh_success() -> None:
-    svc = _svc_sched(info=_info())
-    resp = await refresh_package("qq", schedule_service=svc)
+    svc = _svc_refresh(info=_info())
+    resp = await refresh_package("qq", service=svc)
     assert resp.code == 0
     assert resp.data is not None and resp.data.version == "1.0.0"

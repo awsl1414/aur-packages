@@ -6,7 +6,6 @@
 - 失败路径：头部下载失败 / 结构不符 / 各架构版本不一致 / URL 全缺 → failed 审计行
 """
 
-from __future__ import annotations
 
 import json
 from typing import Any, cast

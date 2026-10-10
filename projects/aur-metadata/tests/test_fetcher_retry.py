@@ -6,7 +6,6 @@
 - 重试耗尽 → 返回 None，尝试次数等于配置上限
 """
 
-from __future__ import annotations
 
 import httpx
 

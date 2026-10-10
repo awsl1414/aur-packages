@@ -4,7 +4,8 @@
 （interval / cron）触发；采集与落库委托 PackageService.collect，本服务只负责
 注册 schedule、执行采集回调。per-package 锁与节流均由 PackageService 持有。
 
-scheduler 实例由 main.py 通过 ``async with AsyncScheduler()`` 管理生命周期。
+scheduler 实例由 ``cli.py`` 的 lifespan 通过 ``async with AsyncScheduler()``
+管理生命周期。
 """
 
 import logging
@@ -14,10 +15,10 @@ from zoneinfo import ZoneInfo
 from apscheduler import AsyncScheduler, ConflictPolicy
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
+from tortoise.exceptions import DoesNotExist
 
 from aur_metadata.config import AppConfig, SchedulerConfig
 from aur_metadata.models import Package
-from aur_metadata.schemas import PackageInfo
 from aur_metadata.services.package_service import PackageService
 from aur_metadata.services.registry_loader import load_registry_from_db
 
@@ -102,23 +103,16 @@ class ScheduleService:
         """定时回调：委托 PackageService 采集。全程兜底——单包失败不影响 scheduler"""
         try:
             pkg: Package = await Package.get(id=package_id)
-        except Exception:
-            logger.exception("package_id=%s 不存在，跳过采集", package_id)
+        except DoesNotExist:
+            logger.warning("package_id=%s 不存在，跳过采集", package_id)
             return
+        # 其余 DB 异常向上抛给 APScheduler 记录（job 级失败不影响调度器）
 
         try:
             await self._svc.collect(pkg.name)
         except Exception:
             # 域内失败（版本/hash）已由 svc 落库；此处仅兜底记录意外异常
             logger.exception("采集 %s 异常", pkg.name)
-
-    async def collect_now(self, name: str) -> PackageInfo:
-        """手动触发采集；异常上抛供路由层转 HTTP 错误。
-
-        节流由 PackageService 判定（持 per-package 锁，消除 check-then-act），
-        CollectThrottledError → 429，PackageNotFoundError → 404。
-        """
-        return await self._svc.collect_now(name)
 
     async def reload(self) -> list[str]:
         """重新从 DB 加载包配置并同步调度：重建 registry + schedule。

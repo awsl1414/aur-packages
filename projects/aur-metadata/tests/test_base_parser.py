@@ -1,6 +1,5 @@
 """aur_metadata.parsers.base 单元测试：_arch_value、_parse_json_dict 缓存与结构变更日志。"""
 
-from __future__ import annotations
 
 import json
 import logging

@@ -48,8 +48,3 @@ def get_parser(
 def get_parser_types() -> list[str]:
     """返回所有已注册的 parser_type（供包配置校验使用）"""
     return list(_PARSER_REGISTRY)
-
-
-def register_parser(parser_type: str, cls: type[BaseParser]) -> None:
-    """注册一个解析器类型（供扩展/测试注入）"""
-    _PARSER_REGISTRY[parser_type] = cls

@@ -1,13 +1,12 @@
 """aur_metadata.parsers.registry 单元测试"""
 
-from __future__ import annotations
 
 import pytest
 
 from aur_metadata.parsers.base import BaseParser
 from aur_metadata.parsers.deb import DebParser
 from aur_metadata.parsers.qq import QQParser
-from aur_metadata.parsers.registry import _PARSER_REGISTRY, get_parser, register_parser
+from aur_metadata.parsers.registry import _PARSER_REGISTRY, get_parser
 from aur_metadata.parsers.rule import RuleDebParser, RuleParser
 from aur_metadata.parsers.trae import TraeParser
 from tests.fakes import make_app_config
@@ -90,8 +89,8 @@ def test_get_parser_unknown_config_key_raises() -> None:
         get_parser("qq", {"bogus": 1}, app_config=_APP_CONFIG)  # type: ignore[arg-type]
 
 
-def test_register_parser_adds_and_restores() -> None:
-    """register_parser 注入新类型，测试后还原注册表避免污染其他用例"""
+def test_get_parser_with_injected_type(monkeypatch: pytest.MonkeyPatch) -> None:
+    """get_parser 按注册表分派；测试经 monkeypatch 注入类型并自动还原"""
 
     class _Dummy(BaseParser):
         def parse_version(self, response_data: object) -> str | None:
@@ -100,9 +99,5 @@ def test_register_parser_adds_and_restores() -> None:
         def parse_url(self, arch: object, response_data: object) -> str | None:
             return None
 
-    assert "dummy" not in _PARSER_REGISTRY
-    try:
-        register_parser("dummy", _Dummy)
-        assert isinstance(get_parser("dummy", app_config=_APP_CONFIG), _Dummy)
-    finally:
-        _PARSER_REGISTRY.pop("dummy", None)
+    monkeypatch.setitem(_PARSER_REGISTRY, "dummy", _Dummy)
+    assert isinstance(get_parser("dummy", app_config=_APP_CONFIG), _Dummy)

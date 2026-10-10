@@ -23,9 +23,8 @@ class ErrorCode:
     INTERNAL_ERROR = 50000
 
 
-# 业务码 → HTTP 状态码
+# 业务码 → HTTP 状态码（SUCCESS 恒由 success() 直接构造响应，不经异常处理器）
 _HTTP_STATUS: dict[int, HTTPStatus] = {
-    ErrorCode.SUCCESS: HTTPStatus.OK,
     ErrorCode.PACKAGE_NOT_FOUND: HTTPStatus.NOT_FOUND,
     ErrorCode.VALIDATION_ERROR: HTTPStatus.UNPROCESSABLE_ENTITY,
     ErrorCode.TOO_MANY_REQUESTS: HTTPStatus.TOO_MANY_REQUESTS,

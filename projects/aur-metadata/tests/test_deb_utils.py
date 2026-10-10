@@ -1,6 +1,5 @@
 """aur_metadata.utils.deb 单元测试：ar 解析、control.tar 解压与版本归一化。"""
 
-from __future__ import annotations
 
 import io
 import tarfile

@@ -8,7 +8,7 @@ from aur_metadata.config import PackageConfig, load_packages
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-# 仓库自带配置：9 个包全部 interval 模式（ schema.sql 迁移的完整定义）
+# 仓库自带配置：9 个包全部 interval 模式（packages 表定义的事实来源）
 _DEFAULT_PACKAGE_NAMES: set[str] = {
     "qq",
     "navicat",

@@ -1,6 +1,5 @@
 """aur_metadata.services.registry_loader 集成测试（DB）。"""
 
-from __future__ import annotations
 
 from aur_metadata.services.registry_loader import load_registry_from_db
 from tests.fakes import make_app_config

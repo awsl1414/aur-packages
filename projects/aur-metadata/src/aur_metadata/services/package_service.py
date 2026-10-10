@@ -1,8 +1,10 @@
 """包采集编排服务。
 
 版本采集与 hash 下载是两个独立域：各自独立 fetch、独立事务落库。version 先行落库，
-永不被 hash 下载失败回滚；查询接口（get_info）纯读 DB，永不下载，stale 时仅
-fire-and-forget 触发后台刷新。每次 collect 都重新下载算 hash（无短路）。
+永不被 hash 下载失败回滚；查询接口（get_info）纯读 DB，永不下载安装包体，stale 时
+仅 fire-and-forget 触发后台刷新；``download_urls`` 为查询时经 ``resolve_raw_url``
+实时生成（仅签名/鉴权 RPC，如 QQ GetSign），失败降级不影响响应。
+每次 collect 都重新下载算 hash（无短路）。
 """
 
 import asyncio
@@ -108,11 +110,23 @@ class PackageService:
         """剔除不在 ``keep`` 集合中的包的节流记录与采集锁。
 
         reload 后已删除/停用的包不再采集，其运行时状态应清理，避免长生命周期下只增不减。
+        正被持有的锁不剔除——剔除后新 collect 会另建新锁，出现同包新旧两把锁并发采集；
+        遗留锁在采集结束后的下次 reload 自然回收。
         """
         self._last_collected = {
             n: t for n, t in self._last_collected.items() if n in keep
         }
-        self._locks = {n: lk for n, lk in self._locks.items() if n in keep}
+        self._locks = {
+            n: lk for n, lk in self._locks.items() if n in keep or lk.locked()
+        }
+
+    def _get_lock(self, name: str) -> asyncio.Lock:
+        """取 per-package 采集锁，不存在则创建并登记"""
+        lock = self._locks.get(name)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._locks[name] = lock
+        return lock
 
     # ── 查询（纯读） ────────────────────────────────────────────────────
 
@@ -125,11 +139,13 @@ class PackageService:
         name: str,
         hash_algorithm: str = HashAlgorithmEnum.B2.value,
     ) -> PackageInfo:
-        """纯 DB 读：返回最新成功版本快照 + 其所请求算法的各架构 hash。
+        """纯 DB 读版本快照 + 请求算法的各架构 hash，并实时生成 download_urls。
 
-        无网络、不阻塞下载。version fetched_at 超过 ``version_stale_seconds``
-        时 fire-and-forget 触发后台刷新；包已注册但从未采集成功则抛
-        ``DataNotReadyError``（路由层转「数据未就绪」），并尝试后台首次采集。
+        安装包体永不在此路径下载。download_urls 经 ``resolve_raw_url`` 实时
+        签名（QQ 等鉴权源为临时链接，会过期），单架构失败置 None 不影响响应。
+        version fetched_at 超过 ``version_stale_seconds`` 时 fire-and-forget
+        触发后台刷新；包已注册但从未采集成功则抛 ``DataNotReadyError``（路由层
+        转「数据未就绪」），并尝试后台首次采集。
         """
         entry: PackageEntry | None = self.registry.get(name)
         if entry is None:
@@ -144,6 +160,7 @@ class PackageService:
             raise DataNotReadyError(name)
 
         info, fetched_at = read
+        info = await self._attach_download_urls(entry, info)
         if self._is_stale(fetched_at):
             self._maybe_trigger_refresh(name)
         return info
@@ -188,6 +205,33 @@ class PackageService:
             latest.fetched_at,
         )
 
+    async def _attach_download_urls(
+        self, entry: PackageEntry, info: PackageInfo
+    ) -> PackageInfo:
+        """逐架构经 ``resolve_raw_url`` 生成实时可下载链接（download_urls）。
+
+        仅签名/鉴权类 RPC（如 QQ GetSign），不下载安装包体；默认恒等实现
+        的解析器无网络开销，结果与 ``urls`` 相同。单架构失败置 ``None``
+        仅记日志——download_urls 是附加能力，绝不拖垮查询响应。键集与
+        ``urls`` 对齐，消费方可按下标一一配对。
+        """
+        parser: BaseParser = entry.parser
+
+        async def _resolve(arch_value: str, raw_url: str) -> tuple[str, str | None]:
+            try:
+                resolved: str | None = await parser.resolve_raw_url(arch_value, raw_url)
+            except Exception:
+                logger.exception(
+                    "%s 的 %s 架构 resolve_raw_url 异常", entry.name, arch_value
+                )
+                resolved = None
+            return arch_value, resolved
+
+        pairs: list[tuple[str, str | None]] = await asyncio.gather(
+            *[_resolve(arch_value, raw) for arch_value, raw in info.urls.items()]
+        )
+        return info.model_copy(update={"download_urls": dict(pairs)})
+
     def _is_stale(self, fetched_at: datetime) -> bool:
         """版本快照是否超过 ``version_stale_seconds`` 视为过期"""
         if self._version_stale_seconds <= 0:
@@ -230,7 +274,7 @@ class PackageService:
 
         供定时任务与后台刷新调用；手动刷新走 ``collect_now``（含节流拒绝）。
         """
-        async with self._locks.setdefault(name, asyncio.Lock()):
+        async with self._get_lock(name):
             return await self._collect_locked(name)
 
     async def collect_now(self, name: str) -> PackageInfo:
@@ -240,7 +284,7 @@ class PackageService:
         """
         if self.registry.get(name) is None:
             raise PackageNotFoundError(name)
-        async with self._locks.setdefault(name, asyncio.Lock()):
+        async with self._get_lock(name):
             if self.is_throttled(name):
                 raise CollectThrottledError(name)
             return await self._collect_locked(name)
@@ -264,7 +308,12 @@ class PackageService:
             self._last_collected[name] = _utcnow()
             raise RuntimeError(f"采集 {name} 版本失败")
 
-        await self.collect_hashes(entry, snapshot)
+        try:
+            await self.collect_hashes(entry, snapshot)
+        except Exception:
+            # 契约：hash 域失败不抛——version 已先行落库，此处兜底防落库等意外
+            # 异常逃逸成 500，让「版本可用 + hash 待重试」的状态对外可见
+            logger.exception("采集 %s hash 失败（版本已落库）", name)
         self._last_collected[name] = _utcnow()
 
         read: tuple[PackageInfo, datetime] | None = await self._read_info(
@@ -276,6 +325,20 @@ class PackageService:
         return PackageInfo(
             name=name, version=snapshot.version, urls=snapshot.urls, hashes={}
         )
+
+    @staticmethod
+    def _urls_from_response(
+        pkg_name: str, entry: PackageEntry, parser: BaseParser, response_data: str
+    ) -> dict[str, str]:
+        """从版本源响应逐架构提取安装包 URL；缺失架构记普通警告并跳过。"""
+        urls: dict[str, str] = {}
+        for arch in entry.archs:
+            url: str | None = parser.parse_url(arch, response_data)
+            if url:
+                urls[arch.value] = url
+            else:
+                logger.warning("无法获取 %s 的 %s 架构下载 URL", pkg_name, arch.value)
+        return urls
 
     async def collect_version(
         self, pkg: Package, entry: PackageEntry
@@ -306,13 +369,7 @@ class PackageService:
             await self.persist_version_failure(pkg, "无法解析版本号")
             return None
 
-        urls: dict[str, str] = {}
-        for arch in entry.archs:
-            url: str | None = parser.parse_url(arch, response_data)
-            if url:
-                urls[arch.value] = url
-            else:
-                logger.warning("无法获取 %s 的 %s 架构下载 URL", pkg.name, arch.value)
+        urls = self._urls_from_response(pkg.name, entry, parser, response_data)
 
         version_row: PackageVersion = await self.persist_version(pkg, version, urls)
         logger.info("采集 %s 版本完成：version=%s", pkg.name, version)
@@ -397,13 +454,7 @@ class PackageService:
         if response_data is None:
             return {}, f"无法获取版本源: {entry.fetch_url}"
 
-        urls = {}
-        for arch in entry.archs:
-            url = parser.parse_url(arch, response_data)
-            if url:
-                urls[arch.value] = url
-            else:
-                logger.warning("无法获取 %s 的 %s 架构下载 URL", pkg.name, arch.value)
+        urls = self._urls_from_response(pkg.name, entry, parser, response_data)
         error = None if urls else "无法从版本源解析任何架构的安装包 URL"
         return urls, error
 
@@ -439,7 +490,11 @@ class PackageService:
             return None
 
         try:
-            version: str | None = parser.version_from_package_head(head)
+            # deb 头部解压是 CPU 密集操作（control.tar 封顶 32MB），放入线程池
+            # 避免阻塞事件循环
+            version: str | None = await asyncio.to_thread(
+                parser.version_from_package_head, head
+            )
         except Exception:
             # 「任一环节失败不抛出」契约的兜底：parser 实现若漏捕获解析异常，
             # 在此拦下转逐架构跳过，不让整个采集逃逸失败

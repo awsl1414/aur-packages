@@ -1,4 +1,4 @@
--- AUR Packages Helper —— 定时采集结果库 schema（SQLite）
+-- aur-metadata —— 定时采集结果库 schema（SQLite）
 --
 -- 业务定位：定时任务按 packages 配置抓取各包版本、计算文件 hash，
 -- 落库后供 aur-packages 更新 PKGBUILD 时查询。三张表 + 一个取「最新版本」的视图。
@@ -7,8 +7,8 @@
 -- 数据库结构的事实来源（source of truth），便于直接初始化或迁移比对。
 -- 启用外键约束须在连接时执行 `PRAGMA foreign_keys = ON;`（SQLite 默认关闭）。
 --
--- 时间列统一用 TEXT（ISO8601，如 2026-08-01T12:00:00Z），与 Tortoise 的
--- DatetimeField(auto_now_add=True) 默认输出一致，便于排序与跨时区处理。
+-- 时间列统一用 TEXT（ISO8601，如 2026-08-01T12:00:00Z）：ORM 写入即此格式，
+-- DEFAULT 仅兜底裸 SQL 插入；统一格式保证字符串排序与跨时区语义正确。
 --
 -- 字段含义以行内 ``-- ...`` 注释标注。SQLite 不支持 ``COMMENT ON COLUMN``，
 -- 但会把 CREATE 语句原样存入 sqlite_master，故在 DB 内用 ``.schema <table>``
@@ -18,14 +18,14 @@ PRAGMA foreign_keys = ON;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 包采集配置
--- 与 app/registry.py 的 PackageEntry 对应；定时调度从本表读取工作集。
+-- 与 src/aur_metadata/registry.py 的 PackageEntry 对应；定时调度从本表读取工作集。
 -- 包定义的来源是项目根 packages.toml：启动时由 package_seeder 按 name
 -- upsert 到本表，本文件不含种子数据。
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS packages (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,        -- 主键，自增
     name             TEXT    NOT NULL UNIQUE,                   -- 包名，如 qq
-    parser_type      TEXT    NOT NULL,                          -- 解析器类型，对应 app/parsers/*，如 qq
+    parser_type      TEXT    NOT NULL,                          -- 解析器类型，对应 src/aur_metadata/parsers/*，如 qq
     fetch_url        TEXT    NOT NULL,                          -- 版本信息源 URL
     archs            TEXT    NOT NULL,                          -- 支持架构，JSON 数组，如 ["x86_64","aarch64"]
     parser_config    TEXT,                                      -- parser 构造参数 JSON（可空），如 {"region":"sg"} / {"urls":{"x86_64":"..."}}
@@ -68,7 +68,7 @@ CREATE INDEX IF NOT EXISTS idx_versions_package_time ON package_versions (packag
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 文件 hash：版本快照下「架构 × 算法」粒度的记录
--- 对齐 app/constants/package.py 的 ArchEnum（x86_64/aarch64/loong64/...）
+-- 对齐 src/aur_metadata/constants/package.py 的 ArchEnum（x86_64/aarch64/loong64/any）
 -- 与 HashAlgorithmEnum（sha256/sha512/b2）。
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS package_hashes (
@@ -86,8 +86,6 @@ CREATE TABLE IF NOT EXISTS package_hashes (
     UNIQUE (version_id, arch, algorithm)
 ) STRICT;
 
--- 按架构 + 算法检索（如查询某架构最新 b2）
-CREATE INDEX IF NOT EXISTS idx_hashes_arch_algo ON package_hashes (arch, algorithm);
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 视图：每个包的最新「成功」版本快照，供 aur-packages 直接读取

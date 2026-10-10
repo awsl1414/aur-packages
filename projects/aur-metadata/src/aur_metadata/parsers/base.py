@@ -137,12 +137,15 @@ class BaseParser(ABC):
         """
 
     async def resolve_raw_url(self, arch: ArchEnum | str, raw_url: str) -> str | None:
-        """将 ``parse_url`` 产出的原始 URL 转为可直接下载的 URL（程序内部使用）。
+        """将 ``parse_url`` 产出的原始 URL 转为**当下可直接下载**的 URL。
 
-        默认原样返回；子类可重写以附加鉴权/签名处理，例如 QQ 对 deb 链接
-        走 im.qq.com GetSign 换取带 sign 的临时链接。
+        两个调用方：采集域（下载安装包头部、算 hash）与查询域（get_info
+        实时生成 ``download_urls`` 字段）。默认原样返回；子类可重写以附加
+        鉴权/签名处理，例如 QQ 对 deb 链接走 im.qq.com GetSign 换取带 sign
+        的临时链接。返回值会过期、禁止持久化——落库与对外 ``urls`` 字段
+        永远是 ``parse_url`` 的原始 URL。
 
-        下载路径与版本源响应解耦：hash 采集从已持久化的原始 URL 出发，
+        下载/签名路径与版本源响应解耦：hash 采集从已持久化的原始 URL 出发，
         无需重取版本源响应数据。
         """
         return raw_url

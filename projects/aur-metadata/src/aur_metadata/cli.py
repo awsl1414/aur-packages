@@ -139,7 +139,7 @@ def _debug_extract(
                 pkg.fetch_url, parser.get_request_headers()
             )
         if text is None:
-            print(f"版本源抓取失败: {pkg.fetch_url}", file=sys.stderr)
+            print(f"版本源抓取失败：{pkg.fetch_url}", file=sys.stderr)
             return
         if isinstance(parser, PackageFileVersionParser):
             # 版本来自安装包文件头部（下载后提取），文本响应无版本可解析

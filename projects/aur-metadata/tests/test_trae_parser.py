@@ -1,6 +1,5 @@
 """aur_metadata.parsers.trae 单元测试"""
 
-from __future__ import annotations
 
 import json
 from typing import Any

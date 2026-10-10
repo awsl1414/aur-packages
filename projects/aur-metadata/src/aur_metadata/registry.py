@@ -20,7 +20,7 @@ class PackageRegistry:
     """包注册表：内存中的可查询包集合，由 DB 加载（replace_all）构建。
 
     新增/修改包只需操作 ``packages`` 表并调用 reload，无需改路由——
-    通用查询接口 ``GET /api/packages/{name}`` 会自动覆盖。
+    通用查询接口 ``GET /api/v1/packages/{name}`` 会自动覆盖。
     """
 
     def __init__(self) -> None:

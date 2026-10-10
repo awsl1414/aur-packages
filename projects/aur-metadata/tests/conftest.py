@@ -6,7 +6,6 @@
 - 可控桩（FakeParser/FakeFetcher）见 ``tests/fakes.py``。
 """
 
-from __future__ import annotations
 
 import json
 import os

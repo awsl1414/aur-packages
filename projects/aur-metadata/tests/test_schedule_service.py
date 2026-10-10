@@ -1,12 +1,12 @@
 """aur_metadata.services.schedule_service 测试。
 
-覆盖：trigger 构造、schedule 签名、collect_now 的节流/并发互斥/未找到、
-_collect 落库与失败兜底、reload 的签名跳过与内存清理。
+覆盖：trigger 构造、schedule 签名、collect_now（PackageService 手动刷新，
+不依赖调度器）的节流/并发互斥/未找到、_collect 落库与失败兜底、reload 的
+签名跳过与内存清理。
 
-AsyncScheduler 用 FakeScheduler 桩替换（collect_now/reload 不依赖真实调度线程）。
+AsyncScheduler 用 FakeScheduler 桩替换（调度注册/reload 不依赖真实调度线程）。
 """
 
-from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
@@ -155,24 +155,21 @@ def test_schedule_signature_tracks_config() -> None:
 
 async def test_collect_now_unknown_package() -> None:
     """name 不在 registry → PackageNotFoundError，无需 DB"""
-    service = _build_service(_svc(), FakeScheduler())
     with pytest.raises(PackageNotFoundError):
-        await service.collect_now("ghost")
+        await _svc().collect_now("ghost")
 
 
 async def test_collect_now_throttled() -> None:
     """节流窗口内 → CollectThrottledError，在 Package.get 前抛出，无需 DB"""
     svc = _svc()
     svc._last_collected["qq"] = datetime.now(UTC)
-    service = _build_service(svc, FakeScheduler())
     with pytest.raises(CollectThrottledError):
-        await service.collect_now("qq")
+        await svc.collect_now("qq")
 
 
 async def test_collect_now_success_persists(db, make_package) -> None:
     pkg = await make_package()
-    service = _build_service(_svc(), FakeScheduler())
-    info = await service.collect_now("qq")
+    info = await _svc().collect_now("qq")
     assert info.version == "1.0.0"
     v = await PackageVersion.get(package=pkg)
     assert v.status == "success"
@@ -189,12 +186,12 @@ async def test_collect_now_concurrent_second_is_throttled(db, make_package) -> N
     fetcher = FakeFetcher(
         text="cfg", hashes={"x86_64": "h1"}, delay=0.2, entered=entered
     )
-    service = _build_service(_svc(fetcher), FakeScheduler())
+    svc = _svc(fetcher)
 
-    first = asyncio.create_task(service.collect_now("qq"))
+    first = asyncio.create_task(svc.collect_now("qq"))
     await entered.wait()  # 第一次已持锁并在 fetch 中
     with pytest.raises(CollectThrottledError):
-        await service.collect_now("qq")
+        await svc.collect_now("qq")
     await first
     assert fetcher.text_calls == 1  # 第二次未真正回源
 

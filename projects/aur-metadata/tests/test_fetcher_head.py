@@ -1,6 +1,5 @@
 """Fetcher.fetch_head 单测：Range 头、流式截断与重试语义。"""
 
-from __future__ import annotations
 
 import httpx
 import pytest

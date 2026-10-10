@@ -1,6 +1,5 @@
 """aur_metadata.registry 单元测试"""
 
-from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
 

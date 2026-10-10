@@ -3,13 +3,13 @@
 放普通模块而非 conftest，便于测试用绝对导入（``from tests.fakes import ...``）复用。
 """
 
-from __future__ import annotations
 
 import asyncio
 import gzip
 import io
 import lzma
 import tarfile
+from collections.abc import Iterable
 from pathlib import Path
 from typing import cast
 
@@ -66,17 +66,29 @@ def make_app_config() -> AppConfig:
 
 
 class FakeParser(BaseParser):
-    """可控解析器：绕开 QQ 真实网络签名，用于采集/查询编排单测。"""
+    """可控解析器：绕开 QQ 真实网络签名，用于采集/查询编排单测。
+
+    ``resolve_raw_url`` 行为由构造参数决定：
+    - 默认（``signed_by_arch=None`` 且 ``raise_on_resolve=False``）：恒等返回，
+      模拟无需签名的源（download_urls == urls）；
+    - ``signed_by_arch`` 提供映射：按架构返回签名链接，缺 key 返回 None
+      （模拟该架构签名失败）；
+    - ``raise_on_resolve=True``：抛异常（模拟签名 RPC 故障，服务层应吞掉）。
+    """
 
     def __init__(
         self,
         version: str | None = "1.0.0",
         url_by_arch: dict[str, str] | None = None,
         app_config: AppConfig | None = None,
+        signed_by_arch: dict[str, str] | None = None,
+        raise_on_resolve: bool = False,
     ) -> None:
         super().__init__(app_config or make_app_config())
         self._version = version
         self._url_by_arch = url_by_arch or {}
+        self._signed_by_arch = signed_by_arch
+        self._raise_on_resolve = raise_on_resolve
 
     def parse_version(self, response_data: str) -> str | None:
         return self._version
@@ -85,8 +97,11 @@ class FakeParser(BaseParser):
         return self._url_by_arch.get(self._arch_value(arch))
 
     async def resolve_raw_url(self, arch: ArchEnum | str, raw_url: str) -> str | None:
-        """默认原样返回原始 URL（不做签名），模拟非 QQ parser。"""
-        return raw_url
+        if self._raise_on_resolve:
+            raise RuntimeError("模拟签名 RPC 异常")
+        if self._signed_by_arch is None:
+            return raw_url
+        return self._signed_by_arch.get(self._arch_value(arch))
 
 
 class FakeFetcher:
@@ -128,9 +143,7 @@ class FakeFetcher:
             await asyncio.sleep(self._delay)
         return self._text
 
-    async def fetch_head(
-        self, url: str, max_bytes: int, headers: dict[str, str] | None = None
-    ) -> bytes | None:
+    async def fetch_head(self, url: str, max_bytes: int) -> bytes | None:
         self.head_calls += 1
         if self._head is None:
             return None
@@ -139,10 +152,7 @@ class FakeFetcher:
         return self._head[:max_bytes]
 
     async def fetch_and_hash_many(
-        self,
-        urls: dict[str, str],
-        algorithms: list[str],
-        headers: dict[str, str] | None = None,
+        self, urls: dict[str, str], algorithms: Iterable[str]
     ) -> dict[str, dict[str, str] | None]:
         """桩：某架构在 ``_hashes`` 有值视为下载成功，全部算法均返回该 digest；缺失则 None。"""
         self.hash_calls += 1
@@ -214,17 +224,27 @@ def build_deb(
 
 
 def make_qq_registry(
-    archs: list[ArchEnum], version: str | None = "1.0.0"
+    archs: list[ArchEnum],
+    version: str | None = "1.0.0",
+    signed_by_arch: dict[str, str] | None = None,
+    raise_on_resolve: bool = False,
 ) -> PackageRegistry:
     """构造单包 'qq' 的 registry：archs 决定可解析架构，每架构 URL 自动派生。
 
-    抽出共享构造，避免 package_service / schedule 两个测试文件各自重复构建
+    ``signed_by_arch`` / ``raise_on_resolve`` 透传给 FakeParser，控制
+    ``resolve_raw_url`` 的签名模拟行为（见其 docstring）。抽出共享构造，
+    避免 package_service / schedule 两个测试文件各自重复构建
     PackageEntry + PackageRegistry（结构变更只需改一处）。
     """
     url_by_arch: dict[str, str] = {a.value: f"https://x/{a.value}.deb" for a in archs}
     entry = PackageEntry(
         name="qq",
-        parser=FakeParser(version, url_by_arch),
+        parser=FakeParser(
+            version,
+            url_by_arch,
+            signed_by_arch=signed_by_arch,
+            raise_on_resolve=raise_on_resolve,
+        ),
         fetch_url="https://x/cfg",
         archs=archs,
     )

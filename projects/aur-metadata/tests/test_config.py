@@ -1,6 +1,5 @@
 """aur_metadata.config 路径解析单元测试：默认搜索、环境变量与显式参数优先级"""
 
-from __future__ import annotations
 
 from pathlib import Path
 

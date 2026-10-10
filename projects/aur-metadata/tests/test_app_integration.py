@@ -7,7 +7,6 @@
 范围，由 API 单测的 Fake 服务分层保障）。
 """
 
-from __future__ import annotations
 
 from dataclasses import replace
 from importlib.metadata import version

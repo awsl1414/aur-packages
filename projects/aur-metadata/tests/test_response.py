@@ -1,6 +1,5 @@
 """aur_metadata.response 单元测试：成功响应构造与全局异常处理器接线。"""
 
-from __future__ import annotations
 
 from fastapi import FastAPI
 from starlette.testclient import TestClient
@@ -36,8 +35,8 @@ def test_envelope_shape() -> None:
 
 
 def test_error_code_to_http_status_mapping() -> None:
-    """每个业务码映射到期望 HTTP 状态码"""
-    assert _HTTP_STATUS[ErrorCode.SUCCESS].value == 200
+    """错误业务码映射到期望 HTTP 状态码（SUCCESS 由 success() 直接构造，不入映射）"""
+    assert ErrorCode.SUCCESS not in _HTTP_STATUS
     assert _HTTP_STATUS[ErrorCode.PACKAGE_NOT_FOUND].value == 404
     assert _HTTP_STATUS[ErrorCode.VALIDATION_ERROR].value == 422
     assert _HTTP_STATUS[ErrorCode.TOO_MANY_REQUESTS].value == 429

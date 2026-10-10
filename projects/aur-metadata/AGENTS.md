@@ -6,7 +6,7 @@
 
 ## 项目定位
 
-本服务为 aur-auto-update 提供应用版本、文件 hash 等元数据，基于 FastAPI + Tortoise ORM（SQLite）+ APScheduler 实现。包配置以 SQLite `packages` 表为唯一来源，定时采集版本与 hash 落库；版本与 hash 为两个独立采集域（各自独立事务，版本先行落库，hash 下载失败不影响版本可用性）。查询接口纯读 DB，快照过期时后台异步刷新。
+本服务为 aur-auto-update 提供应用版本、文件 hash 等元数据，基于 FastAPI + Tortoise ORM（SQLite）+ APScheduler 实现。包配置以 SQLite `packages` 表为唯一来源，定时采集版本与 hash 落库；版本与 hash 为两个独立采集域（各自独立事务，版本先行落库，hash 下载失败不影响版本可用性）。查询接口不下载安装包体（鉴权类源仅实时签名 RPC 生成 `download_urls`、失败降级），快照过期时后台异步刷新。
 
 ## 目录结构
 

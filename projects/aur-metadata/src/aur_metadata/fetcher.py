@@ -170,7 +170,7 @@ class Fetcher:
         try:
             return await self._retry(url, _attempt)
         except HTTPError as e:
-            logger.error("从 %s 获取文本失败: %s", url, _describe_http_error(e))
+            logger.error("从 %s 获取文本失败：%s", url, _describe_http_error(e))
             if isinstance(e, httpx.HTTPStatusError) and e.response is not None:
                 logger.error("  状态码: %d", e.response.status_code)
                 body: str = e.response.text
@@ -178,9 +178,7 @@ class Fetcher:
                     logger.error("  响应体(截断): %s", body[: self._log_body_max_length])
             return None
 
-    async def fetch_head(
-        self, url: str, max_bytes: int, headers: dict[str, str] | None = None
-    ) -> bytes | None:
+    async def fetch_head(self, url: str, max_bytes: int) -> bytes | None:
         """只读取响应体前 ``max_bytes`` 字节（安装包版本提取用，避免全量下载）。
 
         请求带 ``Range`` 头（服务端支持则只传前缀），并流式读取、凑满即主动断开，
@@ -191,9 +189,7 @@ class Fetcher:
         if max_bytes <= 0:
             raise ValueError(f"max_bytes 须为正整数，得到 {max_bytes}")
         request_headers: dict[str, str] = _with_github_auth(
-            url,
-            headers if headers is not None else self._default_headers,
-            self._github_token,
+            url, self._default_headers, self._github_token
         ) | {"Range": f"bytes=0-{max_bytes - 1}"}
 
         async def _attempt() -> bytes:
@@ -221,7 +217,6 @@ class Fetcher:
         self,
         url: str,
         algorithms: Iterable[str],
-        headers: dict[str, str] | None = None,
     ) -> dict[str, str] | None:
         """流式下载一次，同时计算多种算法的 hash，不落盘。
 
@@ -230,9 +225,7 @@ class Fetcher:
         下载失败返回 None（共享流，要么全成功要么全失败）。瞬时网络错误自动重试。
         """
         request_headers: dict[str, str] = _with_github_auth(
-            url,
-            headers if headers is not None else self._default_headers,
-            self._github_token,
+            url, self._default_headers, self._github_token
         )
         algo_list: list[str] = list(algorithms)
 
@@ -252,7 +245,7 @@ class Fetcher:
             return await self._retry(url, _attempt)
         except HTTPError as e:
             logger.error(
-                "流式下载并计算 hash 失败 %s: %s", url, _describe_http_error(e)
+                "流式下载并计算 hash 失败 %s：%s", url, _describe_http_error(e)
             )
             if isinstance(e, httpx.HTTPStatusError) and e.response is not None:
                 logger.error("  状态码: %d", e.response.status_code)
@@ -266,7 +259,6 @@ class Fetcher:
         self,
         urls: dict[str, str],
         algorithms: Iterable[str],
-        headers: dict[str, str] | None = None,
     ) -> dict[str, dict[str, str] | None]:
         """并发下载多个 URL，每个同时算多种算法，不落盘。
 
@@ -279,7 +271,7 @@ class Fetcher:
         ) -> tuple[str, dict[str, str] | None]:
             async with self._semaphore:
                 result: dict[str, str] | None = await self.fetch_and_hash_multi(
-                    url, algorithms, headers
+                    url, algorithms
                 )
                 return key, result
 

@@ -1,6 +1,5 @@
 """aur_metadata.parsers.deb 单元测试：DebParser 配置注入与 deb 头部版本提取。"""
 
-from __future__ import annotations
 
 import logging
 

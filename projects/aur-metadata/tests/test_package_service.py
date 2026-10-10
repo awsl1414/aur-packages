@@ -2,15 +2,15 @@
 
 覆盖解耦后的新契约：
 - 节流 / 运行时清理（纯逻辑）
-- get_info 纯 DB 读、不触网；无快照 → DataNotReadyError
+- get_info 纯 DB 读、不触网（安装包体）；download_urls 实时签名生成，失败降级 None
+- 无快照 → DataNotReadyError
 - collect：version 与 hash 独立落库；version 成功 + hash 全失败时 version 仍可读（核心回归）
 - 每次 collect 都重新下载算 hash（无短路）
 - 版本抓取失败 → 落 failed 行并抛 RuntimeError
-- collect_now 节流 → CollectThrottledError
+- collect_now 节流 → CollectThrottledError；采集路径不生成 download_urls（read-path-only）
 - get_info stale → fire-and-forget 后台刷新
 """
 
-from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime, timedelta
@@ -34,11 +34,18 @@ def _service(
     hashes: dict[str, str | None] | None = None,
     interval: int = 0,
     stale_seconds: int = 0,
+    signed_by_arch: dict[str, str] | None = None,
+    raise_on_resolve: bool = False,
 ) -> PackageService:
     """构造一个指向单包 'qq'（双架构）registry 的 PackageService。"""
     return PackageService(
         FakeFetcher(text=text, hashes=hashes).as_fetcher(),
-        make_qq_registry([ArchEnum.X86_64, ArchEnum.AARCH64], version="1.2.3"),
+        make_qq_registry(
+            [ArchEnum.X86_64, ArchEnum.AARCH64],
+            version="1.2.3",
+            signed_by_arch=signed_by_arch,
+            raise_on_resolve=raise_on_resolve,
+        ),
         min_collect_interval_seconds=interval,
         version_stale_seconds=stale_seconds,
     )
@@ -86,7 +93,7 @@ async def test_get_info_not_found() -> None:
 
 
 async def test_get_info_pure_read_no_fetch(db, make_package) -> None:
-    """命中 DB 快照时不触网（fetcher 调用为 0）"""
+    """命中 DB 快照时不触网（fetcher 调用为 0）；恒等解析器 download_urls==urls"""
     pkg = await make_package()
     v = await PackageVersion.create(
         package=pkg, version="1.0", urls='{"x86_64":"https://x/a"}', status="success"
@@ -97,6 +104,7 @@ async def test_get_info_pure_read_no_fetch(db, make_package) -> None:
     svc = _service(text="should-not-be-used")
     info = await svc.get_info("qq", "b2")
     assert info.version == "1.0" and info.hashes["x86_64"] == "abc"
+    assert info.download_urls == info.urls  # 恒等解析器：实时链接与原始链接相同
     assert cast(FakeFetcher, svc.fetcher).text_calls == 0
 
 
@@ -104,6 +112,76 @@ async def test_get_info_data_not_ready_when_no_snapshot(db, make_package) -> Non
     await make_package()
     with pytest.raises(DataNotReadyError):
         await _service().get_info("qq", "b2")
+
+
+# ── get_info download_urls（实时签名链接）──────────────────────────────────
+
+
+async def test_get_info_populates_download_urls(db, make_package) -> None:
+    """签名解析器：download_urls 逐架构实时生成，键集与 urls 对齐"""
+    pkg = await make_package()
+    v = await PackageVersion.create(
+        package=pkg,
+        version="1.0",
+        urls='{"x86_64":"https://x/a","aarch64":"https://x/b"}',
+        status="success",
+    )
+    await PackageHash.create(
+        version=v, arch="x86_64", algorithm="b2", hash_value="abc", status="success"
+    )
+    svc = _service(
+        text="should-not-be-used",
+        signed_by_arch={"x86_64": "https://signed/a", "aarch64": "https://signed/b"},
+    )
+    info = await svc.get_info("qq", "b2")
+    assert info.urls == {"x86_64": "https://x/a", "aarch64": "https://x/b"}
+    assert info.download_urls == {
+        "x86_64": "https://signed/a",
+        "aarch64": "https://signed/b",
+    }
+    # 签名是 parser 内部 RPC，不经过 fetcher（不下载安装包体）
+    assert cast(FakeFetcher, svc.fetcher).text_calls == 0
+
+
+async def test_get_info_download_url_sign_failure_degrades_to_none(
+    db, make_package,
+) -> None:
+    """单架构签名失败 → 该架构 download_urls 为 None，响应整体不受影响"""
+    pkg = await make_package()
+    v = await PackageVersion.create(
+        package=pkg,
+        version="1.0",
+        urls='{"x86_64":"https://x/a","aarch64":"https://x/b"}',
+        status="success",
+    )
+    await PackageHash.create(
+        version=v, arch="x86_64", algorithm="b2", hash_value="abc", status="success"
+    )
+    # aarch64 无签名映射 → 模拟该架构签名失败
+    svc = _service(signed_by_arch={"x86_64": "https://signed/a"})
+    info = await svc.get_info("qq", "b2")
+    assert info.download_urls == {"x86_64": "https://signed/a", "aarch64": None}
+    assert info.version == "1.0"
+
+
+async def test_get_info_download_url_exception_degrades_to_none(
+    db, make_package,
+) -> None:
+    """resolve_raw_url 抛异常被服务层吞掉 → 置 None，不拖垮查询响应"""
+    pkg = await make_package()
+    v = await PackageVersion.create(
+        package=pkg,
+        version="1.0",
+        urls='{"x86_64":"https://x/a","aarch64":"https://x/b"}',
+        status="success",
+    )
+    await PackageHash.create(
+        version=v, arch="x86_64", algorithm="b2", hash_value="abc", status="success"
+    )
+    svc = _service(raise_on_resolve=True)
+    info = await svc.get_info("qq", "b2")
+    assert info.download_urls == {"x86_64": None, "aarch64": None}
+    assert info.version == "1.0"
 
 
 # ── collect（采集）─────────────────────────────────────────────────────────
@@ -195,6 +273,19 @@ async def test_collect_now_throttled(db, make_package) -> None:
     await svc.collect_now("qq")
     with pytest.raises(CollectThrottledError):
         await svc.collect_now("qq")  # 节流窗口内再刷新
+
+
+async def test_collect_now_info_has_empty_download_urls(db, make_package) -> None:
+    """采集路径不生成 download_urls（read-path-only），refresh 响应字段为空 dict"""
+    await make_package()
+    svc = _service(
+        text="cfg",
+        hashes={"x86_64": "h1", "aarch64": "h2"},
+        signed_by_arch={"x86_64": "https://signed/a"},
+    )
+    info = await svc.collect_now("qq")
+    assert info.version == "1.2.3"
+    assert info.download_urls == {}
 
 
 # ── 后台异步刷新 ───────────────────────────────────────────────────────────

@@ -1,6 +1,5 @@
 """aur_metadata.utils.hash 单元测试"""
 
-from __future__ import annotations
 
 import hashlib
 from collections.abc import Callable

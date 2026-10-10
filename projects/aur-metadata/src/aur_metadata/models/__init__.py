@@ -8,7 +8,7 @@ from tortoise import Model, fields
 
 
 class Package(Model):
-    """包采集配置（与 app/registry.py 的 PackageEntry 对应，由 DB 持久化）"""
+    """包采集配置（与 registry.py 的 PackageEntry 对应，由 DB 持久化）"""
 
     id = fields.IntField(pk=True)
     name = fields.CharField(max_length=255, unique=True)

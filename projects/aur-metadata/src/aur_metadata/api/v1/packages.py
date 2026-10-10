@@ -22,6 +22,9 @@ router = APIRouter(prefix="/packages", tags=["packages"])
 PackageServiceDep = Annotated[PackageService, Depends(get_package_service)]
 ScheduleServiceDep = Annotated[ScheduleService, Depends(get_schedule_service)]
 
+# 合法 hash 算法取值（单一事实来源为 HashAlgorithmEnum）
+_ALGORITHMS: frozenset[str] = frozenset(a.value for a in HashAlgorithmEnum)
+
 
 @router.get("", response_model=ApiResponse[PackageList], summary="列出所有已注册包")
 async def list_packages(service: PackageServiceDep) -> ApiResponse[PackageList]:
@@ -48,7 +51,7 @@ async def reload_packages(
 @router.get(
     "/{name}",
     response_model=ApiResponse[PackageInfo],
-    summary="查询指定包的最新版本与文件 hash",
+    summary="查询指定包的最新版本、可下载 URL 与文件 hash",
 )
 async def get_package(
     name: str,
@@ -57,6 +60,14 @@ async def get_package(
         str, Query(description="hash 算法：b2 / sha256 / sha512")
     ] = HashAlgorithmEnum.B2.value,
 ) -> ApiResponse[PackageInfo]:
+    """``urls`` 为原始稳定链接（写 PKGBUILD）；``download_urls`` 为查询时
+    实时生成的可直接下载链接（QQ 为临时签名链接，会过期，失败为 null）。
+    """
+    if algorithm not in _ALGORITHMS:
+        raise BizError(
+            ErrorCode.VALIDATION_ERROR,
+            f"不支持的 hash 算法: {algorithm}，支持: {', '.join(sorted(_ALGORITHMS))}",
+        )
     try:
         info: PackageInfo = await service.get_info(name, hash_algorithm=algorithm)
     except PackageNotFoundError:
@@ -75,10 +86,14 @@ async def get_package(
 )
 async def refresh_package(
     name: str,
-    schedule_service: ScheduleServiceDep,
+    service: PackageServiceDep,
 ) -> ApiResponse[PackageInfo]:
+    """采集不依赖调度器：调度器未启用的部署同样可手动刷新。
+
+    响应的 ``download_urls`` 恒为空 dict（采集路径不实时签名）。
+    """
     try:
-        info: PackageInfo = await schedule_service.collect_now(name)
+        info: PackageInfo = await service.collect_now(name)
     except PackageNotFoundError:
         raise BizError(ErrorCode.PACKAGE_NOT_FOUND, f"包 '{name}' 未注册") from None
     except CollectThrottledError:
