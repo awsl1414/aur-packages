@@ -25,8 +25,8 @@ sudo pacman -S aria2   # 或 sudo apt install aria2
 # 同步依赖（uv workspace，单 uv.lock 管理全部成员）
 uv sync
 
-# 更新所有包（仓库根执行）
-uv run --package aur-auto-update aur-auto-update --all
+# 更新所有包（仓库根执行；指定包用 -p <name>，可用包列表用 --list）
+uv run --package aur-auto-update aur-auto-update
 
 # 启动元数据服务（仓库根或成员目录内执行，默认 :8000）
 uv run --package aur-metadata aur-metadata

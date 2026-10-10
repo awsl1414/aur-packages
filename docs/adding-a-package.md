@@ -6,6 +6,11 @@
 
 在 `packages/` 目录中创建以包名命名的子目录，编写 PKGBUILD。
 
+> **CI 行为**：定时更新工作流只推送「被 updater 实际改动过 PKGBUILD」的包
+> （按 `git diff` 检测）——未完成注册的目录不会被自动更新，也就不会进推送矩阵。
+> 但**手动全量触发** `push-to-aur` 时会扫描 `packages/*/` 全部目录并推送；
+> 因此目录一旦提交，请尽快完成下面两步注册接入自动更新，或明确标注纯手动维护。
+
 - **必须遵守** [打包规范](packaging-guide.md)（版本、依赖、校验和、source 声明等）
 - 本地源文件（`.sh`、`.desktop`、`.install`）列入 `source=()` 后，**修改内容必须同步更新 PKGBUILD 中对应的校验和**（`b2sums`、`sha512sums`），否则 makepkg 构建失败——原因与案例见 [已知问题](troubleshooting.md)
 

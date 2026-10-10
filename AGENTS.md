@@ -24,7 +24,7 @@
 uv sync                                          # 同步依赖（仓库根执行）
 
 # aur-auto-update（仓库根执行）
-uv run --package aur-auto-update aur-auto-update --all        # 更新所有包
+uv run --package aur-auto-update aur-auto-update             # 更新所有包
 uv run --package aur-auto-update aur-auto-update -p linuxqq-nt # 更新指定包
 uv run --package aur-auto-update aur-auto-update --list       # 列出所有可用包
 
@@ -45,7 +45,7 @@ uv run ty check projects/
 
 - 项目统一使用 `uv` 管理和运行，禁止显式使用 `python` 命令（特殊情况除外）
 - 添加依赖：运行依赖进对应成员 `pyproject.toml`（`uv add --package <member> <pkg>`），开发依赖进成员 `dev` 组，ruff/ty 进根 `dev` 组
-- 导入使用带包名前缀的绝对导入（如 `from aur_auto_update.core.package_updater import PackageUpdater`、`from aur_metadata.fetcher import Fetcher`）
+- 导入使用带包名前缀的绝对导入（如 `from aur_auto_update.services.package_updater import PackageUpdater`、`from aur_metadata.fetcher import Fetcher`）
 - Python 版本要求 >= 3.13
 
 ## 添加新软件包
