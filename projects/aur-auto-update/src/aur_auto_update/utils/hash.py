@@ -3,12 +3,14 @@
 import hashlib
 from collections.abc import Callable
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import Protocol
 
-from aur_auto_update.constants.constants import HashAlgorithmEnum
+from aur_auto_update.constants import HashAlgorithmEnum
+
+# 分块读取：1 MiB 在内存占用与系统调用次数间取衡（安装包常达数百 MB）
+_CHUNK_SIZE = 1024 * 1024
 
 
-@runtime_checkable
 class _Hash(Protocol):
     def update(self, data: bytes, /) -> None: ...
     def hexdigest(self) -> str: ...
@@ -42,7 +44,7 @@ def calculate_file_hash(
     hash_func = _HASH_BUILDERS[hash_algorithm.lower()]()
 
     with file_path.open("rb") as f:
-        for chunk in iter(lambda: f.read(4096), b""):
+        for chunk in iter(lambda: f.read(_CHUNK_SIZE), b""):
             hash_func.update(chunk)
 
     return hash_func.hexdigest()

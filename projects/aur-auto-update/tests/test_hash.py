@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from aur_auto_update.constants.constants import HashAlgorithmEnum
+from aur_auto_update.constants import HashAlgorithmEnum
 from aur_auto_update.utils.hash import calculate_file_hash
 
 

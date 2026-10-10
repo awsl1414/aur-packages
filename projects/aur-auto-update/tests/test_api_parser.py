@@ -5,11 +5,12 @@
 """
 
 import json
+from typing import Any
 
 from aur_auto_update.parsers.api_parser import ApiParser
 
-# 完整合法的 API 响应：含 code / message / data(version + urls + hashes)
-API_RESPONSE: dict = {
+# 完整合法的 API 响应：含 code / message / data(version + urls + download_urls + hashes)
+API_RESPONSE: dict[str, Any] = {
     "code": 0,
     "message": "ok",
     "data": {
@@ -18,6 +19,10 @@ API_RESPONSE: dict = {
         "urls": {
             "x86_64": "https://dn.navicat.com/download/navicat17-premium-cs-x86_64.AppImage",
             "aarch64": "https://dn.navicat.com/download/navicat17-premium-cs-aarch64.AppImage",
+        },
+        "download_urls": {
+            "x86_64": "https://dn.navicat.com/download/signed/navicat17-premium-cs-x86_64.AppImage",
+            "aarch64": None,  # 该架构签名失败
         },
         "hashes": {
             "x86_64": "c633020961f2fabe7a37f5998f41644ec425010d98ef75ae42bce0e3cbd7488691b93740f1123c12a4a28cd65022f596bc5fb3c0bd3dd1acdf040cb29d53489f",
@@ -37,6 +42,8 @@ class TestApiParseSuccess:
         assert parsed.urls["x86_64"].endswith(".AppImage")
         assert set(parsed.hashes.keys()) == {"x86_64", "aarch64"}
         assert parsed.hashes["x86_64"] == API_RESPONSE["data"]["hashes"]["x86_64"]
+        # download_urls 中 null 值架构被过滤
+        assert parsed.download_urls == {"x86_64": API_RESPONSE["data"]["download_urls"]["x86_64"]}
 
     def test_urls_values_preserved(self) -> None:
         parser = ApiParser()
@@ -100,6 +107,7 @@ class TestApiParseUrls:
             "data": {
                 "version": "1.0",
                 "urls": {"x86_64": 12345, "aarch64": "https://example.com/a"},
+                "download_urls": {},
             },
         }
         parsed = parser.parse(json.dumps(data))
@@ -111,7 +119,10 @@ class TestApiParseHashes:
     def test_missing_hashes_field_returns_empty(self) -> None:
         """data 中无 hashes 字段时 hashes 为空字典（调用方回退下载），不算解析失败"""
         parser = ApiParser()
-        data = {"code": 0, "data": {"version": "1.0", "urls": {"x86_64": "https://x"}}}
+        data = {
+            "code": 0,
+            "data": {"version": "1.0", "urls": {"x86_64": "https://x"}, "download_urls": {}},
+        }
         parsed = parser.parse(json.dumps(data))
         assert parsed is not None
         assert parsed.hashes == {}
@@ -121,7 +132,12 @@ class TestApiParseHashes:
         parser = ApiParser()
         data = {
             "code": 0,
-            "data": {"version": "1.0", "urls": {"x86_64": "https://x"}, "hashes": {}},
+            "data": {
+                "version": "1.0",
+                "urls": {"x86_64": "https://x"},
+                "download_urls": {},
+                "hashes": {},
+            },
         }
         parsed = parser.parse(json.dumps(data))
         assert parsed is not None
@@ -135,6 +151,7 @@ class TestApiParseHashes:
             "data": {
                 "version": "1.0",
                 "urls": {"x86_64": "https://x", "aarch64": "https://a"},
+                "download_urls": {},
                 "hashes": {"x86_64": None, "aarch64": "valid_hash"},
             },
         }
@@ -150,9 +167,63 @@ class TestApiParseHashes:
             "data": {
                 "version": "1.0",
                 "urls": {"x86_64": "https://x", "aarch64": "https://a"},
+                "download_urls": {},
                 "hashes": {"x86_64": "", "aarch64": "valid_hash"},
             },
         }
         parsed = parser.parse(json.dumps(data))
         assert parsed is not None
         assert parsed.hashes == {"aarch64": "valid_hash"}
+
+
+class TestApiParseDownloadUrls:
+    def test_missing_download_urls_field_fails(self) -> None:
+        """缺少 download_urls 字段属响应契约违规 → 解析失败返回 None"""
+        parser = ApiParser()
+        data = {"code": 0, "data": {"version": "1.0", "urls": {"x86_64": "https://x"}}}
+        assert parser.parse(json.dumps(data)) is None
+
+    def test_non_string_url_value_skipped(self) -> None:
+        """download_urls 值非字符串（如 null / 数字）时跳过该架构"""
+        parser = ApiParser()
+        data = {
+            "code": 0,
+            "data": {
+                "version": "1.0",
+                "urls": {"x86_64": "https://x", "aarch64": "https://a"},
+                "download_urls": {"x86_64": 12345, "aarch64": "https://signed/a"},
+            },
+        }
+        parsed = parser.parse(json.dumps(data))
+        assert parsed is not None
+        assert parsed.download_urls == {"aarch64": "https://signed/a"}
+
+    def test_empty_string_url_value_skipped(self) -> None:
+        """空字符串 download_urls 值被跳过"""
+        parser = ApiParser()
+        data = {
+            "code": 0,
+            "data": {
+                "version": "1.0",
+                "urls": {"x86_64": "https://x", "aarch64": "https://a"},
+                "download_urls": {"x86_64": "", "aarch64": "https://signed/a"},
+            },
+        }
+        parsed = parser.parse(json.dumps(data))
+        assert parsed is not None
+        assert parsed.download_urls == {"aarch64": "https://signed/a"}
+
+    def test_empty_download_urls_dict(self) -> None:
+        """download_urls 为空字典时正常返回（全部架构回退 urls 下载）"""
+        parser = ApiParser()
+        data = {
+            "code": 0,
+            "data": {
+                "version": "1.0",
+                "urls": {"x86_64": "https://x"},
+                "download_urls": {},
+            },
+        }
+        parsed = parser.parse(json.dumps(data))
+        assert parsed is not None
+        assert parsed.download_urls == {}

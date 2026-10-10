@@ -6,7 +6,7 @@ import logging
 import sys
 from pathlib import Path
 
-from aur_auto_update.core.package_updater import PackageUpdater
+from aur_auto_update.services.package_updater import PackageUpdater
 
 
 def _configure_logging() -> None:
@@ -28,18 +28,13 @@ async def _dispatch(args: argparse.Namespace) -> int:
             updater.list_available_packages()
             return 0
 
-        # 更新指定的包
+        # 更新指定的包；不带参数时默认更新所有包
         if args.package:
-            success_count, total_count = await updater.update_packages(args.package)
-            if total_count > 0 and success_count == 0:
-                return 1
-            return 0
-
-        # 更新所有包
-        success_count, total_count = await updater.update_all_packages()
-        if total_count > 0 and success_count == 0:
-            return 1
-        return 0
+            summary = await updater.update_packages(args.package)
+        else:
+            summary = await updater.update_all_packages()
+        # 存在无效包名，或有进入流程的包未成功 → 非零退出码，供 CI/cron 探测
+        return 1 if summary.failed else 0
     finally:
         await updater.close()
 
@@ -48,7 +43,7 @@ def main() -> int:
     """CLI 入口，处理命令行参数并执行相应操作"""
     _configure_logging()
 
-    parser = argparse.ArgumentParser(description="AUR包更新工具")
+    parser = argparse.ArgumentParser(description="AUR 包自动更新工具")
     parser.add_argument(
         "--config",
         "-c",
@@ -60,7 +55,6 @@ def main() -> int:
         "--package", "-p", nargs="+", metavar="NAME", help="更新指定的包（可指定多个）"
     )
     parser.add_argument("--list", "-l", action="store_true", help="列出所有可用的包")
-    parser.add_argument("--all", "-a", action="store_true", help="更新所有包")
 
     args = parser.parse_args()
 

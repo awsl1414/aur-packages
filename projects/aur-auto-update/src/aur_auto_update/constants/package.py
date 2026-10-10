@@ -9,7 +9,6 @@ class ArchEnum(Enum):
     X86_64 = "x86_64"
     AARCH64 = "aarch64"
     LOONG64 = "loong64"
-    MIPS64EL = "mips64el"
     ANY = "any"
 
 

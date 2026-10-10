@@ -53,48 +53,34 @@ class Fetcher:
 
     def __init__(
         self,
-        timeout: int = 10,
-        headers: dict[str, str] | None = None,
+        timeout: int = 60,
         max_retries: int = 3,
-        retry_wait: float = 2.0,
+        retry_wait: float = 1.0,
         verify_ssl: bool = True,
     ) -> None:
-        merged_headers: dict[str, str] = DEFAULT_HEADERS.copy()
-        if headers:
-            merged_headers.update(headers)
-
         if not verify_ssl:
             logger.warning("已禁用 SSL 证书校验（verify=False），仅建议在受控环境使用")
         self.client = AsyncClient(
-            timeout=timeout, headers=merged_headers, verify=verify_ssl
+            timeout=timeout, headers=DEFAULT_HEADERS.copy(), verify=verify_ssl
         )
         # 瞬时错误的最大重试次数（不含首次尝试）；0 表示不重试
         self.max_retries = max_retries
         # 指数退避基数（秒）：第 n 次重试前等待 retry_wait * 2^(n-1)
         self.retry_wait = retry_wait
 
-    async def fetch_text(
-        self, url: str, headers: dict[str, str] | None = None
-    ) -> str | None:
+    async def fetch_text(self, url: str) -> str | None:
         """获取文本数据。
 
         - HTTP 200 → 返回 body 文本
         - 4xx 永久错误 → 记日志，返回 None（不重试）
         - 429/5xx 或网络异常 → 指数退避重试至多 ``max_retries`` 次；仍失败返回 None
-
-        Args:
-            url: 请求地址
-            headers: 追加请求头（覆盖同名默认头）
-
-        Returns:
-            body 文本，或失败时 None
         """
         total_attempts = self.max_retries + 1
         last_reason: str | None = None
 
         for attempt in range(1, total_attempts + 1):
             try:
-                response = await self.client.get(url, headers=headers)
+                response = await self.client.get(url)
             except HTTPError as e:
                 # 网络层异常（连接超时/TLS 重置/对端中断）视为瞬时，可重试
                 last_reason = f"网络错误: {e}"
@@ -119,7 +105,7 @@ class Fetcher:
                     )
                 else:
                     # 永久错误（404/422 等），重试无意义
-                    logger.error("  错误: %s", last_reason)
+                    logger.error("  %s", last_reason)
                     return None
 
             # 还有重试机会则指数退避
@@ -127,7 +113,7 @@ class Fetcher:
                 backoff = self.retry_wait * (2 ** (attempt - 1))
                 await asyncio.sleep(backoff)
 
-        logger.error("  错误: 请求 %d 次均失败: %s", total_attempts, last_reason)
+        logger.error("  请求 %d 次均失败: %s", total_attempts, last_reason)
         return None
 
     @staticmethod
@@ -140,7 +126,7 @@ class Fetcher:
             return None
         try:
             data: Any = json.loads(body)
-        except (json.JSONDecodeError, ValueError):
+        except json.JSONDecodeError:
             return None
         if isinstance(data, dict):
             message = data.get("message")

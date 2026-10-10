@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from aur_auto_update.constants.constants import HashAlgorithmEnum
-from aur_auto_update.updater.pkgbuild_editor import PKGBUILDEditor
+from aur_auto_update.constants import HashAlgorithmEnum
+from aur_auto_update.pkgbuild_editor import PKGBUILDEditor
 
 PKGBUILD_TEMPLATE: str = """\
 # Maintainer: test <test@test.com>
@@ -33,15 +33,6 @@ source_aarch64=('https://example.com/test-1.0.0-aarch64.tar.gz')
 b2sums=('c1c1c1' 'd2d2d2')
 b2sums_x86_64=('eee333')
 b2sums_aarch64=('fff444')
-"""
-
-PKGBUILD_WITH_EPOCH: str = """\
-# Maintainer: test <test@test.com>
-pkgname=test-pkg
-epoch=5
-pkgver=1.0.0
-pkgrel=1
-sha512sums_x86_64=('aaa111')
 """
 
 PKGBUILD_ALIAS: str = """\
@@ -154,39 +145,6 @@ class TestPKGBUILDEditorUpdate:
         assert editor2.get_pkgver() == "3.0.0"
 
 
-class TestPKGBUILDEditorEpoch:
-    """update_epoch 和 get_epoch 测试"""
-
-    def test_update_epoch_existing(self, tmp_path: Path) -> None:
-        """替换已有的 epoch 行"""
-        p = tmp_path / "PKGBUILD"
-        p.write_text(PKGBUILD_WITH_EPOCH, encoding="utf-8")
-        editor = PKGBUILDEditor(p)
-        editor.update_epoch(10)
-        assert editor.get_epoch() == 10
-
-    def test_update_epoch_insert(self, pkgbuild) -> None:
-        """无 epoch 行时在 pkgver 前插入"""
-        editor = PKGBUILDEditor(pkgbuild)
-        assert editor.get_epoch() is None
-        editor.update_epoch(5)
-        assert editor.get_epoch() == 5
-
-    def test_update_epoch_none(self, pkgbuild) -> None:
-        """new_epoch=None 时不做任何修改"""
-        editor = PKGBUILDEditor(pkgbuild)
-        original = editor.content
-        editor.update_epoch(None)
-        assert editor.content == original
-
-    def test_get_epoch_non_integer(self, tmp_path: Path) -> None:
-        """epoch 值非整数时返回 None"""
-        p = tmp_path / "PKGBUILD"
-        p.write_text("pkgname=test\nepoch=abc\npkgver=1.0\n", encoding="utf-8")
-        editor = PKGBUILDEditor(p)
-        assert editor.get_epoch() is None
-
-
 class TestPKGBUILDEditorEdgeCases:
     """边界条件测试"""
 
@@ -212,32 +170,6 @@ class TestPKGBUILDEditorEdgeCases:
         editor.update_source("https://example.com/test-v2.tar.gz", arch="x86_64")
         assert "test-${pkgver}-${pkgrel}.tar.gz::" in editor.content
         assert "test-v2.tar.gz" in editor.content
-
-
-class TestPKGBUILDEditorContextManager:
-    """上下文管理器测试"""
-
-    def test_auto_save_on_normal_exit(self, pkgbuild) -> None:
-        """with 块正常退出时自动保存"""
-        with PKGBUILDEditor(pkgbuild) as editor:
-            editor.update_pkgver("9.0.0")
-
-        # 重新加载验证已保存
-        editor2 = PKGBUILDEditor(pkgbuild)
-        assert editor2.get_pkgver() == "9.0.0"
-
-    def test_no_save_on_exception(self, pkgbuild) -> None:
-        """with 块抛异常时不保存"""
-        try:
-            with PKGBUILDEditor(pkgbuild) as editor:
-                editor.update_pkgver("9.0.0")
-                raise RuntimeError("test error")
-        except RuntimeError:
-            pass
-
-        # 重新加载验证未保存
-        editor2 = PKGBUILDEditor(pkgbuild)
-        assert editor2.get_pkgver() == "1.0.0"
 
 
 class TestUpdateSourceArchEdgeCases:
@@ -390,3 +322,31 @@ class TestUpdateSourceEdgeCases:
         editor.update_source("https://new/file.tar.gz")
         assert "launcher.sh" in editor.content
         assert "app::https://new/file.tar.gz" in editor.content
+
+
+class TestNewlineInjectionGuard:
+    """写入值换行拒绝：版本/URL 来自上游响应，换行即 PKGBUILD 行注入"""
+
+    def test_update_pkgver_rejects_newline(self, pkgbuild) -> None:
+        """pkgver 含换行 → ValueError，且内容不被部分修改"""
+        editor = PKGBUILDEditor(pkgbuild)
+        original = editor.content
+        with pytest.raises(ValueError, match="换行"):
+            editor.update_pkgver("1.0.0\ninstall=evil")
+        assert editor.content == original
+
+    def test_update_source_rejects_newline(self, pkgbuild) -> None:
+        """source URL 含换行 → ValueError"""
+        editor = PKGBUILDEditor(pkgbuild)
+        original = editor.content
+        with pytest.raises(ValueError, match="换行"):
+            editor.update_source("https://example.com/a.tar.gz\ncurl evil", arch="x86_64")
+        assert editor.content == original
+
+    def test_update_checksum_rejects_newline(self, pkgbuild) -> None:
+        """校验和含换行 → ValueError"""
+        editor = PKGBUILDEditor(pkgbuild)
+        with pytest.raises(ValueError, match="换行"):
+            editor.update_checksum(
+                "abc\nb2sums=()", HashAlgorithmEnum.SHA512.value, arch="x86_64"
+            )

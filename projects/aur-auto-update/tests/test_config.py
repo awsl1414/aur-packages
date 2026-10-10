@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from aur_auto_update.constants.constants import ArchEnum
-from aur_auto_update.loaders.config_loader import ConfigLoader, PackageConfig
+from aur_auto_update.config import ConfigLoader, PackageConfig
+from aur_auto_update.constants import ArchEnum
 
 
 class TestPackageConfig:
@@ -182,3 +182,31 @@ class TestPackageConfigUnknownArch:
         )
         archs = config.get_supported_archs()
         assert archs == [ArchEnum.X86_64]
+
+
+class TestHashAlgorithmValidation:
+    """hash_algorithm 配置加载期校验（配错算法会让 sums 字段静默 no-op）"""
+
+    def test_global_invalid_algorithm_rejected(self, tmp_path: Path) -> None:
+        """全局 hash_algorithm 非法时加载即报错"""
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text(
+            """
+settings:
+  hash_algorithm: md5
+  api:
+    base_url: https://example.com/api/v1/packages
+""",
+            encoding="utf-8",
+        )
+        with pytest.raises(ValueError, match="未知 hash 算法"):
+            ConfigLoader.load_from_yaml(config_file)
+
+    def test_package_invalid_algorithm_rejected(self) -> None:
+        """包级 hash_algorithm 非法时构造即报错"""
+        with pytest.raises(ValueError, match="未知 hash 算法"):
+            PackageConfig(
+                name="test",
+                pkgbuild="packages/test/PKGBUILD",
+                hash_algorithm="md5",
+            )

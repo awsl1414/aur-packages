@@ -5,26 +5,46 @@
 架构设计：
 1. 并行更新所有维护的 AUR 包（使用 asyncio.gather）
 2. 所有上游解析统一由 aur-metadata 的 API 完成，客户端只消费
-   {version, urls, hashes} 结构
-3. metadata 未提供 hashes（或部分架构缺失）时，回退到按 urls 下载 + 本地计算
+   {version, urls, download_urls, hashes} 结构
+3. metadata 未提供 hashes（或部分架构缺失）时，回退到按 download_urls
+  （QQ 等鉴权源的实时签名链接；缺失时退回 urls）下载 + 本地计算
 """
 
 import asyncio
 import logging
+from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
 
-from aur_auto_update.constants.constants import ArchEnum, HashAlgorithmEnum
-from aur_auto_update.fetcher.fetcher import Fetcher
-from aur_auto_update.loaders.config_loader import ConfigLoader, PackageConfig
+from aur_auto_update.config import ConfigLoader, PackageConfig
+from aur_auto_update.constants import ArchEnum
+from aur_auto_update.fetcher import Fetcher
 from aur_auto_update.parsers.api_parser import ApiParser, ParsedPackage
-from aur_auto_update.updater.pkgbuild_editor import PKGBUILDEditor
+from aur_auto_update.pkgbuild_editor import PKGBUILDEditor
 from aur_auto_update.utils.downloader import Downloader
 from aur_auto_update.utils.hash import calculate_file_hash
 from aur_auto_update.utils.url_utils import generate_download_filename
 from aur_auto_update.utils.version_utils import compare_versions
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class UpdateSummary:
+    """一轮更新的结果汇总，供 CLI 决定退出码。
+
+    ``total`` 仅统计实际进入更新流程的包；被配置禁用或缺 PKGBUILD 属预期跳过，
+    不计入。``invalid`` 为请求了但不在配置中的包名，属调用错误。
+    """
+
+    success: int
+    total: int
+    invalid: list[str] = field(default_factory=list)
+
+    @property
+    def failed(self) -> bool:
+        """是否应视为失败：存在无效包名，或有进入流程的包未更新成功"""
+        return bool(self.invalid) or self.success < self.total
 
 
 class PackageUpdater:
@@ -38,6 +58,17 @@ class PackageUpdater:
         # 从配置中获取下载设置
         download_settings = self.config.settings.download
 
+        # 初始化下载器（仅在 metadata 未提供 hashes 时回退使用）。构造即检测
+        # aria2c，置于 Fetcher 之前：缺失时在此抛错，不会留下已创建的 httpx 客户端
+        self.downloader = Downloader(
+            max_retries=download_settings.max_retries,
+            retry_wait=download_settings.retry_wait,
+            timeout=download_settings.timeout,
+            connections=download_settings.connections,
+            show_progress=download_settings.show_progress,
+            verify_ssl=not self.config.settings.ignore_ssl_errors,
+        )
+
         # 初始化 Fetcher（复用下载设置的超时与重试参数；metadata API 的
         # 429/5xx 瞬时错误由 Fetcher 指数退避重试）
         self.fetcher = Fetcher(
@@ -49,16 +80,6 @@ class PackageUpdater:
 
         # 唯一解析器：消费 metadata API 的统一响应
         self.parser = ApiParser()
-
-        # 初始化下载器（仅在 metadata 未提供 hashes 时回退使用）
-        self.downloader = Downloader(
-            max_retries=download_settings.max_retries,
-            retry_wait=download_settings.retry_wait,
-            timeout=download_settings.timeout,
-            connections=download_settings.connections,
-            show_progress=download_settings.show_progress,
-            check_certificate=not self.config.settings.ignore_ssl_errors,
-        )
 
         # 配置文件所在目录为 PKGBUILD 与回退下载目录的解析基准
         # （config.yaml 位于仓库根，故即仓库根）
@@ -139,29 +160,32 @@ class PackageUpdater:
         """获取各架构校验和：优先用 metadata API 提供的 hashes，否则下载计算。
 
         metadata 通过 ``data.hashes`` 提供校验和时直接采用，跳过本地下载。若 hashes
-        为空或缺部分架构，按 ``parsed.urls`` 下载缺失架构并在本地计算 hash。
+        为空或缺部分架构，按 ``parsed.download_urls``（QQ 等鉴权源的实时签名链接，
+        缺失时退回 ``parsed.urls``）下载缺失架构并在本地计算 hash。
 
-        返回 ``(checksums, success)``。``success=False`` 仅在下载路径下有架构失败
-        时出现（``verify_only=False``）；``verify_only=True`` 时即便全部失败也返回
-        ``success=True``，但 ``checksums`` 为空，调用方需自行检查空字典。
+        返回 ``(checksums, success)``。写路径（``verify_only=False``）在任一架构
+        下载失败、或合并后仍有架构未获得校验和时返回 ``False``（放弃更新，避免
+        新 pkgver 配旧校验和）；``verify_only=True`` 时即便全部失败也返回
+        ``success=True``，但 ``checksums`` 可能为空，调用方需自行检查空字典。
         """
         api_hashes = self._select_api_hashes(parsed, supported_archs)
         if api_hashes and len(api_hashes) == len(supported_archs):
             logger.info("  使用 API 提供的校验和，跳过下载")
             return api_hashes, True
 
-        # 部分/全部缺失 → 回退下载缺失架构
+        # 部分/全部缺失 → 回退下载缺失架构（优先实时可下载链接：QQ 等鉴权源
+        # 的原始 urls 直接下载会被上游拒绝）
         missing_archs = [
             arch for arch in supported_archs if arch.value not in api_hashes
         ]
-        arch_urls = {
-            arch.value: parsed.urls[arch.value]
-            for arch in missing_archs
-            if arch.value in parsed.urls
-        }
+        arch_urls: dict[str, str] = {}
+        for arch in missing_archs:
+            url = parsed.download_urls.get(arch.value) or parsed.urls.get(arch.value)
+            if url:
+                arch_urls[arch.value] = url
         if not arch_urls:
             logger.error(
-                "  错误: 无法获取缺失架构的下载URL（API hashes 与 urls 均不足）"
+                "  无法获取缺失架构的下载URL（API hashes 与 urls 均不足）"
             )
             return api_hashes, False
 
@@ -178,6 +202,17 @@ class PackageUpdater:
 
         # 合并 API 提供的 + 本地计算的
         merged = {**api_hashes, **downloaded}
+        # 完整性校验：缺失架构会把旧文件的校验和随新 pkgver 一起留在 PKGBUILD，
+        # makepkg 校验必炸，故写路径视为整体失败
+        missing = [arch.value for arch in supported_archs if arch.value not in merged]
+        if missing:
+            if verify_only:
+                logger.warning(
+                    "  以下架构未获得校验和（仅验证模式，不中断）: %s", missing
+                )
+                return merged, True
+            logger.error("  以下架构未获得校验和，放弃更新: %s", missing)
+            return merged, False
         return merged, True
 
     async def _download_and_verify(
@@ -185,7 +220,7 @@ class PackageUpdater:
         package_name: str,
         new_version: str,
         arch_urls: dict[str, str],
-        hash_algorithm: str = HashAlgorithmEnum.B2.value,
+        hash_algorithm: str,
         verify_only: bool = False,
     ) -> tuple[dict[str, str], bool]:
         """
@@ -194,9 +229,8 @@ class PackageUpdater:
         使用 Downloader 的并发下载功能，并行下载单个包的所有架构
         """
         # 回退下载目录（metadata 未提供 hashes 时本地下载计算），
-        # 相对配置文件所在目录解析
+        # 相对配置文件所在目录解析；目录由 Downloader 按目标路径创建
         download_dir = self.pkgbuild_root / "downloads"
-        download_dir.mkdir(exist_ok=True)
 
         downloads = {
             arch: (
@@ -210,9 +244,7 @@ class PackageUpdater:
         }
 
         # 使用 Downloader 并行下载所有架构
-        download_results = await self.downloader.download_all(
-            downloads, package_name=package_name
-        )
+        download_results = await self.downloader.download_all(downloads)
 
         checksums = {}
         failed_archs = []
@@ -220,16 +252,18 @@ class PackageUpdater:
         for arch, result in download_results.items():
             if not result.success:
                 if not verify_only:
-                    logger.error("  错误: %s 架构下载失败: %s", arch, result.error)
+                    logger.error("  %s 架构下载失败: %s", arch, result.error)
                     failed_archs.append(arch)
                 else:
-                    logger.warning("  警告: %s 架构下载失败: %s", arch, result.error)
+                    logger.warning("  %s 架构下载失败: %s", arch, result.error)
                 continue
 
             if result.file_path is None:
                 if not verify_only:
-                    logger.error("  错误: %s 架构文件路径为空", arch)
+                    logger.error("  %s 架构文件路径为空", arch)
                     failed_archs.append(arch)
+                else:
+                    logger.warning("  %s 架构文件路径为空", arch)
                 continue
 
             checksum = await self._calculate_checksum(result.file_path, hash_algorithm)
@@ -239,10 +273,10 @@ class PackageUpdater:
         if not verify_only and (failed_archs or not checksums):
             if failed_archs:
                 logger.error(
-                    "  错误: %d 个架构下载失败: %s", len(failed_archs), failed_archs
+                    "  %d 个架构下载失败: %s", len(failed_archs), failed_archs
                 )
             if not checksums:
-                logger.error("  错误: 没有成功下载任何架构的文件")
+                logger.error("  没有成功下载任何架构的文件")
             return {}, False
 
         return checksums, True
@@ -264,14 +298,14 @@ class PackageUpdater:
             logger.info("  1. 从 %s 获取版本信息...", fetch_url)
             response_data = await self.fetcher.fetch_text(fetch_url)
             if not response_data:
-                logger.error("  错误: 无法获取版本信息")
+                logger.error("  无法获取版本信息")
                 return False
 
             # 2. 解析统一响应
             logger.info("  2. 解析版本信息...")
             parsed = self.parser.parse(response_data)
             if parsed is None:
-                logger.error("  错误: 无法解析版本信息")
+                logger.error("  无法解析版本信息")
                 return False
 
             new_version = parsed.version
@@ -282,7 +316,7 @@ class PackageUpdater:
             logger.info("  PKGBUILD路径: %s", pkgbuild_path)
 
             if not pkgbuild_path.exists():
-                logger.error("  错误: PKGBUILD文件不存在: %s", pkgbuild_path)
+                logger.error("  PKGBUILD文件不存在: %s", pkgbuild_path)
                 return False
 
             editor = PKGBUILDEditor(pkgbuild_path)
@@ -323,6 +357,11 @@ class PackageUpdater:
             logger.exception("更新包 %s 时发生异常", package_name)
             return False
 
+    @staticmethod
+    def _field_arch(arch_value: str) -> str | None:
+        """PKGBUILD 字段的架构后缀：``any`` 用非架构特定字段（``source=()``），返回 None。"""
+        return None if arch_value == ArchEnum.ANY.value else arch_value
+
     async def _handle_version_not_newer(
         self,
         package_name: str,
@@ -332,15 +371,15 @@ class PackageUpdater:
         editor: PKGBUILDEditor,
         parsed: ParsedPackage,
         supported_archs: list[ArchEnum],
-        hash_algorithm: str = HashAlgorithmEnum.B2.value,
+        hash_algorithm: str,
     ) -> bool:
         """
         处理版本不更新的情况（当前版本 >= 新版本）
 
         复用 update_package 已创建的 editor，避免重复加载 PKGBUILD。
         两种场景：
-        1. 当前版本 > 新版本（version_comparison < 0）：版本降级，下载并验证
-           远端哈希，不写 PKGBUILD。返回 True 仅在验证成功时。
+        1. 当前版本 > 新版本（version_comparison < 0）：版本降级，获取远端哈希
+           （API 提供或下载验证），不写 PKGBUILD。返回 True 仅在验证成功时。
         2. 当前版本 = 新版本（version_comparison == 0）：比较本地/远端哈希，
            若发生变化则自增 pkgrel 并写入新校验和，PKGBUILD 仍会被更新。
 
@@ -378,15 +417,13 @@ class PackageUpdater:
         # 复用 update_package 传入的 editor，直接读取当前 PKGBUILD 的哈希
         current_checksums = {}
         for arch in supported_archs:
-            # ANY 架构使用非架构特定字段 sums=()，其余使用 sums_<arch>=()
-            field_arch = None if arch == ArchEnum.ANY else arch.value
             current_checksum = editor.get_checksum(
-                arch=field_arch, hash_algorithm=hash_algorithm
+                arch=self._field_arch(arch.value), hash_algorithm=hash_algorithm
             )
             if current_checksum:
                 current_checksums[arch.value] = current_checksum
             else:
-                logger.warning("  警告: 无法获取 %s 架构的当前哈希值", arch.value)
+                logger.warning("  无法获取 %s 架构的当前哈希值", arch.value)
 
         # 获取远端 hashes：API 优先提供，否则下载计算
         new_checksums, success = await self._get_checksums(
@@ -423,8 +460,9 @@ class PackageUpdater:
 
         # 更新校验和（不更新 source URL，因为版本未变）
         for arch_value, checksum in new_checksums.items():
-            field_arch = None if arch_value == ArchEnum.ANY.value else arch_value
-            editor.update_checksum(checksum, hash_algorithm, arch=field_arch)
+            editor.update_checksum(
+                checksum, hash_algorithm, arch=self._field_arch(arch_value)
+            )
 
         editor.save()
         logger.info("  包 %s 的 pkgrel 已更新（版本未变但哈希已变）", package_name)
@@ -438,13 +476,14 @@ class PackageUpdater:
         parsed: ParsedPackage,
         supported_archs: list[ArchEnum],
         package_config: PackageConfig,
-        hash_algorithm: str = HashAlgorithmEnum.B2.value,
+        hash_algorithm: str,
     ) -> bool:
         """
         处理版本更新流程（new_version > current_version）。
 
         步骤：
-        1. 获取 checksums：API 优先提供，否则按 urls 下载计算
+        1. 获取 checksums：API 优先提供，否则按 download_urls（缺失退回 urls）
+           下载计算
         2. 若 update_source_url=True，用 parsed.urls 写入 PKGBUILD source 字段
         3. 更新 PKGBUILD：pkgver、pkgrel=1、source、checksum
         4. save 写入磁盘
@@ -466,11 +505,12 @@ class PackageUpdater:
         # 更新 PKGBUILD
         logger.info("  4. 更新 PKGBUILD 版本和校验和...")
         editor.update_pkgver(new_version)
-        editor.update_pkgrel(1)  # 重置 pkgrel 为 1
+        # AUR 惯例：新 pkgver 重置 pkgrel 为 1
+        editor.update_pkgrel(1)
 
         # 更新 source 和校验和；ANY 架构用非架构特定字段，其余用架构特定字段
         for arch_value, checksum in checksums.items():
-            field_arch = None if arch_value == ArchEnum.ANY.value else arch_value
+            field_arch = self._field_arch(arch_value)
             if package_config.update_source_url:
                 source_url = parsed.urls.get(arch_value)
                 if source_url:
@@ -493,14 +533,11 @@ class PackageUpdater:
             partial(calculate_file_hash, file_path, hash_algorithm),
         )
 
-    async def update_all_packages(self) -> tuple[int, int]:
+    async def update_all_packages(self) -> UpdateSummary:
         """
         并行更新所有配置的包
 
         所有包同时进入更新流程，每个包的多个架构并行下载
-
-        Returns:
-            (成功数量, 总数量)
         """
         # 过滤出启用的包
         enabled_packages = {
@@ -539,9 +576,10 @@ class PackageUpdater:
 
         if not valid_packages:
             logger.info("\n没有可更新的包")
-            return 0, 0
+            return UpdateSummary(0, 0)
 
-        return await self._run_updates(valid_packages)
+        success_count, total_count = await self._run_updates(valid_packages)
+        return UpdateSummary(success_count, total_count)
 
     def _is_package_updatable(
         self, package_name: str, package_config: PackageConfig
@@ -567,28 +605,31 @@ class PackageUpdater:
     async def _run_updates(
         self, valid_packages: dict[str, PackageConfig]
     ) -> tuple[int, int]:
-        """并行更新 valid_packages 中的包，返回 (成功数, 总数)"""
-        tasks = [
-            self.update_package(name, config) for name, config in valid_packages.items()
-        ]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        success_count = sum(1 for r in results if r is True)
-        logger.info("")
-        logger.info("更新完成: %d/%d 个包更新成功", success_count, len(valid_packages))
-        return success_count, len(valid_packages)
+        """并行更新 valid_packages 中的包，返回 (成功数, 总数)。
 
-    async def update_packages(self, package_names: list[str]) -> tuple[int, int]:
+        ``update_package`` 内部已捕获 ``Exception`` 并转 ``False``，能逃逸到
+        TaskGroup 的只剩取消等 ``BaseException``——由其保证取消语义正确传播并
+        连带取消兄弟任务，而不是像 ``gather(return_exceptions=True)`` 那样吞掉。
+        """
+        async with asyncio.TaskGroup() as tg:
+            tasks: list[asyncio.Task[bool]] = [
+                tg.create_task(self.update_package(name, config))
+                for name, config in valid_packages.items()
+            ]
+        success_count = sum(1 for task in tasks if task.result() is True)
+        logger.info("")
+        logger.info("更新完成: %d/%d 个包更新成功", success_count, len(tasks))
+        return success_count, len(tasks)
+
+    async def update_packages(self, package_names: list[str]) -> UpdateSummary:
         """
         更新指定的包列表
 
         Args:
             package_names: 包名列表
-
-        Returns:
-            (成功数量, 总数量)
         """
         if not package_names:
-            return 0, 0
+            return UpdateSummary(0, 0)
 
         # 验证和过滤包
         valid_packages: dict[str, PackageConfig] = {}
@@ -612,18 +653,19 @@ class PackageUpdater:
 
         # 输出跳过的包
         if invalid_packages:
-            logger.error("错误: 以下包不在配置中: %s", ", ".join(invalid_packages))
+            logger.error("以下包不在配置中: %s", ", ".join(invalid_packages))
 
         for reason in skip_reasons:
             logger.info("  跳过: %s", reason)
 
         if not valid_packages:
-            return 0, 0
+            return UpdateSummary(0, 0, invalid_packages)
 
         # 并行更新包
         logger.info("开始更新 %d 个包...", len(valid_packages))
 
-        return await self._run_updates(valid_packages)
+        success_count, total_count = await self._run_updates(valid_packages)
+        return UpdateSummary(success_count, total_count, invalid_packages)
 
     def list_available_packages(self) -> None:
         """列出所有可用的包"""

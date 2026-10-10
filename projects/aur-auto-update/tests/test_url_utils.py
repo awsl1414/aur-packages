@@ -72,3 +72,37 @@ class TestGenerateDownloadFilename:
             "pkg", "1.0", "x86_64", "https://example.com/file", default_extension=".bin"
         )
         assert result == "pkg_1.0_x86_64.bin"
+
+
+class TestFilenameSanitization:
+    """组件白名单清洗：防版本/包名串注入路径（version 来自上游响应）"""
+
+    def test_path_traversal_sanitized(self) -> None:
+        """version 携带路径分隔符被替换，文件名不逃出下载目录"""
+        result = generate_download_filename(
+            "pkg", "../../etc/passwd", "x86_64", "https://example.com/f.deb"
+        )
+        assert "/" not in result and "\\" not in result
+        assert result.endswith(".deb")
+
+    def test_control_chars_sanitized(self) -> None:
+        """version 携带换行等控制字符被替换"""
+        result = generate_download_filename(
+            "pkg", "1.0\n  dir=/tmp", "x86_64", "https://example.com/f"
+        )
+        assert "\n" not in result and "\r" not in result
+
+    def test_valid_components_unchanged(self) -> None:
+        """现有包的合法命名形态零变形"""
+        assert (
+            generate_download_filename(
+                "bt-dualboot-ng", "1.2.3", "any", "https://example.com/f.zip"
+            )
+            == "bt-dualboot-ng_1.2.3_any.zip"
+        )
+        assert (
+            generate_download_filename(
+                "qq", "3.2.31_260710", "x86_64", "https://example.com/f.deb"
+            )
+            == "qq_3.2.31_260710_x86_64.deb"
+        )

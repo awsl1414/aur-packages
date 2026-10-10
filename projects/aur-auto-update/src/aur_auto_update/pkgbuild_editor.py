@@ -2,9 +2,8 @@
 
 import re
 from pathlib import Path
-from typing import Self
 
-from aur_auto_update.constants.constants import HashAlgorithmEnum
+from aur_auto_update.constants import HashAlgorithmEnum
 
 # shell 变量引用：匹配 ${VAR} 或 $VAR / $_VAR（无花括号形式）
 _SHELL_VAR_RE = re.compile(r"\$\{|\$[A-Za-z_]")
@@ -12,24 +11,17 @@ _SHELL_VAR_RE = re.compile(r"\$\{|\$[A-Za-z_]")
 _REMOTE_PROTO_RE = re.compile(r"^[a-z][a-z0-9+.\-]*://", re.IGNORECASE)
 # source 数组内的引号条目（双引号或单引号）
 _SOURCE_ENTRY_RE = re.compile(r'"([^"]*)"|\'([^\']*)\'')
+# 换行/回车：写入值携带即可向 PKGBUILD 注入任意新行
+_NEWLINE_RE = re.compile(r"[\r\n]")
 
 
 class PKGBUILDEditor:
-    """PKGBUILD 文件编辑器，支持上下文管理器自动保存"""
+    """PKGBUILD 文件编辑器：加载内容到内存，编辑后经 ``save()`` 显式写盘"""
 
     def __init__(self, pkgbuild_path: Path) -> None:
         self.pkgbuild_path = pkgbuild_path
         self.content = ""
         self._load_content()
-
-    def __enter__(self) -> Self:
-        return self
-
-    def __exit__(
-        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: object
-    ) -> None:
-        if exc_type is None:
-            self.save()
 
     def _load_content(self) -> None:
         """加载 PKGBUILD 文件内容"""
@@ -44,9 +36,12 @@ class PKGBUILDEditor:
     def _update_scalar_field(self, field: str, value: str) -> None:
         """替换 ^field=.*$ 整行为 field=value（MULTILINE）。字段不存在时无操作。
 
-        用 lambda 返回替换文本，避免 value 中的反斜杠被当作反向引用（与
-        _update_source_field 的安全姿态一致）。
+        - 用 lambda 返回替换文本，避免 value 中的反斜杠被当作反向引用（与
+          _update_source_field 的安全姿态一致）；
+        - 拒绝含换行的写入值（版本/校验和来自上游响应，换行即 PKGBUILD 行注入）。
         """
+        if _NEWLINE_RE.search(value):
+            raise ValueError(f"字段 {field} 的写入值含换行符，已拒绝: {value!r}")
         self.content = re.sub(
             rf"^{re.escape(field)}=.*$",
             lambda _m: f"{field}={value}",
@@ -79,21 +74,6 @@ class PKGBUILDEditor:
         """更新 pkgrel 字段"""
         self._update_scalar_field("pkgrel", str(new_pkgrel))
 
-    def update_epoch(self, new_epoch: int | None = None) -> None:
-        """更新或添加 epoch 字段"""
-        if new_epoch is None:
-            return
-        if self._get_scalar_field("epoch") is not None:
-            self._update_scalar_field("epoch", str(new_epoch))
-        else:
-            # pkgver 之前插入 epoch 行
-            self.content = re.sub(
-                r"^(pkgver=.*)$",
-                f"epoch={new_epoch}\n\\1",
-                self.content,
-                flags=re.MULTILINE,
-            )
-
     def update_source(self, new_url: str, *, arch: str | None = None) -> None:
         """更新 source URL，保留别名与本地源条目；URL 含 shell 变量时跳过。
 
@@ -119,7 +99,10 @@ class PKGBUILDEditor:
         - 仅替换第一个远程条目；其 URL 部分含 shell 变量引用时整段保留。
         - 别名中的 shell 变量（如 ${pkgver}，用于文件名缓存破除）始终保留。
         - re.sub 用函数返回替换文本，避免 new_url/alias 中的反斜杠被当作反向引用。
+        - 拒绝含换行的写入值（与 _update_scalar_field 同一注入面）。
         """
+        if _NEWLINE_RE.search(new_url):
+            raise ValueError(f"source 写入值含换行符，已拒绝: {new_url!r}")
         block_re = re.compile(
             rf"^({field_pattern})=\((.*?)\)\s*$",
             re.MULTILINE | re.DOTALL,
@@ -162,11 +145,7 @@ class PKGBUILDEditor:
         self.content = block_re.sub(lambda _m: new_block, self.content, count=1)
 
     def update_checksum(
-        self,
-        new_checksum: str,
-        hash_algorithm: str = HashAlgorithmEnum.B2.value,
-        *,
-        arch: str | None = None,
+        self, new_checksum: str, hash_algorithm: str, *, arch: str | None = None
     ) -> None:
         """更新校验和字段。
 
@@ -188,19 +167,13 @@ class PKGBUILDEditor:
         value = self._get_scalar_field_as_int("pkgrel", 1)
         return value if value is not None else 1
 
-    def get_epoch(self) -> int | None:
-        """获取当前 epoch 值"""
-        return self._get_scalar_field_as_int("epoch", None)
-
     def get_checksum(
-        self,
-        *,
-        arch: str | None = None,
-        hash_algorithm: str = HashAlgorithmEnum.B2.value,
+        self, *, arch: str | None = None, hash_algorithm: str = HashAlgorithmEnum.B2.value
     ) -> str:
         """获取当前校验和值。
 
         arch=None 读取非架构特定 sums=()（arch=('any') 包），否则读取 sums_<arch>=()。
+        默认 b2 与全局配置默认一致，便于单独排查时少传一个参数。
         """
         if arch:
             pattern = f"^{hash_algorithm}sums_{arch}=\\((?:'([^']*)'.*)?\\)$"

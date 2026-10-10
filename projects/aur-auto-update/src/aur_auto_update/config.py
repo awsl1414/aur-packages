@@ -4,11 +4,23 @@ import logging
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from aur_auto_update.constants.constants import ArchEnum, HashAlgorithmEnum
+from aur_auto_update.constants import ArchEnum, HashAlgorithmEnum
 
 logger = logging.getLogger(__name__)
+
+# 合法的 hash 算法取值（配置加载期 fail-fast：配错算法会让 sums 字段静默 no-op）
+_VALID_ALGORITHMS: frozenset[str] = frozenset(a.value for a in HashAlgorithmEnum)
+
+
+def _validate_hash_algorithm(value: str) -> str:
+    """校验 hash 算法配置值，非法抛 ValueError"""
+    if value not in _VALID_ALGORITHMS:
+        raise ValueError(
+            f"未知 hash 算法: {value!r}，支持的算法: {sorted(_VALID_ALGORITHMS)}"
+        )
+    return value
 
 
 class DownloadSettings(BaseModel):
@@ -39,9 +51,14 @@ class Settings(BaseModel):
     hash_algorithm: str = HashAlgorithmEnum.B2.value
     api: ApiSettings
     download: DownloadSettings = Field(default_factory=DownloadSettings)
-    # 忽略 SSL 证书校验错误（metadata 服务自签名/过期证书的 metadata API 或上游下载源），
+    # 忽略 SSL 证书校验错误（自签名/过期证书的 metadata API 或上游下载源），
     # 同时作用于 httpx 客户端与 aria2c 回退下载。仅建议在受控环境中开启
     ignore_ssl_errors: bool = False
+
+    @field_validator("hash_algorithm")
+    @classmethod
+    def _check_hash_algorithm(cls, value: str) -> str:
+        return _validate_hash_algorithm(value)
 
 
 class PackageConfig(BaseModel):
@@ -58,6 +75,11 @@ class PackageConfig(BaseModel):
     update_source_url: bool = Field(default=True)
     enable: bool = Field(default=True)
     hash_algorithm: str | None = None
+
+    @field_validator("hash_algorithm")
+    @classmethod
+    def _check_hash_algorithm(cls, value: str | None) -> str | None:
+        return value if value is None else _validate_hash_algorithm(value)
 
     def get_supported_archs(self) -> list[ArchEnum]:
         """将字符串架构列表转换为 ArchEnum 列表"""
