@@ -7,7 +7,7 @@ settings:
   # metadata API（projects/aur-metadata）：所有上游解析统一在服务端完成，
   # 客户端通过 GET {base_url}/{name}?algorithm={algo} 获取 version/urls/hashes
   api:
-    base_url: "http://175.178.59.129:8000/api/v1/packages"
+    base_url: "https://aur.llz.asia/api/v1/packages"
   # 下载设置：timeout/max_retries/retry_wait 同时作用于 metadata API 的 HTTP 客户端
   # （Fetcher），connections/show_progress 仅在 API 未返回 hashes 时回退本地下载使用
   download:
@@ -23,7 +23,7 @@ settings:
     show_progress: true
   # 忽略 SSL 证书校验错误（自签名/过期证书的 metadata API 或上游下载源），
   # 同时作用于 httpx 客户端与 aria2c 回退下载。仅建议在受控环境中开启
-  ignore_ssl_errors: true
+  ignore_ssl_errors: false
 
 # 包配置
 # name: metadata 中注册的包名（用于拼接 API 查询 URL）
