@@ -9,7 +9,7 @@ from typing import Any, cast
 import pytest
 
 from aur_metadata.constants import ArchEnum
-from aur_metadata.parsers.rule import RuleDebParser, RuleParser
+from aur_metadata.parsers.rule import RuleDebParser, RuleParser, UrlRuleMap
 from tests.fakes import build_deb, make_app_config
 
 _APP_CONFIG = make_app_config()
@@ -233,7 +233,7 @@ def test_re_kind_without_match() -> None:
 # ── parse_url：静态直链 / 动态规则 / 缺架构 ──────────────────────────────────
 
 
-def _static_urls() -> dict[str, dict[str, Any] | str]:
+def _static_urls() -> UrlRuleMap:
     return {"x86_64": "https://dn/x.AppImage", "aarch64": "https://dn/a.AppImage"}
 
 
@@ -389,3 +389,110 @@ def test_orca_url_rule_returns_none_when_asset_missing() -> None:
         "https://example.invalid/amd64.deb"
     )
     assert parser.parse_url(ArchEnum.AARCH64, json.dumps(payload)) is None
+
+
+# ── 规则链 fallback ──────────────────────────────────────────────────────────
+
+
+def test_rule_chain_falls_back_to_next_rule() -> None:
+    """首条规则失配时由下一条接管，两条都命中时以声明顺序为准"""
+    parser = RuleParser(
+        _APP_CONFIG,
+        version=[
+            {"kind": "re", "expr": r"id=(\d+)", "group": 1},
+            {"kind": "re", "expr": r"tag=v?(\d+\.\d+\.\d+)", "group": 1},
+        ],
+    )
+    assert parser.parse_version("tag=v2.1.0") == "2.1.0"
+    assert parser.parse_version("id=42 tag=v2.1.0") == "42"
+
+
+def test_rule_chain_reports_only_when_all_rules_miss(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """中间规则失配属预期 fallback，不应产生结构变更告警淹没有效信号"""
+    parser = RuleParser(
+        _APP_CONFIG,
+        version=[
+            {"kind": "re", "expr": r"id=(\d+)", "group": 1},
+            {"kind": "re", "expr": r"tag=v?(\d+\.\d+\.\d+)", "group": 1},
+        ],
+    )
+    with caplog.at_level(logging.WARNING):
+        assert parser.parse_version("tag=v2.1.0") == "2.1.0"
+    assert caplog.records == []
+
+
+def test_rule_chain_rejects_empty_list() -> None:
+    with pytest.raises(ValueError, match="不得为空"):
+        RuleParser(_APP_CONFIG, version=[])
+
+
+# ── Zen Browser 生产规则（packages.toml，rule + 规则链） ─────────────────────
+
+_ZEN_RELEASE_JSON: str = (
+    Path(__file__).parent.joinpath("fixtures", "zen_release_twilight.json")
+    .read_text(encoding="utf-8")
+)
+
+_ZEN_VERSION_RULES: list[dict[str, Any]] = [
+    {
+        "kind": "jmespath",
+        "expr": "name",
+        "regex": r"(\d+\.\d+[a-z]?)\s*\((\d{4})-(\d{2})-(\d{2})",
+        "template": "{0}.{1}{2}{3}",
+    },
+    {"kind": "jmespath", "expr": "name", "regex": r"\d+\.\d+[a-z]?"},
+]
+
+
+def _zen_parser() -> RuleParser:
+    return RuleParser(
+        _APP_CONFIG,
+        version=_ZEN_VERSION_RULES,
+        url={
+            "x86_64": {
+                "kind": "jmespath",
+                "expr": "assets[?name=='zen.linux-x86_64.tar.xz'].browser_download_url | [0]",
+            },
+            "aarch64": {
+                "kind": "jmespath",
+                "expr": "assets[?name=='zen.linux-aarch64.tar.xz'].browser_download_url | [0]",
+            },
+        },
+    )
+
+
+def test_zen_version_joins_date_suffix() -> None:
+    """release name 带日期时，版本片段拼上去连字符的日期"""
+    assert _zen_parser().parse_version(_ZEN_RELEASE_JSON) == "1.25t.20261111"
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("Twilight build - 1.5a", "1.5a"),
+        ("Twilight build - 2.0", "2.0"),
+    ],
+)
+def test_zen_version_falls_back_without_date(name: str, expected: str) -> None:
+    """name 无日期后缀时由第二条规则取纯版本号，不留分隔符残留"""
+    parser = _zen_parser()
+    assert parser.parse_version(json.dumps({"name": name})) == expected
+
+
+def test_zen_url_rules_target_linux_tarballs() -> None:
+    """按精确 asset 名取链接，避开同 release 的 AppImage / .mar / 其他平台产物"""
+    parser = _zen_parser()
+    assert parser.parse_url(ArchEnum.X86_64, _ZEN_RELEASE_JSON) == (
+        "https://github.com/zen-browser/desktop/releases/download/twilight-1/"
+        "zen.linux-x86_64.tar.xz"
+    )
+    assert parser.parse_url(ArchEnum.AARCH64, _ZEN_RELEASE_JSON) == (
+        "https://github.com/zen-browser/desktop/releases/download/twilight-1/"
+        "zen.linux-aarch64.tar.xz"
+    )
+
+
+def test_zen_missing_name_returns_none() -> None:
+    assert _zen_parser().parse_version(json.dumps({"assets": []})) is None

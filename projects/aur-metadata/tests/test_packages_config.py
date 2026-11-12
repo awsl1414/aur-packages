@@ -41,7 +41,13 @@ def test_load_default_packages_file() -> None:
         "kind": "jmespath",
         "expr": "info.version",
     }
-    assert by_name["zen-browser"].parser_config == {}
+    # zen 已从专属 parser 迁到 rule：版本是两条规则的链，TOML 里必须写成
+    # [[packages.parser_config.version]] 数组，写成单表会让第二条规则挂错
+    zen = by_name["zen-browser"]
+    assert zen.parser_type == "rule"
+    assert isinstance(zen.parser_config["version"], list)
+    assert len(zen.parser_config["version"]) == 2
+    assert set(zen.parser_config["url"]) == {"x86_64", "aarch64"}
     # orca-ide 的 version/url 子表都必须绑定到它自己，后面新增条目时不能挂错
     orca = by_name["orca-ide"]
     assert orca.parser_type == "rule"

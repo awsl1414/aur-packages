@@ -13,14 +13,12 @@ from aur_metadata.parsers.deb import DebParser
 from aur_metadata.parsers.qq import QQParser
 from aur_metadata.parsers.rule import RuleDebParser, RuleParser
 from aur_metadata.parsers.trae import TraeParser
-from aur_metadata.parsers.zen import ZenParser
 
 # parser_type → 解析器类。parser 实例仅持有上一响应的解析缓存
 # （见 BaseParser._parse_json_dict），无其他跨请求状态
 _PARSER_REGISTRY: dict[str, type[BaseParser]] = {
     "qq": QQParser,
     "trae": TraeParser,
-    "zen": ZenParser,
     "deb": DebParser,
     "rule": RuleParser,
     "rule-deb": RuleDebParser,

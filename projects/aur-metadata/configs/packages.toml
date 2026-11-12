@@ -110,13 +110,36 @@ interval_seconds = 14400
 [packages.parser_config]
 region = "cn"
 
-# Zen Browser 每夜版：GitHub Releases 固定标签 twilight-1
+# Zen Browser 每夜版：GitHub Releases 固定标签 twilight-1，发布内容每天覆盖。
+# release name 形如 "Twilight build - 1.25t (2026-11-11 at 22:04:21)"，版本号
+# 由版本片段拼括号内日期（去连字符）得到；两条规则按序 fallback，覆盖上游
+# 偶发省略日期后缀的形态，无需专属 parser。
 [[packages]]
 name = "zen-browser"
-parser_type = "zen"
+parser_type = "rule"
 fetch_url = "https://api.github.com/repos/zen-browser/desktop/releases/tags/twilight-1"
 archs = ["x86_64", "aarch64"]
 interval_seconds = 14400
+
+[[packages.parser_config.version]]
+kind = "jmespath"
+expr = "name"
+regex = '(\d+\.\d+[a-z]?)\s*\((\d{4})-(\d{2})-(\d{2})'
+template = "{0}.{1}{2}{3}"
+
+# 首条规则未命中（name 无日期）时退回纯版本号
+[[packages.parser_config.version]]
+kind = "jmespath"
+expr = "name"
+regex = '\d+\.\d+[a-z]?'
+
+[packages.parser_config.url.x86_64]
+kind = "jmespath"
+expr = "assets[?name=='zen.linux-x86_64.tar.xz'].browser_download_url | [0]"
+
+[packages.parser_config.url.aarch64]
+kind = "jmespath"
+expr = "assets[?name=='zen.linux-aarch64.tar.xz'].browser_download_url | [0]"
 
 # ZCode：官网（/ 与 /cn 同源同构）为单行静态 HTML，内嵌当前版本各平台下载直链，
 # 且全页各链接仅出现一次。URL 以自校验的文件名 ZCode-<ver>-linux-<arch>.deb 为

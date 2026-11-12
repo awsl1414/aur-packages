@@ -20,7 +20,7 @@
 
 选择解析方式（按优先级）：
 
-1. **`parser_type = "rule"`**：简单数据源（HTML/JSON 的单点提取），用声明式规则表达（xpath/css/jmespath/re，见 `src/aur_metadata/parsers/rule.py`）
+1. **`parser_type = "rule"`**：简单数据源（HTML/JSON 的单点提取），用声明式规则表达（xpath/css/jmespath/re，见 `src/aur_metadata/parsers/rule.py`）。上游有多种可选形态时，把规则写成表列表按序 fallback（`[[packages.parser_config.version]]` 重复声明）
 2. **`parser_type = "rule-deb"`**：版本取自 deb 安装包头部、URL 由规则提取的组合
 3. **专属解析器**：以上都表达不了时（鉴权下载、跨架构一致性校验等），在 `src/aur_metadata/parsers/` 实现并注册进 `_PARSER_REGISTRY`
 

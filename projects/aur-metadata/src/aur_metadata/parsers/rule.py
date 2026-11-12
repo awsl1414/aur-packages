@@ -12,11 +12,15 @@
   - 命中多个结果时默认取首个（``first``），``first=false`` 则以 ``join``
     分隔符拼接全部命中
 - 变换（可选）：对选择结果应用 ``regex``，取捕获组 ``group`` 或按
-  ``template``（如 ``"{0}.{1}"``）拼接多个捕获组
+  ``template``（如 ``"{0}.{1}"``）拼接多个捕获组；未命中的捕获组按空串代入
+- 规则链（可选）：``version`` / ``url.<arch>`` 可写成规则表列表，按声明顺序
+  尝试，首个提取到值的规则生效。用于上游存在多种可选形态的数据源，只有末条
+  规则失配才记结构变更告警
 
 配置形态::
 
     version = { kind = "xpath", expr = "...", regex = "...", group = 1 }
+    version = [{ ... 带日期形态 ... }, { ... 无日期形态 ... }]   # fallback 链
     url.x86_64 = "https://static/direct-link"          # 静态直链
     url."any" = { kind = "jmespath", expr = "..." }     # 动态提取
 
@@ -24,8 +28,8 @@
 （``RuleDebParser``）：免配 version 规则，URL 仍按上述规则提取，版本由服务层
 下载头部后统一提取。
 
-能力边界（需求命中任一条即应写专属 parser）：不支持多规则 fallback、
-鉴权/签名下载、跨字段或跨架构一致性校验、二进制内容提取、条件分支逻辑。
+能力边界（需求命中任一条即应写专属 parser）：鉴权/签名下载、跨字段或跨架构
+一致性校验（如 trae 要求各架构版本一致）、二进制内容提取、条件分支逻辑。
 
 配置错误（未知 kind、非法正则、group 与 template 同填等）构造时抛
 ``ValueError`` fail-fast；上游结构变更（选择器未命中、变换无结果等）走
@@ -138,6 +142,22 @@ def _build_rule(data: Any, label: str) -> ExtractRule:
     return rule
 
 
+def _build_rules(data: Any, label: str) -> list[ExtractRule]:
+    """构造规则链：接受单条规则表或规则表列表，按声明顺序依次尝试。
+
+    列表语义是 fallback——任一规则提取到值即返回，用于上游存在多种可选
+    形态的场景（如 release name 有/无日期后缀）。空列表视为配置错误。
+    """
+    if isinstance(data, list):
+        if not data:
+            raise ValueError(f"rule.{label} 规则列表不得为空")
+        return [
+            _build_rule(item, f"{label}[{index}]")
+            for index, item in enumerate(data)
+        ]
+    return [_build_rule(data, label)]
+
+
 def _validate_expr_syntax(
     kind: str, expr: str, label: str, *, group: int = 0
 ) -> None:
@@ -171,15 +191,24 @@ def _sorted_kinds() -> str:
     return "/".join(sorted(_RULE_KINDS))
 
 
+# 规则声明：单条规则表，或按顺序 fallback 的规则表列表
+RuleSpec = dict[str, Any]
+RuleChain = RuleSpec | list[RuleSpec]
+# arch → 规则链 / 静态 URL
+UrlRuleMap = dict[str, RuleChain | str]
+
+
 class RuleParser(BaseParser):
     """规则化解析器：version/url 均由声明式规则驱动。
 
     构造参数（packages.parser_config）：
 
-    - ``version``：版本提取规则（dict）；纯 rule 解析器必填（缺失构造期
-      抛 ValueError），``RuleDebParser`` 版本来自安装包头部，不适用
-    - ``url``：arch_value → 规则 dict 或静态 URL 字符串（缺架构的
-      parse_url 返回 None，属配置错误走普通日志）
+    - ``version``：版本提取规则（dict 或 dict 列表）；纯 rule 解析器必填
+      （缺失构造期抛 ValueError），``RuleDebParser`` 版本来自安装包头部，不适用
+    - ``url``：arch_value → 规则 dict / 规则 dict 列表 / 静态 URL 字符串
+      （缺架构的 parse_url 返回 None，属配置错误走普通日志）
+
+    规则列表为 fallback 语义：按声明顺序尝试，首个提取到值的规则生效。
     """
 
     # 版本规则是否必填：deb 变体（RuleDebParser）版本来自安装包头部提取
@@ -188,41 +217,69 @@ class RuleParser(BaseParser):
     def __init__(
         self,
         app_config: AppConfig,
-        version: dict[str, Any] | None = None,
-        url: dict[str, dict[str, Any] | str] | None = None,
+        version: RuleChain | None = None,
+        url: UrlRuleMap | None = None,
     ) -> None:
         super().__init__(app_config)
         if version is None and self._version_required:
             raise ValueError("rule 解析器必须配置 version 版本提取规则")
-        self._version_rule: ExtractRule | None = (
-            _build_rule(version, "version") if version is not None else None
+        self._version_rules: list[ExtractRule] = (
+            _build_rules(version, "version") if version is not None else []
         )
-        self._url_rules: dict[str, ExtractRule | str] = {
-            arch: url_value if isinstance(url_value, str) else _build_rule(
+        self._url_rules: dict[str, list[ExtractRule] | str] = {
+            arch: url_value if isinstance(url_value, str) else _build_rules(
                 url_value, f"url.{arch}"
             )
             for arch, url_value in (url or {}).items()
         }
 
     def parse_version(self, response_data: str) -> str | None:
-        if self._version_rule is None:
-            return None
-        return self._extract(self._version_rule, response_data, context="version")
+        return self._extract_first(self._version_rules, response_data, context="version")
 
     def parse_url(self, arch: ArchEnum | str, response_data: str) -> str | None:
         arch_value: str = self._arch_value(arch)
-        rule: ExtractRule | str | None = self._url_rules.get(arch_value)
-        if rule is None:
+        rules: list[ExtractRule] | str | None = self._url_rules.get(arch_value)
+        if rules is None:
             # 缺规则属包配置错误而非上游变更，走普通日志
             logger.warning("RuleParser: url 规则中无 %s 架构", arch_value)
             return None
-        if isinstance(rule, str):
-            return rule
-        return self._extract(rule, response_data, context=f"url({arch_value})")
+        if isinstance(rules, str):
+            return rules
+        return self._extract_first(rules, response_data, context=f"url({arch_value})")
 
-    def _extract(self, rule: ExtractRule, response_data: str, context: str) -> str | None:
-        """选择 → 合并 → 变换三段提取；无命中/无变换结果记结构变更返回 None。"""
-        texts: list[str] | None = self._select(rule, response_data)
+    def _extract_first(
+        self, rules: list[ExtractRule], response_data: str, context: str
+    ) -> str | None:
+        """按顺序尝试规则链，返回首个提取结果；全部未命中返回 None。
+
+        只有最后一条规则失配时才记结构变更日志——前面的规则是允许失配的
+        fallback 分支，逐条告警会淹没真正的问题。
+        """
+        if not rules:
+            return None
+        for rule in rules[:-1]:
+            result: str | None = self._extract(
+                rule, response_data, context=context, quiet=True
+            )
+            if result is not None:
+                return result
+        return self._extract(rules[-1], response_data, context=context)
+
+    def _extract(
+        self,
+        rule: ExtractRule,
+        response_data: str,
+        context: str,
+        *,
+        quiet: bool = False,
+    ) -> str | None:
+        """选择 → 合并 → 变换三段提取；无命中/无变换结果记结构变更返回 None。
+
+        ``quiet`` 用于规则链的非末位规则：失配属预期 fallback，不记结构变更
+        告警，避免多形态上游每轮采集都刷出误报。模板中未命中的捕获组按空串
+        代入（如 release name 有日期则拼日期，无日期则只用基础版本号）。
+        """
+        texts: list[str] | None = self._select(rule, response_data, quiet=quiet)
         if texts is None:
             return None
         text: str = texts[0] if rule.first else rule.join.join(texts)
@@ -231,15 +288,22 @@ class RuleParser(BaseParser):
             return text
         match: re.Match[str] | None = rule._compiled.search(text)
         if match is None:
-            self._log_structure_change(
-                f"{context}: 变换正则未命中", text or response_data
-            )
+            if not quiet:
+                self._log_structure_change(
+                    f"{context}: 变换正则未命中", text or response_data
+                )
             return None
         if rule.template is not None:
-            return rule.template.format(*match.groups())
+            # 可选组未参与匹配时为 None，按空串代入以免 template 里出现 "None"
+            groups: tuple[str, ...] = tuple(
+                g if g is not None else "" for g in match.groups()
+            )
+            return rule.template.format(*groups)
         return match.group(rule.group)
 
-    def _select(self, rule: ExtractRule, response_data: str) -> list[str] | None:
+    def _select(
+        self, rule: ExtractRule, response_data: str, *, quiet: bool = False
+    ) -> list[str] | None:
         """按 kind 执行选择，返回命中的文本列表；无命中返回 None。"""
         if rule.kind == "re":
             texts: list[str] = [
@@ -256,18 +320,20 @@ class RuleParser(BaseParser):
             elif isinstance(result, list) and all(isinstance(t, str) for t in result):
                 texts = result
             else:
-                self._log_structure_change(
-                    f"{rule.kind} 选择结果非字符串: {result!r}", response_data
-                )
+                if not quiet:
+                    self._log_structure_change(
+                        f"{rule.kind} 选择结果非字符串: {result!r}", response_data
+                    )
                 return None
         else:
             selector: Selector = Selector(text=response_data)
             method = selector.xpath if rule.kind == "xpath" else selector.css
             texts = method(rule.expr).getall()
         if not texts:
-            self._log_structure_change(
-                f"{rule.kind} 选择器未命中: {rule.expr}", response_data
-            )
+            if not quiet:
+                self._log_structure_change(
+                    f"{rule.kind} 选择器未命中: {rule.expr}", response_data
+                )
             return None
         return texts
 

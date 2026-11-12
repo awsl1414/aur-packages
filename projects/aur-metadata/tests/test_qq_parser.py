@@ -16,12 +16,13 @@ import pytest
 from aur_metadata.constants import ArchEnum
 from aur_metadata.parsers import base as base_mod
 from aur_metadata.parsers.qq import QQParser
+from aur_metadata.parsers.rule import UrlRuleMap
 from tests.fakes import build_deb, make_app_config
 
 _APP_CONFIG = make_app_config()
 
 # 与 configs/packages.toml 的 qq parser_config.url 保持一致
-_URL_RULES: dict[str, dict[str, Any] | str] = {
+_URL_RULES: UrlRuleMap = {
     "x86_64": {
         "kind": "jmespath",
         "expr": "Linux.x64DownloadUrl.deb || Linux.x64DownloadUrl",

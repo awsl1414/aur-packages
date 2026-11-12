@@ -10,14 +10,13 @@ im.qq.com GetSign 换取带 sign 的临时链接——鉴权是业务逻辑，�
 import json
 import logging
 import time
-from typing import Any
 
 import httpx
 
 from aur_metadata.config import AppConfig, HttpConfig, QQConfig
 from aur_metadata.constants import ArchEnum
 
-from .rule import RuleDebParser
+from .rule import RuleChain, RuleDebParser, UrlRuleMap
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +37,8 @@ class QQParser(RuleDebParser):
     def __init__(
         self,
         app_config: AppConfig,
-        version: dict[str, Any] | None = None,
-        url: dict[str, dict[str, Any] | str] | None = None,
+        version: RuleChain | None = None,
+        url: UrlRuleMap | None = None,
     ) -> None:
         super().__init__(app_config, version, url)
         # 签名结果 TTL 缓存：raw_url → (signed_url, 过期时刻 monotonic)。
