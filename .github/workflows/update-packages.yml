@@ -2,7 +2,7 @@ name: Update Packages
 
 on:
   schedule:
-    - cron: '23 6,18 * * *'
+    - cron: '0 */4 * * *'
   workflow_dispatch:
 
 permissions:
@@ -31,32 +31,21 @@ jobs:
       - name: Install aria2
         run: |
           sudo apt-get update
-          sudo apt-get install -y aria2 dnsutils
-
-      - name: Resolve cdn-go.cn via Chinese DNS
-        run: |
-          CHINA_IP=$(dig @119.29.29.29 cdn-go.cn +subnet=118.134.175.0/24 +short | grep -E '^[0-9]' | head -1)
-          if [ -z "$CHINA_IP" ]; then
-            echo "ERROR: Failed to resolve cdn-go.cn via Chinese DNS"
-            exit 1
-          fi
-          echo "$CHINA_IP cdn-go.cn" | sudo tee -a /etc/hosts
-          echo "Resolved cdn-go.cn -> $CHINA_IP"
-          getent ahosts cdn-go.cn
+          sudo apt-get install -y aria2
 
       - name: Install uv
         uses: astral-sh/setup-uv@v8.1.0
         with:
           enable-cache: true
           cache-dependency-glob: |
-            scripts/pyproject.toml
-            scripts/uv.lock
+            pyproject.toml
+            uv.lock
+            projects/*/pyproject.toml
 
       - name: Sync dependencies and update packages
-        working-directory: scripts
         run: |
-          uv sync
-          uv run main.py --all
+          uv sync --package aur-auto-update
+          uv run --package aur-auto-update aur-auto-update
 
       - name: Detect changed packages
         id: detect
@@ -173,6 +162,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref_name }}
 
       - name: Detect package assets
         id: assets

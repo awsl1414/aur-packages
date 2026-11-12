@@ -1,0 +1,30 @@
+{
+  "tag_name": "v0.7.2",
+  "prerelease": false,
+  "assets": [
+    {
+      "name": "RustMusic_0.7.2_amd64.AppImage",
+      "browser_download_url": "https://github.com/LingyunStudio/RustMusic/releases/download/v0.7.2/RustMusic_0.7.2_amd64.AppImage"
+    },
+    {
+      "name": "RustMusic_0.7.2_amd64.AppImage.sig",
+      "browser_download_url": "https://github.com/LingyunStudio/RustMusic/releases/download/v0.7.2/RustMusic_0.7.2_amd64.AppImage.sig"
+    },
+    {
+      "name": "RustMusic_0.7.2_amd64.deb",
+      "browser_download_url": "https://github.com/LingyunStudio/RustMusic/releases/download/v0.7.2/RustMusic_0.7.2_amd64.deb"
+    },
+    {
+      "name": "RustMusic_0.7.2_amd64.deb.sig",
+      "browser_download_url": "https://github.com/LingyunStudio/RustMusic/releases/download/v0.7.2/RustMusic_0.7.2_amd64.deb.sig"
+    },
+    {
+      "name": "RustMusic_0.7.2_x64-setup.exe",
+      "browser_download_url": "https://github.com/LingyunStudio/RustMusic/releases/download/v0.7.2/RustMusic_0.7.2_x64-setup.exe"
+    },
+    {
+      "name": "RustMusic_0.7.2_x64-setup.exe.sig",
+      "browser_download_url": "https://github.com/LingyunStudio/RustMusic/releases/download/v0.7.2/RustMusic_0.7.2_x64-setup.exe.sig"
+    }
+  ]
+}

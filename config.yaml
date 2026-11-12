@@ -1,0 +1,132 @@
+# AUR 包自动更新工具配置文件
+
+# 基础设置
+settings:
+  # 全局默认哈希算法（支持 b2、sha512、sha256）
+  hash_algorithm: b2
+  # metadata API（projects/aur-metadata）：所有上游解析统一在服务端完成，
+  # 客户端通过 GET {base_url}/{name}?algorithm={algo} 获取 version/urls/hashes
+  api:
+    base_url: "https://aur.why.vin/api/v1/packages"
+  # 下载设置：timeout/max_retries/retry_wait 同时作用于 metadata API 的 HTTP 客户端
+  # （Fetcher），connections/show_progress 仅在 API 未返回 hashes 时回退本地下载使用
+  download:
+    # 下载重试次数
+    max_retries: 3
+    # 重试等待时间（秒）
+    retry_wait: 1
+    # 下载超时时间（秒）
+    timeout: 120
+    # 每个服务器的最大连接数
+    connections: 16
+    # 是否显示下载进度
+    show_progress: true
+  # 忽略 SSL 证书校验错误（自签名/过期证书的 metadata API 或上游下载源），
+  # 同时作用于 httpx 客户端与 aria2c 回退下载。仅建议在受控环境中开启
+  ignore_ssl_errors: false
+
+# 包配置
+# name: metadata 中注册的包名（用于拼接 API 查询 URL）
+packages:
+  linuxqq-nt:
+    name: qq
+    pkgbuild: "packages/linuxqq-nt/PKGBUILD"
+    update_source_url: true
+    enable: true  # 是否启用更新，false 则跳过
+    arch:
+      - x86_64
+      - aarch64
+      - loong64
+
+  navicat:
+    name: navicat
+    pkgbuild: "packages/navicat17-premium-zh-cn/PKGBUILD"
+    # URL 静态写死在 PKGBUILD，无需更新 source 字段
+    update_source_url: false
+    enable: true
+    arch:
+      - x86_64
+      - aarch64
+
+  trae:
+    name: trae
+    pkgbuild: "packages/trae/PKGBUILD"
+    update_source_url: true
+    enable: true
+    arch:
+      - x86_64
+      - aarch64
+
+  trae-sg:
+    name: trae-sg
+    pkgbuild: "packages/trae-sg/PKGBUILD"
+    update_source_url: true
+    enable: true
+    arch:
+      - x86_64
+      - aarch64
+
+  trae-us:
+    name: trae-us
+    pkgbuild: "packages/trae-us/PKGBUILD"
+    update_source_url: true
+    enable: true
+    arch:
+      - x86_64
+      - aarch64
+
+  # trae-cn 是国内版（https://www.trae.cn/），与 trae/trae-sg/trae-us（国际版，https://www.trae.ai/）是不同的产品
+  # 国际版的 CDN 变体（trae-sg/trae-us）共享同一个 API 和版本号，国内版使用独立的 API 和版本号
+  # 注意：trae 和 trae-cn 的 tarball 内部目录结构完全相同，仅二进制/补全文件名不同（trae vs trae-cn）
+  trae-cn:
+    name: trae-cn
+    pkgbuild: "packages/trae-cn/PKGBUILD"
+    update_source_url: true
+    enable: true
+    arch:
+      - x86_64
+      - aarch64
+
+  zen-browser:
+    name: zen-browser
+    pkgbuild: "packages/zen-browser-twilight-bin/PKGBUILD"
+    update_source_url: true
+    enable: true
+    arch:
+      - x86_64
+      - aarch64
+
+  bt-dualboot-ng:
+    name: bt-dualboot-ng
+    pkgbuild: "packages/bt-dualboot-ng/PKGBUILD"
+    update_source_url: true
+    enable: true
+    arch:
+      - any
+
+  z-code:
+    name: zcode
+    pkgbuild: "packages/z-code/PKGBUILD"
+    update_source_url: true
+    enable: true
+    arch:
+      - x86_64
+      - aarch64
+
+  orca-ide:
+    name: orca-ide
+    pkgbuild: "packages/orca-ide/PKGBUILD"
+    update_source_url: true
+    enable: true
+    arch:
+      - x86_64
+      - aarch64
+
+  # 上游当前只发 amd64 deb；补 arm64 后在此加 aarch64 并同步 packages.toml
+  rustmusic:
+    name: rustmusic
+    pkgbuild: "packages/rustmusic/PKGBUILD"
+    update_source_url: true
+    enable: true
+    arch:
+      - x86_64

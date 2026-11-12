@@ -1,0 +1,130 @@
+"""配置文件加载模块"""
+
+import logging
+from pathlib import Path
+
+import yaml
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from aur_auto_update.constants import ArchEnum, HashAlgorithmEnum
+
+logger = logging.getLogger(__name__)
+
+# 合法的 hash 算法取值（配置加载期 fail-fast：配错算法会让 sums 字段静默 no-op）
+_VALID_ALGORITHMS: frozenset[str] = frozenset(a.value for a in HashAlgorithmEnum)
+
+
+def _validate_hash_algorithm(value: str) -> str:
+    """校验 hash 算法配置值，非法抛 ValueError"""
+    if value not in _VALID_ALGORITHMS:
+        raise ValueError(
+            f"未知 hash 算法: {value!r}，支持的算法: {sorted(_VALID_ALGORITHMS)}"
+        )
+    return value
+
+
+class DownloadSettings(BaseModel):
+    """下载配置（回退下载路径使用）"""
+
+    model_config = ConfigDict(extra="ignore")
+
+    max_retries: int = 3
+    retry_wait: int = 1
+    timeout: int = 60
+    connections: int = 16
+    show_progress: bool = True
+
+
+class ApiSettings(BaseModel):
+    """metadata API 配置"""
+
+    model_config = ConfigDict(extra="ignore")
+
+    base_url: str
+
+
+class Settings(BaseModel):
+    """全局配置"""
+
+    model_config = ConfigDict(extra="ignore")
+
+    hash_algorithm: str = HashAlgorithmEnum.B2.value
+    api: ApiSettings
+    download: DownloadSettings = Field(default_factory=DownloadSettings)
+    # 忽略 SSL 证书校验错误（自签名/过期证书的 metadata API 或上游下载源），
+    # 同时作用于 httpx 客户端与 aria2c 回退下载。仅建议在受控环境中开启
+    ignore_ssl_errors: bool = False
+
+    @field_validator("hash_algorithm")
+    @classmethod
+    def _check_hash_algorithm(cls, value: str) -> str:
+        return _validate_hash_algorithm(value)
+
+
+class PackageConfig(BaseModel):
+    """单个包的配置。
+
+    ``name`` 为 ``aur-metadata`` 中注册的包名（用于拼接 API 查询 URL）。
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    name: str
+    pkgbuild: str
+    arch: list[str] = Field(default_factory=list)
+    update_source_url: bool = Field(default=True)
+    enable: bool = Field(default=True)
+    hash_algorithm: str | None = None
+
+    @field_validator("hash_algorithm")
+    @classmethod
+    def _check_hash_algorithm(cls, value: str | None) -> str | None:
+        return value if value is None else _validate_hash_algorithm(value)
+
+    def get_supported_archs(self) -> list[ArchEnum]:
+        """将字符串架构列表转换为 ArchEnum 列表"""
+        supported_archs = []
+        for arch_str in self.arch:
+            for arch_enum in ArchEnum:
+                if arch_enum.value == arch_str:
+                    supported_archs.append(arch_enum)
+                    break
+            else:
+                logger.warning("未知的架构标识: %s", arch_str)
+        return supported_archs
+
+    def get_effective_hash_algorithm(self, default: str) -> str:
+        """获取生效的哈希算法（包级覆盖 > 全局默认）"""
+        return self.hash_algorithm if self.hash_algorithm else default
+
+
+class ConfigLoader(BaseModel):
+    """配置加载器，管理全局设置和包配置
+
+    ``base_dir`` 为配置文件所在目录，配置内的相对路径（如 ``pkgbuild``）
+    均以该目录为基准解析。
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    settings: Settings
+    packages: dict[str, PackageConfig] = Field(default_factory=dict)
+    # 不参与序列化，仅用于配置内相对路径的解析
+    base_dir: Path = Field(exclude=True)
+
+    @classmethod
+    def load_from_yaml(cls, filepath: str | Path = "config.yaml") -> "ConfigLoader":
+        """从 YAML 文件加载配置
+
+        Args:
+            filepath: 配置文件路径；相对路径相对当前工作目录解析
+
+        Returns:
+            加载完成的 ConfigLoader，``base_dir`` 为配置文件所在目录
+        """
+        path = Path(filepath)
+        with path.open(encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        if data is None:
+            raise ValueError(f"配置文件为空: {path}")
+        return cls(**data, base_dir=path.resolve().parent)

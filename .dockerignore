@@ -1,0 +1,19 @@
+# 构建上下文为仓库根（projects/aur-metadata/Dockerfile），排除与镜像无关的内容
+.git/
+.venv/
+**/__pycache__/
+**/*.py[oc]
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+**/*.egg-info/
+/downloads/
+/graphify-out/
+/projects/aur-metadata/data/
+**/*.db
+*.log
+.claude/
+.zcode/
+.idea/
+.vscode/
+.DS_Store

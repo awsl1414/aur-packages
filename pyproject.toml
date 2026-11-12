@@ -1,0 +1,79 @@
+# uv workspace 根（虚拟项目：不构建、不安装、无代码）
+# 两个成员应用位于 projects/ 下，统一由根目录的 uv.lock 管理依赖
+#
+# version 仅为满足 [project] 表必填字段，不参与任何发布或运行时流程：
+# 本包 package = false，无产物；需要维护的版本号在各自的成员 pyproject.toml
+# （aur-metadata 的版本用于 FastAPI /docs 显示与镜像 tag）。不要随成员升版本。
+[project]
+name = "aur-packages"
+version = "0.1.0"
+description = "AUR packages monorepo"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = []
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+# 显式列出成员，避免未来实验性目录被隐式纳入 workspace
+members = [
+    "projects/aur-auto-update",
+    "projects/aur-metadata",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.16",
+    "ty>=0.0.8",
+]
+
+[tool.ruff]
+# 与 ty 的检查范围一致，两个成员的源代码与测试
+line-length = 100
+# uv workspace 成员为 src 布局，必须显式声明成员 src 路径，
+# 否则 ruff 解析不到 aur_metadata / aur_auto_update，isort 会把它们
+# 与第三方库混入同一分区（ruff 默认 src 仅含项目根与 <root>/src）
+src = ["projects/aur-metadata/src", "projects/aur-auto-update/src"]
+
+[tool.ruff.lint]
+# ruff 0.16 起默认规则集由 59 条扩展为 413 条（breaking change，
+# 见 https://astral.sh/blog/ruff-v0.16.0）。不显式 select，跟随默认集，
+# 但通过 dev 依赖下界固定基线版本，保证检查行为不随升级静默漂移；
+# 对本项目无意义的规则在 ignore 中逐条说明，其余默认集规则均需通过。
+ignore = [
+    # 项目不做国际化，无 gettext 调用，i18n 检查无意义
+    "INT001",
+    "INT002",
+    "INT003",
+    # 配置/参数校验错误统一抛 ValueError（与 load_packages 的收集式校验一致），
+    # 不因「类型不符」细分 TypeError——调用方只需捕获一种配置错误类型
+    "TRY004",
+]
+
+[tool.ty]
+# Ty 配置 - Astral 开发的快速 Python 类型检查器
+# https://docs.astral.sh/ty/
+# 运行命令：uv run ty check projects/
+
+# 源代码配置
+[tool.ty.src]
+# 排除的文件和目录
+exclude = [
+    ".venv",
+    "__pycache__",
+    "*.pyc",
+]
+
+# 分析配置
+[tool.ty.analysis]
+# 尊重 type: ignore 注释
+respect-type-ignore-comments = true
+
+# 终端输出配置
+[tool.ty.terminal]
+# 输出格式：full, concise, gitlab, github
+output-format = "full"
+
+# 将警告视为错误
+error-on-warning = false

@@ -1,0 +1,210 @@
+# packages.toml —— 包采集配置（packages 表的声明式定义来源）
+#
+# 启动时与 packages 表同步：按 name upsert 定义字段（parser_type / fetch_url /
+# archs / parser_config / schedule_* / description）；enabled 仅对新增包生效，
+# 已有包的启停属运行期运维操作（改表 + POST /api/v1/packages/reload）。
+# 从本文件删除的包不会自动删行（避免级联清掉采集历史），仅启动时告警。
+#
+# 字段说明：
+# - name / parser_type / fetch_url / archs 必填；parser_type 须已在
+#   src/aur_metadata/parsers/registry.py 的 _PARSER_REGISTRY 注册，archs 取值见 ArchEnum
+# - 调度二选一：interval_seconds 或 cron_expr 恰好填一个，schedule_type 由其派生
+# - parser_config 为 parser 构造参数表（可省略），落库时序列化为 JSON；
+#   其子表头（如 [packages.parser_config]）按 TOML 语义绑定到**最近的**
+#   [[packages]]，必须紧跟所属条目，中间插入新条目会静默挂错包
+# - enabled（默认 true）/ description（运维备注）可选
+#
+# 环境变量 APP_PACKAGES 可指定自定义路径（与 APP_CONFIG 对称）。
+# hash 算法不按包配置：每次采集单流计算全部支持算法（b2/sha256/sha512）。
+
+[[packages]]
+name = "qq"
+parser_type = "qq"
+# 版本信息源：QQ NT 客户端 PC 配置 JSON——URL 按下方 jmespath 规则提取
+# （"字段.deb || 字段" 兼容 dict 与裸字符串两种形态），版本从 deb 头部
+# 权威提取；下载链接经 GetSign 换签名（签名钩子在专属类 QQParser）
+fetch_url = "https://qq-web.cdn-go.cn/im.qq.com_new/latest/rainbow/pcConfig.json"
+archs = ["x86_64", "aarch64", "loong64"]
+interval_seconds = 14400
+
+[packages.parser_config.url]
+x86_64 = { kind = "jmespath", expr = "Linux.x64DownloadUrl.deb || Linux.x64DownloadUrl" }
+aarch64 = { kind = "jmespath", expr = "Linux.armDownloadUrl.deb || Linux.armDownloadUrl" }
+loong64 = { kind = "jmespath", expr = "Linux.loongarchDownloadUrl.deb || Linux.loongarchDownloadUrl" }
+
+# Navicat：rule 解析器——版本取自 release-note HTML（platform=L 表首个
+# note-title），下载 URL 为固定 AppImage 直链，经 parser_config.url 注入
+[[packages]]
+name = "navicat"
+parser_type = "rule"
+fetch_url = "https://www.navicat.com.cn/products/navicat-premium-release-note#L"
+archs = ["x86_64", "aarch64"]
+interval_seconds = 14400
+
+[packages.parser_config.version]
+kind = "xpath"
+expr = '//table[@platform="L"]//div[@class="note-title"]/b/text()'
+regex = 'version\s+(\d+\.\d+\.\d+)'
+group = 1
+
+[packages.parser_config.url]
+x86_64 = "https://dn.navicat.com/download/navicat17-premium-cs-x86_64.AppImage"
+aarch64 = "https://dn.navicat.com/download/navicat17-premium-cs-aarch64.AppImage"
+
+# bt-dualboot-ng：rule 解析器——PyPI JSON API（sdist 与架构无关，arch=any）
+[[packages]]
+name = "bt-dualboot-ng"
+parser_type = "rule"
+fetch_url = "https://pypi.org/pypi/bt-dualboot-ng/json"
+archs = ["any"]
+interval_seconds = 14400
+
+[packages.parser_config.version]
+kind = "jmespath"
+expr = "info.version"
+
+[packages.parser_config.url."any"]
+kind = "jmespath"
+expr = "urls[?packagetype=='sdist'] | [0].url"
+
+# Trae 国际版：同一 API，按 region 选不同机房 CDN（cn / sg / va）
+[[packages]]
+name = "trae"
+parser_type = "trae"
+fetch_url = "https://icube-normal.trae.ai/icube/api/v1/native/version/trae/latest"
+archs = ["x86_64", "aarch64"]
+interval_seconds = 14400
+
+[packages.parser_config]
+region = "cn"
+
+[[packages]]
+name = "trae-sg"
+parser_type = "trae"
+fetch_url = "https://icube-normal.trae.ai/icube/api/v1/native/version/trae/latest"
+archs = ["x86_64", "aarch64"]
+interval_seconds = 14400
+
+[packages.parser_config]
+region = "sg"
+
+# trae-us 用 region=va（弗吉尼亚机房，上游 download[] 直传该值，非 us→va 映射）
+[[packages]]
+name = "trae-us"
+parser_type = "trae"
+fetch_url = "https://icube-normal.trae.ai/icube/api/v1/native/version/trae/latest"
+archs = ["x86_64", "aarch64"]
+interval_seconds = 14400
+
+[packages.parser_config]
+region = "va"
+
+# Trae 国内版：独立 API（api.trae.cn），与国际版是不同产品
+[[packages]]
+name = "trae-cn"
+parser_type = "trae"
+fetch_url = "https://api.trae.cn/icube/api/v1/native/version/trae/cn/latest"
+archs = ["x86_64", "aarch64"]
+interval_seconds = 14400
+
+[packages.parser_config]
+region = "cn"
+
+# Zen Browser 每夜版：GitHub Releases 固定标签 twilight-1，发布内容每天覆盖。
+# release name 形如 "Twilight build - 1.25t (2026-11-11 at 22:04:21)"，版本号
+# 由版本片段拼括号内日期（去连字符）得到；两条规则按序 fallback，覆盖上游
+# 偶发省略日期后缀的形态，无需专属 parser。
+[[packages]]
+name = "zen-browser"
+parser_type = "rule"
+fetch_url = "https://api.github.com/repos/zen-browser/desktop/releases/tags/twilight-1"
+archs = ["x86_64", "aarch64"]
+interval_seconds = 14400
+
+[[packages.parser_config.version]]
+kind = "jmespath"
+expr = "name"
+regex = '(\d+\.\d+[a-z]?)\s*\((\d{4})-(\d{2})-(\d{2})'
+template = "{0}.{1}{2}{3}"
+
+# 首条规则未命中（name 无日期）时退回纯版本号
+[[packages.parser_config.version]]
+kind = "jmespath"
+expr = "name"
+regex = '\d+\.\d+[a-z]?'
+
+[packages.parser_config.url.x86_64]
+kind = "jmespath"
+expr = "assets[?name=='zen.linux-x86_64.tar.xz'].browser_download_url | [0]"
+
+[packages.parser_config.url.aarch64]
+kind = "jmespath"
+expr = "assets[?name=='zen.linux-aarch64.tar.xz'].browser_download_url | [0]"
+
+# ZCode：官网（/ 与 /cn 同源同构）为单行静态 HTML，内嵌当前版本各平台下载直链，
+# 且全页各链接仅出现一次。URL 以自校验的文件名 ZCode-<ver>-linux-<arch>.deb 为
+# 锚点（对 CDN 域名/路径层级变更不敏感；上游改名时整体失配走结构变更告警而非
+# 静默提取错值）。版本走 rule-deb 的 deb 头部权威提取（dpkg Version，含 build
+# 号，归一化为 3.14.0_7681），并免费获得跨架构版本一致性校验。
+[[packages]]
+name = "zcode"
+parser_type = "rule-deb"
+fetch_url = "https://zcode.z.ai/cn"
+archs = ["x86_64", "aarch64"]
+interval_seconds = 14400
+
+[packages.parser_config.url.x86_64]
+kind = "re"
+expr = 'https://[^"<>\s]+/ZCode-[0-9]+(?:\.[0-9]+)+-linux-x64\.deb'
+
+[packages.parser_config.url.aarch64]
+kind = "re"
+expr = 'https://[^"<>\s]+/ZCode-[0-9]+(?:\.[0-9]+)+-linux-arm64\.deb'
+
+# Orca IDE：GitHub Releases（latest）提供 deb。asset 名带版本号与架构
+# （orca-ide_<ver>_amd64.deb / _arm64.deb），按名称后缀筛 browser_download_url，
+# 避开同仓库的 rpm / AppImage / orca-server-linux-*.tar.gz（后者也带架构标识）。
+# 版本取 tag_name 而非 deb 头部：上游 tag 与 deb 的 dpkg Version 一致，省掉一次
+# 194MB 下载。正则限死三段式：仓库里另有一条 mobile-android-vX.Y.Z 产品线，
+# 严格匹配能让 tag 方案变更时 fail-loud（返回 None + 结构变更告警），
+# 而不是把 0.0.64 这类移动端版本误写进桌面包的 pkgver。
+[[packages]]
+name = "orca-ide"
+parser_type = "rule"
+fetch_url = "https://api.github.com/repos/stablyai/orca/releases/latest"
+archs = ["x86_64", "aarch64"]
+interval_seconds = 14400
+
+[packages.parser_config.version]
+kind = "jmespath"
+expr = "tag_name"
+regex = '^v(\d+\.\d+\.\d+)$'
+group = 1
+
+[packages.parser_config.url.x86_64]
+kind = "jmespath"
+expr = "assets[?ends_with(name, '_amd64.deb')].browser_download_url | [0]"
+
+[packages.parser_config.url.aarch64]
+kind = "jmespath"
+expr = "assets[?ends_with(name, '_arm64.deb')].browser_download_url | [0]"
+
+# RustMusic：Tauri 音乐播放器，GitHub Releases 提供 deb / AppImage / exe。
+# 当前上游只发 amd64 deb，archs 仅 x86_64；上游补 aarch64 后需在此加
+# url.aarch64 规则并同步 archs 与 config.yaml。
+[[packages]]
+name = "rustmusic"
+parser_type = "rule"
+fetch_url = "https://api.github.com/repos/LingyunStudio/RustMusic/releases/latest"
+archs = ["x86_64"]
+interval_seconds = 14400
+
+[packages.parser_config.version]
+kind = "jmespath"
+expr = "tag_name"
+regex = '^v(\d+\.\d+\.\d+)$'
+group = 1
+
+[packages.parser_config.url.x86_64]
+kind = "jmespath"
+expr = "assets[?ends_with(name, '_amd64.deb')].browser_download_url | [0]"

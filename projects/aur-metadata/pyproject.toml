@@ -1,0 +1,38 @@
+# version 有两个消费方，改动即时生效：importlib.metadata 读它作为 FastAPI 的
+# version（见 cli._app_version，体现在 /docs 与 /openapi.json），CI 也用它打
+# 镜像 tag。因此只在值得让用户重新拉镜像时递增：功能、行为、包配置变更算，
+# 注释与测试改动不算。升版本需同步 `uv lock`（uv.lock 记录成员版本，--locked 会校验）。
+[project]
+name = "aur-metadata"
+version = "1.0.3"
+description = "AUR packages metadata service"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "aiosqlite>=0.22.1",
+    "apscheduler>=4.0.0a6",
+    "fastapi[standard]>=0.139.0",
+    "httpx>=0.28.1",
+    "jmespath>=1.0",
+    "parsel>=1.11.0",
+    "tortoise-orm>=1.1.7",
+    "zstandard>=0.25.0",
+]
+
+[project.scripts]
+aur-metadata = "aur_metadata.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.12,<0.13"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# 测试中的 async 测试函数无需显式标记
+asyncio_mode = "auto"

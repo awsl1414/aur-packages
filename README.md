@@ -1,62 +1,51 @@
-# AUR 包自动更新工具
+# aur-packages
 
-> 自动化 Arch Linux AUR 包版本更新工具
+> Arch Linux AUR 包维护 monorepo：包元数据服务 + 自动更新工具 + PKGBUILD 仓库
 
 [![Python](https://img.shields.io/badge/Python-3.13%2B-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-## 特性
+本仓库为 uv workspace monorepo，包含两个 Python 应用与 AUR 包资产：
 
-- 自动获取最新版本并更新 PKGBUILD
-- 多架构支持：x86_64、aarch64、loong64
-- 多算法校验和自动计算（支持 BLAKE2b、SHA512、SHA256）
-- 基于 aria2c 的多连接分片下载
-- 插件化解析器设计，易于扩展
+| 项目 | 说明 |
+| ---- | ---- |
+| [`projects/aur-metadata`](projects/aur-metadata/) | 包元数据服务：定时追踪上游版本、计算文件 hash（b2/sha256/sha512），经 HTTP API 供更新工具查询 |
+| [`projects/aur-auto-update`](projects/aur-auto-update/) | AUR 包自动更新工具：消费 aur-metadata 的 API，自动更新 `packages/` 下 PKGBUILD 的版本号与校验和 |
+| `packages/` | AUR PKGBUILD 与本地源文件（由 CI 在版本更新后自动发布到 AUR） |
 
 ## 快速开始
 
 ```bash
 git clone https://github.com/awsl1414/aur-packages.git
-cd aur-packages/scripts
+cd aur-packages
 
-# 安装系统依赖
+# 安装系统依赖（aur-auto-update 的回退下载器）
 sudo pacman -S aria2   # 或 sudo apt install aria2
 
-# 安装 Python 依赖
-pip install uv
+# 同步依赖（uv workspace，单 uv.lock 管理全部成员）
 uv sync
 
-# 运行
-uv run main.py              # 更新所有包
-uv run main.py --package qq # 更新指定包
-uv run main.py --list       # 列出所有包
+# 更新所有包（仓库根执行；指定包用 -p <name>，可用包列表用 --list）
+uv run --package aur-auto-update aur-auto-update
+
+# 启动元数据服务（仓库根或成员目录内执行，默认 :8000）
+uv run --package aur-metadata aur-metadata
 ```
 
-## 支持的包
+服务启动后访问 `http://127.0.0.1:8000/docs` 查看交互式 API 文档。
 
-| 包名 | 说明 |
-|------|------|
-| `linuxqq-nt` | QQ Linux |
-| `navicat17-premium-zh-cn` | Navicat Premium 中文版 |
-| `trae` | Trae AI IDE 国际版（中国 CDN） |
-| `trae-sg` | Trae AI IDE 国际版（新加坡 CDN） |
-| `trae-us` | Trae AI IDE 国际版（美国 CDN） |
-| `trae-cn` | Trae AI IDE 国内版（独立产品，非国际版 CDN 变体） |
+## 文档导航
 
-## 开发
+| 文档 | 职责 |
+| ---- | ---- |
+| [`projects/aur-metadata`](projects/aur-metadata/) / [`projects/aur-auto-update`](projects/aur-auto-update/) | 各成员的使用、配置与部署 |
+| [`projects/aur-metadata/docs/api.md`](projects/aur-metadata/docs/api.md) | HTTP API 契约（路由、响应、业务码） |
+| [`docs/adding-a-package.md`](docs/adding-a-package.md) | 添加新软件包的完整流程 |
+| [`docs/packaging-guide.md`](docs/packaging-guide.md) | PKGBUILD 打包规范 |
+| [`docs/troubleshooting.md`](docs/troubleshooting.md) | 各包已知运行时问题与处理 |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | 贡献流程（分支、commit 规范） |
 
-```bash
-uv run pytest    # 运行测试
-uv run ty check  # 类型检查
-uv sync          # 同步依赖
-```
-
-## 技术栈
-
-- Python 3.13+ / uv
-- aria2c (多线程下载)
-- httpx (异步 HTTP)
-- pydantic (数据验证)
+开发命令速查与 agent 工作规范见 [AGENTS.md](AGENTS.md)。
 
 ## 贡献
 
