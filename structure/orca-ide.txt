@@ -1,0 +1,250 @@
+# Orca IDE deb 包解包目录结构快照
+# 来源: orca-ide_1.4.257_arm64.deb (control: Package orca-ide / Version 1.4.257)
+# 提取: bsdtar -xf <deb> data.tar.xz && bsdtar -xf data.tar.xz -C data
+# 架构: arm64 (aarch64)，5 层深度；amd64 变体结构相同，仅二进制架构不同
+# 全包 8137 个文件，深于 5 层的部分见 deb 内 md5sums 清单
+data/
+├── opt/
+│   └── Orca/
+│       ├── locales/
+│       │   ├── af.pak
+│       │   ├── am.pak
+│       │   ├── ar.pak
+│       │   ├── bg.pak
+│       │   ├── bn.pak
+│       │   ├── ca.pak
+│       │   ├── cs.pak
+│       │   ├── da.pak
+│       │   ├── de.pak
+│       │   ├── el.pak
+│       │   ├── en-GB.pak
+│       │   ├── en-US.pak
+│       │   ├── es-419.pak
+│       │   ├── es.pak
+│       │   ├── et.pak
+│       │   ├── fa.pak
+│       │   ├── fi.pak
+│       │   ├── fil.pak
+│       │   ├── fr.pak
+│       │   ├── gu.pak
+│       │   ├── he.pak
+│       │   ├── hi.pak
+│       │   ├── hr.pak
+│       │   ├── hu.pak
+│       │   ├── id.pak
+│       │   ├── it.pak
+│       │   ├── ja.pak
+│       │   ├── kn.pak
+│       │   ├── ko.pak
+│       │   ├── lt.pak
+│       │   ├── lv.pak
+│       │   ├── ml.pak
+│       │   ├── mr.pak
+│       │   ├── ms.pak
+│       │   ├── nb.pak
+│       │   ├── nl.pak
+│       │   ├── pl.pak
+│       │   ├── pt-BR.pak
+│       │   ├── pt-PT.pak
+│       │   ├── ro.pak
+│       │   ├── ru.pak
+│       │   ├── sk.pak
+│       │   ├── sl.pak
+│       │   ├── sr.pak
+│       │   ├── sv.pak
+│       │   ├── sw.pak
+│       │   ├── ta.pak
+│       │   ├── te.pak
+│       │   ├── th.pak
+│       │   ├── tr.pak
+│       │   ├── uk.pak
+│       │   ├── ur.pak
+│       │   ├── vi.pak
+│       │   ├── zh-CN.pak
+│       │   └── zh-TW.pak
+│       ├── resources/
+│       │   ├── app.asar.unpacked/
+│       │   │   ├── out/
+│       │   │   └── resources/
+│       │   ├── bin/
+│       │   │   ├── orca-ide*
+│       │   │   └── orca-wayland-clipboard*
+│       │   ├── computer-use-linux/
+│       │   │   └── runtime.py
+│       │   ├── native-chat-visuals/
+│       │   │   ├── .claude-plugin/
+│       │   │   └── skills/
+│       │   ├── node_modules/
+│       │   │   ├── @anthropic-ai/
+│       │   │   ├── @graphql-typed-document-node/
+│       │   │   ├── @koromix/
+│       │   │   ├── @linear/
+│       │   │   ├── @orca/
+│       │   │   ├── @parcel/
+│       │   │   ├── @posthog/
+│       │   │   ├── @transcribe-cpp/
+│       │   │   ├── ansi-regex/
+│       │   │   ├── ansi-styles/
+│       │   │   ├── argparse/
+│       │   │   ├── asn1/
+│       │   │   ├── bcrypt-pbkdf/
+│       │   │   ├── builder-util-runtime/
+│       │   │   ├── camelcase/
+│       │   │   ├── cliui/
+│       │   │   ├── color-convert/
+│       │   │   ├── color-name/
+│       │   │   ├── debug/
+│       │   │   ├── decamelize/
+│       │   │   ├── detect-libc/
+│       │   │   ├── dijkstrajs/
+│       │   │   ├── electron-updater/
+│       │   │   ├── emoji-regex/
+│       │   │   ├── emojibase-data/
+│       │   │   ├── find-up/
+│       │   │   ├── fs-extra/
+│       │   │   ├── get-caller-file/
+│       │   │   ├── graceful-fs/
+│       │   │   ├── i18next/
+│       │   │   ├── is-extglob/
+│       │   │   ├── is-fullwidth-code-point/
+│       │   │   ├── is-glob/
+│       │   │   ├── js-yaml/
+│       │   │   ├── jsonc-parser/
+│       │   │   ├── jsonfile/
+│       │   │   ├── koffi/
+│       │   │   ├── lazy-val/
+│       │   │   ├── locate-path/
+│       │   │   ├── lodash.escaperegexp/
+│       │   │   ├── lodash.isequal/
+│       │   │   ├── ms/
+│       │   │   ├── node-addon-api/
+│       │   │   ├── node-pty/
+│       │   │   ├── p-limit/
+│       │   │   ├── p-locate/
+│       │   │   ├── p-try/
+│       │   │   ├── path-exists/
+│       │   │   ├── picomatch/
+│       │   │   ├── pngjs/
+│       │   │   ├── posthog-node/
+│       │   │   ├── proper-lockfile/
+│       │   │   ├── qrcode/
+│       │   │   ├── require-directory/
+│       │   │   ├── require-main-filename/
+│       │   │   ├── retry/
+│       │   │   ├── safer-buffer/
+│       │   │   ├── sax/
+│       │   │   ├── semver/
+│       │   │   ├── set-blocking/
+│       │   │   ├── signal-exit/
+│       │   │   ├── smol-toml/
+│       │   │   ├── ssh2/
+│       │   │   ├── string-width/
+│       │   │   ├── strip-ansi/
+│       │   │   ├── tiny-typed-emitter/
+│       │   │   ├── transcribe-cpp/
+│       │   │   ├── tweetnacl/
+│       │   │   ├── universalify/
+│       │   │   ├── which-module/
+│       │   │   ├── wrap-ansi/
+│       │   │   ├── ws/
+│       │   │   ├── y18n/
+│       │   │   ├── yaml/
+│       │   │   ├── yargs/
+│       │   │   ├── yargs-parser/
+│       │   │   └── zod/
+│       │   ├── onboarding/
+│       │   │   └── feature-wall/
+│       │   ├── orcad-template/
+│       │   │   ├── computer-use-linux/
+│       │   │   ├── computer-use-windows/
+│       │   │   ├── native-chat-visuals/
+│       │   │   ├── node_modules/
+│       │   │   ├── out/
+│       │   │   ├── ripgrep/
+│       │   │   ├── targets/
+│       │   │   ├── claude-conversation-fork-worker-entry.js
+│       │   │   ├── claude-profile-setup-worker-entry.js
+│       │   │   ├── command-path-directory-worker-entry.js
+│       │   │   ├── computer-sidecar.js
+│       │   │   ├── daemon-entry.js
+│       │   │   ├── foreign-sqlite-reader-entry.js
+│       │   │   ├── orcad-server.js
+│       │   │   ├── orcad-template.json
+│       │   │   ├── orcad.js
+│       │   │   ├── parcel-watcher-process-entry.js
+│       │   │   ├── port-scan-command-worker-entry.js
+│       │   │   ├── profile-state-backup-worker-entry.js
+│       │   │   ├── profile-state-writer-worker-entry.js
+│       │   │   ├── session-scanner-service-entry.js
+│       │   │   ├── session-search-worker-entry.js
+│       │   │   ├── stt-worker.js
+│       │   │   └── worker-thread-child-process-entry.js
+│       │   ├── plugins/
+│       │   │   ├── declarative/
+│       │   │   ├── launch/
+│       │   │   └── types/
+│       │   ├── relay/
+│       │   │   └── wsl/
+│       │   ├── ripgrep/
+│       │   │   ├── darwin-arm64/
+│       │   │   ├── darwin-x64/
+│       │   │   ├── licenses/
+│       │   │   ├── linux-arm64/
+│       │   │   ├── linux-x64/
+│       │   │   ├── win32-arm64/
+│       │   │   └── win32-x64/
+│       │   ├── skill-data/
+│       │   │   ├── agentcore/
+│       │   │   ├── core/
+│       │   │   ├── derive-client/
+│       │   │   ├── dogfood/
+│       │   │   ├── electron/
+│       │   │   ├── protected-vercel-deployments/
+│       │   │   ├── slack/
+│       │   │   ├── vercel-sandbox/
+│       │   │   └── webmcp-gen/
+│       │   ├── skills/
+│       │   │   ├── agent-browser/
+│       │   │   ├── current-manifest.json
+│       │   │   └── released-digests.json
+│       │   ├── agent-browser-linux-arm64*
+│       │   ├── app-update.yml
+│       │   ├── app.asar
+│       │   ├── apparmor-profile
+│       │   └── package-type
+│       ├── LICENSE.electron.txt
+│       ├── LICENSES.chromium.html
+│       ├── chrome-sandbox*
+│       ├── chrome_100_percent.pak
+│       ├── chrome_200_percent.pak
+│       ├── chrome_crashpad_handler*
+│       ├── icudtl.dat
+│       ├── libEGL.so*
+│       ├── libGLESv2.so*
+│       ├── libffmpeg.so*
+│       ├── libvk_swiftshader.so*
+│       ├── libvulkan.so.1*
+│       ├── orca-ide*
+│       ├── resources.pak
+│       ├── snapshot_blob.bin
+│       ├── v8_context_snapshot.bin
+│       └── vk_swiftshader_icd.json
+└── usr/
+    └── share/
+        ├── applications/
+        │   └── orca-ide.desktop
+        ├── doc/
+        │   └── orca-ide/
+        │       └── changelog.gz
+        └── icons/
+            └── hicolor/
+                ├── 128x128/
+                ├── 16x16/
+                ├── 24x24/
+                ├── 256x256/
+                ├── 32x32/
+                ├── 48x48/
+                ├── 512x512/
+                └── 64x64/
+
+142 directories, 101 files
