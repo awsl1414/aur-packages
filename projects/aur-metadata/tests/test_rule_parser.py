@@ -428,6 +428,43 @@ def test_rule_chain_rejects_empty_list() -> None:
         RuleParser(_APP_CONFIG, version=[])
 
 
+def test_template_unmatched_group_falls_back_instead_of_partial_value() -> None:
+    """template 引用的组未命中时判失配，不拼出 "1.2." 这类看着合法的残缺值。
+
+    残缺值会被当成正常版本号写进 pkgver，下游无从发现；判失配则让规则链
+    继续尝试下一条规则。
+    """
+    parser = RuleParser(
+        _APP_CONFIG,
+        version=[
+            {
+                "kind": "jmespath",
+                "expr": "name",
+                "regex": r"(\d+\.\d+)(?:-(\w+))?",
+                "template": "{0}.{1}",
+            },
+            {"kind": "jmespath", "expr": "name", "regex": r"\d+\.\d+"},
+        ],
+    )
+    assert parser.parse_version(json.dumps({"name": "v1.2"})) == "1.2"
+    assert parser.parse_version(json.dumps({"name": "v1.2-beta"})) == "1.2.beta"
+
+
+def test_template_ignores_unreferenced_missing_groups() -> None:
+    """template 未引用的可选组缺失不影响输出（只有被引用的组才要求命中）"""
+    parser = RuleParser(
+        _APP_CONFIG,
+        version={
+            "kind": "re",
+            "expr": r"(\d+)\.(\d+)(?:-(x))?",
+            "regex": r"(\d+)\.(\d+)(?:-(x))?",
+            "template": "{0}.{1}",
+        },
+    )
+    assert parser.parse_version("1.2") == "1.2"
+    assert parser.parse_version("1.2-x") == "1.2"
+
+
 # ── Zen Browser 生产规则（packages.toml，rule + 规则链） ─────────────────────
 
 _ZEN_RELEASE_JSON: str = (
@@ -496,3 +533,39 @@ def test_zen_url_rules_target_linux_tarballs() -> None:
 
 def test_zen_missing_name_returns_none() -> None:
     assert _zen_parser().parse_version(json.dumps({"assets": []})) is None
+
+
+# ── RustMusic 生产规则（packages.toml，rule）：GitHub Releases API ────────────
+
+_RUSTMUSIC_RELEASE_JSON: str = (
+    Path(__file__).parent.joinpath("fixtures", "rustmusic_release_latest.json")
+    .read_text(encoding="utf-8")
+)
+
+
+def _rustmusic_parser() -> RuleParser:
+    return RuleParser(
+        _APP_CONFIG,
+        version={
+            "kind": "jmespath",
+            "expr": "tag_name",
+            "regex": r"^v(\d+\.\d+\.\d+)$",
+            "group": 1,
+        },
+        url={
+            "x86_64": {
+                "kind": "jmespath",
+                "expr": "assets[?ends_with(name, '_amd64.deb')].browser_download_url | [0]",
+            }
+        },
+    )
+
+
+def test_rustmusic_extracts_version_and_amd64_deb() -> None:
+    """tag 去 v 前缀；deb 按后缀筛选，避开同 release 的 AppImage / exe / .sig"""
+    parser = _rustmusic_parser()
+    assert parser.parse_version(_RUSTMUSIC_RELEASE_JSON) == "0.7.2"
+    assert parser.parse_url(ArchEnum.X86_64, _RUSTMUSIC_RELEASE_JSON) == (
+        "https://github.com/LingyunStudio/RustMusic/releases/download/v0.7.2/"
+        "RustMusic_0.7.2_amd64.deb"
+    )

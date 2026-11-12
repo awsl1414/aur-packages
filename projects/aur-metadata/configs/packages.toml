@@ -188,3 +188,23 @@ expr = "assets[?ends_with(name, '_amd64.deb')].browser_download_url | [0]"
 [packages.parser_config.url.aarch64]
 kind = "jmespath"
 expr = "assets[?ends_with(name, '_arm64.deb')].browser_download_url | [0]"
+
+# RustMusic：Tauri 音乐播放器，GitHub Releases 提供 deb / AppImage / exe。
+# 当前上游只发 amd64 deb，archs 仅 x86_64；上游补 aarch64 后需在此加
+# url.aarch64 规则并同步 archs 与 config.yaml。
+[[packages]]
+name = "rustmusic"
+parser_type = "rule"
+fetch_url = "https://api.github.com/repos/LingyunStudio/RustMusic/releases/latest"
+archs = ["x86_64"]
+interval_seconds = 14400
+
+[packages.parser_config.version]
+kind = "jmespath"
+expr = "tag_name"
+regex = '^v(\d+\.\d+\.\d+)$'
+group = 1
+
+[packages.parser_config.url.x86_64]
+kind = "jmespath"
+expr = "assets[?ends_with(name, '_amd64.deb')].browser_download_url | [0]"

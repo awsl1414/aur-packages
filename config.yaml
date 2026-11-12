@@ -121,3 +121,12 @@ packages:
     arch:
       - x86_64
       - aarch64
+
+  # 上游当前只发 amd64 deb；补 arm64 后在此加 aarch64 并同步 packages.toml
+  rustmusic:
+    name: rustmusic
+    pkgbuild: "packages/rustmusic/PKGBUILD"
+    update_source_url: true
+    enable: true
+    arch:
+      - x86_64

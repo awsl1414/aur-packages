@@ -55,6 +55,12 @@ def test_load_default_packages_file() -> None:
     assert set(orca.parser_config["url"]) == {"x86_64", "aarch64"}
     assert "_amd64.deb" in orca.parser_config["url"]["x86_64"]["expr"]
     assert "_arm64.deb" in orca.parser_config["url"]["aarch64"]["expr"]
+    # rustmusic 上游只发 amd64 deb：archs 与 url 规则都只能有 x86_64。
+    # 上游补 arm64 后这条断言会提醒同步 packages.toml 与 config.yaml
+    rust = by_name["rustmusic"]
+    assert rust.parser_type == "rule"
+    assert rust.archs == ["x86_64"]
+    assert set(rust.parser_config["url"]) == {"x86_64"}
 
 
 def test_load_rejects_missing_packages_key(tmp_path: Path) -> None:

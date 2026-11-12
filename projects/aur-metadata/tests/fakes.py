@@ -42,6 +42,7 @@ DEFAULT_PACKAGE_NAMES: set[str] = {
     "zen-browser",
     "zcode",
     "orca-ide",
+    "rustmusic",
 }
 
 
