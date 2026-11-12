@@ -96,11 +96,13 @@ class ExtractRule:
             # 无 regex 时 template 永不生效，静默忽略会掩盖配置错误
             raise ValueError("template 须与 regex 搭配使用")
         try:
-            # 干跑 format：占位符越界（IndexError）或非法（KeyError）构造期拦下
+            # 干跑 format：占位符越界（IndexError）、非整数键（KeyError）、
+            # 属性/下标访问（AttributeError/TypeError）构造期一并拦下
             self.template.format(*([""] * compiled.groups))
-        except (IndexError, KeyError, ValueError) as e:
+        except (IndexError, KeyError, ValueError, AttributeError, TypeError) as e:
             raise ValueError(f"template 与 regex 捕获组数不匹配: {e}") from e
-        # 仅记录 template 真正引用的组：未引用的组缺失不影响输出
+        # 仅记录 template 真正引用的组：未引用的组缺失不影响输出。
+        # 非整数占位符（{name}、{0.x}）已在上面的干跑中拦下，此处可安全转 int
         groups: tuple[int, ...] = tuple(
             int(index)
             for _, index, _, _ in Formatter().parse(self.template)

@@ -107,6 +107,13 @@ def _rule(**overrides: Any) -> dict[str, Any]:
             "template 缺 regex 搭配",
         ),
         (_rule(regex=r"(\d+)\.(\d+)", template="{0}a{x}"), "template 非法占位符"),
+        # 属性访问的占位符抛 AttributeError，须一并包装成 ValueError
+        # （配置错误统一一种异常类型，见 pyproject.toml 的 TRY004 ignore 说明）。
+        # 显式置 group=0：_rule() 默认带 group=1，会先撞上「group 与 template 同填」
+        (
+            _rule(regex=r"(\d+)\.(\d+)", group=0, template="{0.x}"),
+            "template 属性访问占位符",
+        ),
         (_rule(regex=r"(\d+)", group=2), "group 超出 regex 捕获组数"),
         (
             {"kind": "re", "expr": r"v(\d+)", "group": 2},
