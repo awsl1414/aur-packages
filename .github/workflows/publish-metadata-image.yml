@@ -2,8 +2,10 @@ name: Publish aur-metadata image
 
 on:
   push:
+    # dev 是本仓库的默认分支与主开发线（定时采集、CI 均在此跑），镜像在 dev
+    # 上构建，改完即可拉取验证；main 仅由 dev 合并而来，不单独触发
     branches:
-      - main
+      - dev
     paths:
       - projects/aur-metadata/**
       - uv.lock
@@ -68,6 +70,27 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "Package version: $version"
 
+      # 版本号未升时（自上次发布以来只改了别的东西），远端已有该版本的镜像，
+      # 说明这次是开发中的中间状态：只打 dev 标签供验证，不覆盖 v<version>
+      # 与 latest，避免把未发布的代码变成用户默认拉到的版本
+      - name: Check if version already published
+        id: release
+        run: |
+          tag="v${{ steps.version.outputs.version }}"
+          # 只把 200 视为已发布；网络错误或非 200 一律按未发布处理，
+          # 宁可重复发布（幂等）也不要漏发
+          code=$(curl -s -o /dev/null -w '%{http_code}' \
+            "https://hub.docker.com/v2/repositories/${DOCKERHUB_OWNER}/${IMAGE_NAME}/tags/${tag}/")
+          if [ "$code" = "200" ]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "dev=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::$tag 已发布，本轮只推 dev 标签供验证"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "dev=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::$tag 尚未发布，本轮将发布正式版本"
+          fi
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -94,11 +117,15 @@ jobs:
           images: |
             ${{ env.DOCKERHUB_OWNER }}/${{ env.IMAGE_NAME }}
             ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
-          # tag 沿用仓库既有约定 v<version>（历史镜像为 v1.0.0~v1.0.2）；
-          # version 字段本身不带 v，此处显式加前缀
+          # 单一 step 内按 release 取值分支：tag 沿用仓库既有约定 v<version>
+          # （历史镜像为 v1.0.0~v1.0.2），version 字段本身不带 v，显式加前缀。
+          # dev 分支构建只在版本号未发布时出现，此时用 dev 标签供验证，
+          # 避免中间状态覆盖 latest
           tags: |
-            type=raw,value=v${{ steps.version.outputs.version }}
-            type=raw,value=latest
+            type=raw,value=v${{ steps.version.outputs.version }},enable=${{ steps.release.outputs.publish }}
+            type=raw,value=latest,enable=${{ steps.release.outputs.publish }}
+            type=raw,value=dev,enable=${{ steps.release.outputs.dev }}
+            type=sha,format=short,prefix=dev-,enable=${{ steps.release.outputs.dev }}
 
       - name: Build and push
         uses: docker/build-push-action@v6

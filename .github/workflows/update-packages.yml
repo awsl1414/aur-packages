@@ -47,14 +47,36 @@ jobs:
           uv sync --package aur-auto-update
           uv run --package aur-auto-update aur-auto-update
 
-      - name: Detect changed packages
+      # 两类包需要推送 AUR：
+      # 1) updater 改了 PKGBUILD（版本或校验和变化）
+      # 2) AUR 上还不存在该包——新加入仓库的包没有版本变化，git diff 抓不到，
+      #    必须查 AUR 才能识别；漏判会让新包一直停留在本地仓库
+      # AUR 查询失败即终止：查询故障无法区分「包存在」与「不存在」，继续跑会
+      # 要么漏推、要么误推，两种都掩盖真实问题
+      - name: Detect packages to push
         id: detect
         run: |
           CHANGED=()
           for pkg_path in packages/*/; do
             [ -d "$pkg_path" ] || continue
             pkg_name=$(basename "$pkg_path")
+            reason=""
             if ! git diff --quiet -- "$pkg_path/PKGBUILD"; then
+              reason="PKGBUILD 已更新"
+            else
+              response=$(curl -fsS --max-time 20 \
+                "https://aur.archlinux.org/rpc/v5/info?arg[]=${pkg_name}")
+              count=$(echo "$response" | jq -er '.resultcount')
+              if [ -z "$count" ]; then
+                echo "::error::查询 ${pkg_name} 的 AUR 状态失败：${response}"
+                exit 1
+              fi
+              if [ "$count" -eq 0 ]; then
+                reason="AUR 上尚不存在，首次推送"
+              fi
+            fi
+            if [ -n "$reason" ]; then
+              echo "  $pkg_name —— $reason"
               CHANGED+=("$pkg_name")
             fi
           done
@@ -141,6 +163,14 @@ jobs:
           git config core.hooksPath .githooks
 
           git add packages/
+
+          # 仅「AUR 上尚不存在」的包不会产生任何文件改动（PKGBUILD 与
+          # .SRCINFO 都已是仓库中的现状），此时无内容可提交，直接跳过——
+          # 首次推送到 AUR 由后面的 push-to-aur 完成，不依赖这次提交
+          if git diff --cached --quiet; then
+            echo "无文件改动，跳过提交（首次推送的包在 push-to-aur 中处理）"
+            exit 0
+          fi
 
           changed='${{ needs.update.outputs.changed_packages }}'
           count=$(echo "$changed" | jq 'length')
