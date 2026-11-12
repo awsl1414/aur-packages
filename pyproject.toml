@@ -1,5 +1,9 @@
 # uv workspace 根（虚拟项目：不构建、不安装、无代码）
 # 两个成员应用位于 projects/ 下，统一由根目录的 uv.lock 管理依赖
+#
+# version 仅为满足 [project] 表必填字段，不参与任何发布或运行时流程：
+# 本包 package = false，无产物；需要维护的版本号在各自的成员 pyproject.toml
+# （aur-metadata 的版本用于 FastAPI /docs 显示与镜像 tag）。不要随成员升版本。
 [project]
 name = "aur-packages"
 version = "0.1.0"

@@ -67,8 +67,8 @@ docker run -d --name aur-metadata \
   awsl1414/aur-metadata:latest
 ```
 
-`GITHUB_TOKEN` 可省，但匿名调用 `api.github.com` 限流 60 次/时，涉及 GitHub
-上游的包（zen-browser / orca-ide / rustmusic）会频繁失败。
+`GITHUB_TOKEN` 可省，但匿名调用 `api.github.com` 限流 60 次/时，`fetch_url`
+指向 GitHub API 的包（见 `configs/packages.toml`）会频繁采集失败。
 
 ### 本地构建镜像
 

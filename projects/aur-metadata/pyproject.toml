@@ -1,3 +1,7 @@
+# version 有两个消费方，改动即时生效：importlib.metadata 读它作为 FastAPI 的
+# version（见 cli._app_version，体现在 /docs 与 /openapi.json），CI 也用它打
+# 镜像 tag。因此只在值得让用户重新拉镜像时递增：功能、行为、包配置变更算，
+# 注释与测试改动不算。升版本需同步 `uv lock`（uv.lock 记录成员版本，--locked 会校验）。
 [project]
 name = "aur-metadata"
 version = "1.0.3"

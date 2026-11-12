@@ -34,7 +34,7 @@
 | ---- | ---- | ---- |
 | `name` | ✓ | metadata 注册的包名 |
 | `pkgbuild` | ✓ | PKGBUILD 路径（相对 `config.yaml` 所在目录） |
-| `arch` | ✓ | 架构列表，须与 `packages.toml` 的 `archs` 一致 |
+| `arch` | ✓ | 架构列表，须与 `packages.toml` 的 `archs` 一致。上游只发部分架构时两者都只列已发布的（如 rustmusic 的 deb 仅有 amd64） |
 | `update_source_url` | — | 覆盖自动从 PKGBUILD 提取的 source URL |
 | `enable` | — | 是否启用该包（默认 true） |
 | `hash_algorithm` | — | 包级哈希算法覆盖，默认继承 `settings.hash_algorithm` |

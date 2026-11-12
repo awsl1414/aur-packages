@@ -1,3 +1,5 @@
+# version 当前无消费方：本应用不经 importlib.metadata 暴露自身版本，也不发镜像，
+# 它只被 CI 与本地 uv run 调用。版本号在需要分发（镜像/CLI --version）时再维护。
 [project]
 name = "aur-auto-update"
 version = "0.1.0"

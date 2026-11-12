@@ -49,3 +49,9 @@ export LD_PRELOAD="/usr/lib/libsystemd.so.0${LD_PRELOAD:+:$LD_PRELOAD}"
 本地源文件（`.sh`、`.desktop`、`.install`）列入 `source=()` 数组，makepkg 会校验其哈希。修改文件内容但未更新 PKGBUILD 中对应的校验和（如 `b2sums`、`sha512sums`）会导致构建失败。
 
 **处理**：修改本地源文件后必须同步更新 PKGBUILD 中对应的校验和。
+
+### deb 数据层压缩格式不固定
+
+makepkg 解包 deb 后，数据层文件名由上游决定：多数包是 `data.tar.xz`，也有用 `data.tar.gz` 的（如 rustmusic）。在 `package()` 里写死 `data.tar.xz` 会在后一类包上构建失败。
+
+**处理**：先 `bsdtar -tf <deb>` 确认实际文件名，再在 `package()` 中对应解包。仅支持单一格式的包，可参考 `structure/<pkgname>.txt` 快照确认。

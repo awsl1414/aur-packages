@@ -10,14 +10,8 @@
 
 ## 命名
 
-`<pkgname>.txt`，与 `packages/<pkgname>` 对应。例如：
-
-```
-structure/
-├── README.md
-├── navicat17-premium-zh-cn.txt
-└── z-code.txt
-```
+`<pkgname>.txt`，与 `packages/<pkgname>` 对应。当前已有 `navicat17-premium-zh-cn.txt`、
+`z-code.txt`、`orca-ide.txt`、`rustmusic.txt` 等。
 
 ## 添加新包快照
 
