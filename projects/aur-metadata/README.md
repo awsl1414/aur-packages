@@ -49,10 +49,11 @@ uv run aur-metadata debug-extract qq                      # 按包配置试提�
 ### 使用已发布镜像
 
 CI 在推送到 `main` 时自动构建并推送多架构镜像（linux/amd64、linux/arm64），
-tag 为 `pyproject.toml` 的版本号、`latest` 与 `sha-<短哈希>`：
+tag 为 `v<版本号>`（与 `pyproject.toml` 一致，加 `v` 前缀）与 `latest`：
 
 ```bash
-docker pull awsl1414/aur-metadata:latest    # Docker Hub
+docker pull awsl1414/aur-metadata:latest          # Docker Hub
+docker pull awsl1414/aur-metadata:v1.0.3          # 锁定版本
 docker pull ghcr.io/awsl1414/aur-metadata:latest  # GitHub Container Registry
 ```
 
