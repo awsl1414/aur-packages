@@ -1,0 +1,112 @@
+name: Publish aur-metadata image
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - projects/aur-metadata/**
+      - uv.lock
+      - pyproject.toml
+      - .github/workflows/publish-metadata-image.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-metadata-image
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: aur-metadata
+  # 写死命名空间而不是引用 secret：未配置时 images 会退化成 "/aur-metadata"
+  # 这种无效名，构建才报错；用户名不是密钥，token 才需要
+  DOCKERHUB_OWNER: awsl1414
+
+jobs:
+  test:
+    name: Test before publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+            projects/*/pyproject.toml
+
+      - name: Sync dependencies
+        run: uv sync --package aur-metadata
+
+      - name: Test aur-metadata
+        working-directory: projects/aur-metadata
+        run: uv run pytest
+
+  build:
+    name: Build and push
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Read package version
+        id: version
+        run: |
+          version=$(grep -m1 '^version' projects/aur-metadata/pyproject.toml | cut -d'"' -f2)
+          if [ -z "$version" ]; then
+            echo "::error::projects/aur-metadata/pyproject.toml 未解析到 version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Package version: $version"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKERHUB_OWNER }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.DOCKERHUB_OWNER }}/${{ env.IMAGE_NAME }}
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ steps.version.outputs.version }}
+            type=raw,value=latest
+            type=sha,format=short,prefix=sha-
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: projects/aur-metadata/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

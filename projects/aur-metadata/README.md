@@ -46,6 +46,32 @@ uv run aur-metadata debug-extract qq                      # 按包配置试提�
 
 ## Docker 部署
 
+### 使用已发布镜像
+
+CI 在推送到 `main` 时自动构建并推送多架构镜像（linux/amd64、linux/arm64），
+tag 为 `pyproject.toml` 的版本号、`latest` 与 `sha-<短哈希>`：
+
+```bash
+docker pull awsl1414/aur-metadata:latest    # Docker Hub
+docker pull ghcr.io/awsl1414/aur-metadata:latest  # GitHub Container Registry
+```
+
+运行（挂载自定义配置与数据卷）：
+
+```bash
+docker run -d --name aur-metadata \
+  -p 8000:8000 \
+  -v "$PWD/configs/config.docker.toml:/app/configs/config.docker.toml:ro" \
+  -v metadata-data:/app/data \
+  -e GITHUB_TOKEN=<token> \
+  awsl1414/aur-metadata:latest
+```
+
+`GITHUB_TOKEN` 可省，但匿名调用 `api.github.com` 限流 60 次/时，涉及 GitHub
+上游的包（zen-browser / orca-ide / rustmusic）会频繁失败。
+
+### 本地构建镜像
+
 镜像以 **monorepo 仓库根为构建上下文**——Dockerfile 需要 COPY 根 `uv.lock` 与
 各成员 `pyproject.toml` 才能完成 workspace 级 `--locked` 校验。因此必须从仓库
 根构建，或显式指定上下文：
