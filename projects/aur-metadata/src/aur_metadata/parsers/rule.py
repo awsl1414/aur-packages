@@ -12,7 +12,9 @@
   - 命中多个结果时默认取首个（``first``），``first=false`` 则以 ``join``
     分隔符拼接全部命中
 - 变换（可选）：对选择结果应用 ``regex``，取捕获组 ``group`` 或按
-  ``template``（如 ``"{0}.{1}"``）拼接多个捕获组；未命中的捕获组按空串代入
+  ``template``（如 ``"{0}.{1}"``）拼接多个捕获组。template 引用的组必须全部
+  命中，否则该规则判为失配——部分缺失时拼出的残缺值（如 ``"1.2."``）看着
+  合法却错误，比直接 fallback 更难发现
 - 规则链（可选）：``version`` / ``url.<arch>`` 可写成规则表列表，按声明顺序
   尝试，首个提取到值的规则生效。用于上游存在多种可选形态的数据源，只有末条
   规则失配才记结构变更告警
@@ -40,6 +42,7 @@
 import logging
 import re
 from dataclasses import dataclass, field
+from string import Formatter
 from typing import Any
 
 import jmespath
@@ -72,6 +75,10 @@ class ExtractRule:
     _compiled: re.Pattern[str] | None = field(
         default=None, init=False, repr=False, compare=False
     )
+    # template 实际引用的捕获组索引，运行期据此判断是否有组未命中
+    _template_groups: tuple[int, ...] = field(
+        default=(), init=False, repr=False, compare=False
+    )
 
     def __post_init__(self) -> None:
         compiled: re.Pattern[str] | None = (
@@ -93,6 +100,13 @@ class ExtractRule:
             self.template.format(*([""] * compiled.groups))
         except (IndexError, KeyError, ValueError) as e:
             raise ValueError(f"template 与 regex 捕获组数不匹配: {e}") from e
+        # 仅记录 template 真正引用的组：未引用的组缺失不影响输出
+        groups: tuple[int, ...] = tuple(
+            int(index)
+            for _, index, _, _ in Formatter().parse(self.template)
+            if index is not None
+        )
+        object.__setattr__(self, "_template_groups", groups)
 
 
 def _build_rule(data: Any, label: str) -> ExtractRule:
@@ -276,8 +290,7 @@ class RuleParser(BaseParser):
         """选择 → 合并 → 变换三段提取；无命中/无变换结果记结构变更返回 None。
 
         ``quiet`` 用于规则链的非末位规则：失配属预期 fallback，不记结构变更
-        告警，避免多形态上游每轮采集都刷出误报。模板中未命中的捕获组按空串
-        代入（如 release name 有日期则拼日期，无日期则只用基础版本号）。
+        告警，避免多形态上游每轮采集都刷出误报。
         """
         texts: list[str] | None = self._select(rule, response_data, quiet=quiet)
         if texts is None:
@@ -294,10 +307,22 @@ class RuleParser(BaseParser):
                 )
             return None
         if rule.template is not None:
-            # 可选组未参与匹配时为 None，按空串代入以免 template 里出现 "None"
-            groups: tuple[str, ...] = tuple(
-                g if g is not None else "" for g in match.groups()
-            )
+            # template 引用的捕获组必须全部命中。部分缺失时若按空串代入，
+            # "1.2." 这类看着合法的残缺版本号会被写进 pkgver，下游无从发现；
+            # 判为失配让规则链 fallback 到能表达该形态的下一条规则
+            groups: tuple[str | None, ...] = match.groups()
+            missing: list[int] = [
+                index
+                for index in rule._template_groups
+                if index >= len(groups) or groups[index] is None
+            ]
+            if missing:
+                if not quiet:
+                    self._log_structure_change(
+                        f"{context}: template 引用的捕获组未命中 {missing}",
+                        text or response_data,
+                    )
+                return None
             return rule.template.format(*groups)
         return match.group(rule.group)
 
