@@ -94,10 +94,11 @@ jobs:
           images: |
             ${{ env.DOCKERHUB_OWNER }}/${{ env.IMAGE_NAME }}
             ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+          # tag 沿用仓库既有约定 v<version>（历史镜像为 v1.0.0~v1.0.2）；
+          # version 字段本身不带 v，此处显式加前缀
           tags: |
-            type=raw,value=${{ steps.version.outputs.version }}
+            type=raw,value=v${{ steps.version.outputs.version }}
             type=raw,value=latest
-            type=sha,format=short,prefix=sha-
 
       - name: Build and push
         uses: docker/build-push-action@v6
