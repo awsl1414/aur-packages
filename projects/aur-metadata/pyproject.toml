@@ -1,6 +1,6 @@
 [project]
 name = "aur-metadata"
-version = "0.1.0"
+version = "1.0.3"
 description = "AUR packages metadata service"
 readme = "README.md"
 requires-python = ">=3.13"
