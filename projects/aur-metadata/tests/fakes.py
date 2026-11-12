@@ -29,6 +29,21 @@ from aur_metadata.fetcher import Fetcher
 from aur_metadata.parsers.base import BaseParser
 from aur_metadata.registry import PackageEntry, PackageRegistry
 
+# 仓库自带 packages.toml 的包名全集。多处测试断言 seeder / registry 与配置同步，
+# 共用一份，避免新增包时漏改某个文件导致断言与实际配置漂移。
+DEFAULT_PACKAGE_NAMES: set[str] = {
+    "qq",
+    "navicat",
+    "bt-dualboot-ng",
+    "trae",
+    "trae-sg",
+    "trae-us",
+    "trae-cn",
+    "zen-browser",
+    "zcode",
+    "orca-ide",
+}
+
 
 def make_app_config() -> AppConfig:
     """构造测试用 AppConfig：合理默认值，QQ 签名等网络参数仅为占位"""

@@ -11,22 +11,11 @@ from aur_metadata.db import _load_schema_sql, _split_sql
 from aur_metadata.models import Package
 from aur_metadata.services.package_seeder import sync_packages_from_config
 from aur_metadata.services.registry_loader import load_registry_from_db
-from tests.fakes import make_app_config
+from tests.fakes import DEFAULT_PACKAGE_NAMES, make_app_config
 
 _APP_CONFIG = make_app_config()
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-_DEFAULT_PACKAGE_NAMES: set[str] = {
-    "qq",
-    "navicat",
-    "bt-dualboot-ng",
-    "trae",
-    "trae-sg",
-    "trae-us",
-    "trae-cn",
-    "zen-browser",
-    "zcode",
-}
 
 
 def _cfg(name: str = "qq", **overrides: Any) -> PackageConfig:
@@ -190,12 +179,12 @@ async def test_full_pipeline_with_real_schema_and_config(tmp_path: Path) -> None
         report = await sync_packages_from_config(
             load_packages(_PROJECT_ROOT / "configs" / "packages.toml")
         )
-        assert set(report.created) == _DEFAULT_PACKAGE_NAMES
+        assert set(report.created) == DEFAULT_PACKAGE_NAMES
         assert report.updated == []
         assert report.orphans == []
 
         registry, pkgs = await load_registry_from_db(_APP_CONFIG)
-        assert {e.name for e in registry.list_all()} == _DEFAULT_PACKAGE_NAMES
-        assert {p.name for p in pkgs} == _DEFAULT_PACKAGE_NAMES
+        assert {e.name for e in registry.list_all()} == DEFAULT_PACKAGE_NAMES
+        assert {p.name for p in pkgs} == DEFAULT_PACKAGE_NAMES
     finally:
         await Tortoise.close_connections()

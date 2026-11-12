@@ -5,21 +5,10 @@ from pathlib import Path
 import pytest
 
 from aur_metadata.config import PackageConfig, load_packages
+from tests.fakes import DEFAULT_PACKAGE_NAMES
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-# 仓库自带配置：9 个包全部 interval 模式（packages 表定义的事实来源）
-_DEFAULT_PACKAGE_NAMES: set[str] = {
-    "qq",
-    "navicat",
-    "bt-dualboot-ng",
-    "trae",
-    "trae-sg",
-    "trae-us",
-    "trae-cn",
-    "zen-browser",
-    "zcode",
-}
 
 
 def _write_config(tmp_path: Path, content: str) -> Path:
@@ -35,7 +24,7 @@ def test_load_default_packages_file() -> None:
     条目，条目顺序被打乱时会静默挂错包，靠这里的断言兜底。
     """
     packages: list[PackageConfig] = load_packages(_PROJECT_ROOT / "configs" / "packages.toml")
-    assert {p.name for p in packages} == _DEFAULT_PACKAGE_NAMES
+    assert {p.name for p in packages} == DEFAULT_PACKAGE_NAMES
     assert all(p.schedule_type == "interval" for p in packages)
     navicat = next(p for p in packages if p.name == "navicat")
     assert navicat.parser_config["version"]["kind"] == "xpath"
@@ -53,6 +42,13 @@ def test_load_default_packages_file() -> None:
         "expr": "info.version",
     }
     assert by_name["zen-browser"].parser_config == {}
+    # orca-ide 的 version/url 子表都必须绑定到它自己，后面新增条目时不能挂错
+    orca = by_name["orca-ide"]
+    assert orca.parser_type == "rule"
+    assert orca.parser_config["version"]["expr"] == "tag_name"
+    assert set(orca.parser_config["url"]) == {"x86_64", "aarch64"}
+    assert "_amd64.deb" in orca.parser_config["url"]["x86_64"]["expr"]
+    assert "_arm64.deb" in orca.parser_config["url"]["aarch64"]["expr"]
 
 
 def test_load_rejects_missing_packages_key(tmp_path: Path) -> None:

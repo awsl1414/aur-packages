@@ -137,3 +137,31 @@ expr = 'https://[^"<>\s]+/ZCode-[0-9]+(?:\.[0-9]+)+-linux-x64\.deb'
 [packages.parser_config.url.aarch64]
 kind = "re"
 expr = 'https://[^"<>\s]+/ZCode-[0-9]+(?:\.[0-9]+)+-linux-arm64\.deb'
+
+# Orca IDE：GitHub Releases（latest）提供 deb。asset 名带版本号与架构
+# （orca-ide_<ver>_amd64.deb / _arm64.deb），按名称后缀筛 browser_download_url，
+# 避开同仓库的 rpm / AppImage / orca-server-linux-*.tar.gz（后者也带架构标识）。
+# 版本取 tag_name 而非 deb 头部：上游 tag 与 deb 的 dpkg Version 一致，省掉一次
+# 194MB 下载。正则限死三段式：仓库里另有一条 mobile-android-vX.Y.Z 产品线，
+# 严格匹配能让 tag 方案变更时 fail-loud（返回 None + 结构变更告警），
+# 而不是把 0.0.64 这类移动端版本误写进桌面包的 pkgver。
+[[packages]]
+name = "orca-ide"
+parser_type = "rule"
+fetch_url = "https://api.github.com/repos/stablyai/orca/releases/latest"
+archs = ["x86_64", "aarch64"]
+interval_seconds = 14400
+
+[packages.parser_config.version]
+kind = "jmespath"
+expr = "tag_name"
+regex = '^v(\d+\.\d+\.\d+)$'
+group = 1
+
+[packages.parser_config.url.x86_64]
+kind = "jmespath"
+expr = "assets[?ends_with(name, '_amd64.deb')].browser_download_url | [0]"
+
+[packages.parser_config.url.aarch64]
+kind = "jmespath"
+expr = "assets[?ends_with(name, '_arm64.deb')].browser_download_url | [0]"

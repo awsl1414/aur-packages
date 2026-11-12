@@ -37,11 +37,42 @@ _ZCODE_URL_AARCH64_RULE: dict[str, Any] = {
     "expr": r"https://[^\"<>\s]+/ZCode-[0-9]+(?:\.[0-9]+)+-linux-arm64\.deb",
 }
 
+# 真实 GitHub Releases API 响应（orca latest）：含 rpm / AppImage / server tarball
+# 等干扰资产，用于验证 deb 筛选不会误匹配
+_ORCA_RELEASE_JSON: str = (
+    Path(__file__).parent.joinpath("fixtures", "orca_release_latest.json")
+    .read_text(encoding="utf-8")
+)
+
+# packages.toml 中 orca-ide 包的生产规则（rule：版本取 tag_name，URL 按 asset 名后缀筛选）
+_ORCA_VERSION_RULE: dict[str, Any] = {
+    "kind": "jmespath",
+    "expr": "tag_name",
+    "regex": r"^v(\d+\.\d+\.\d+)$",
+    "group": 1,
+}
+_ORCA_URL_X86_64_RULE: dict[str, Any] = {
+    "kind": "jmespath",
+    "expr": "assets[?ends_with(name, '_amd64.deb')].browser_download_url | [0]",
+}
+_ORCA_URL_AARCH64_RULE: dict[str, Any] = {
+    "kind": "jmespath",
+    "expr": "assets[?ends_with(name, '_arm64.deb')].browser_download_url | [0]",
+}
+
 
 def _zcode_parser() -> RuleDebParser:
     return RuleDebParser(
         _APP_CONFIG,
         url={"x86_64": _ZCODE_URL_X86_64_RULE, "aarch64": _ZCODE_URL_AARCH64_RULE},
+    )
+
+
+def _orca_parser() -> RuleParser:
+    return RuleParser(
+        _APP_CONFIG,
+        version=_ORCA_VERSION_RULE,
+        url={"x86_64": _ORCA_URL_X86_64_RULE, "aarch64": _ORCA_URL_AARCH64_RULE},
     )
 
 
@@ -312,3 +343,49 @@ def test_zcode_version_from_package_head() -> None:
         parser.version_from_package_head(build_deb(version="3.14.0-7681"))
         == "3.14.0_7681"
     )
+
+
+# ── Orca IDE 生产规则（packages.toml，rule）：GitHub Releases API ─────────────
+
+
+def test_orca_version_strips_tag_prefix() -> None:
+    """tag_name 带 v 前缀，正则单独取出三段式版本号（下游 pkgver 不接受 v）"""
+    assert _orca_parser().parse_version(_ORCA_RELEASE_JSON) == "1.4.257"
+
+
+def test_orca_url_rules_pick_deb_over_lookalike_assets() -> None:
+    """按 _amd64.deb / _arm64.deb 后缀筛选，避开 rpm、AppImage 与
+    orca-server-linux-*.tar.gz（后两者也带架构标识，前缀匹配会误中）"""
+    parser = _orca_parser()
+    assert parser.parse_url(ArchEnum.X86_64, _ORCA_RELEASE_JSON) == (
+        "https://github.com/stablyai/orca/releases/download/v1.4.257/"
+        "orca-ide_1.4.257_amd64.deb"
+    )
+    assert parser.parse_url(ArchEnum.AARCH64, _ORCA_RELEASE_JSON) == (
+        "https://github.com/stablyai/orca/releases/download/v1.4.257/"
+        "orca-ide_1.4.257_arm64.deb"
+    )
+
+
+def test_orca_version_regex_rejects_malformed_tag() -> None:
+    """tag 不符合 vX.Y.Z 时返回 None 并记结构变更，而非把错误值写进 pkgver"""
+    parser = _orca_parser()
+    assert parser.parse_version(json.dumps({"tag_name": "nightly-20261112"})) is None
+
+
+def test_orca_url_rule_returns_none_when_asset_missing() -> None:
+    """上游停止发布某架构 deb 时该架构返回 None（走结构变更告警）"""
+    payload: dict[str, Any] = {
+        "tag_name": "v1.4.258",
+        "assets": [
+            {
+                "name": "orca-ide_1.4.258_amd64.deb",
+                "browser_download_url": "https://example.invalid/amd64.deb",
+            }
+        ],
+    }
+    parser = _orca_parser()
+    assert parser.parse_url(ArchEnum.X86_64, json.dumps(payload)) == (
+        "https://example.invalid/amd64.deb"
+    )
+    assert parser.parse_url(ArchEnum.AARCH64, json.dumps(payload)) is None

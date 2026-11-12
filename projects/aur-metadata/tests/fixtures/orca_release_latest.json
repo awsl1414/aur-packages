@@ -1,0 +1,103 @@
+{
+  "tag_name": "v1.4.257",
+  "prerelease": false,
+  "draft": false,
+  "assets": [
+    {
+      "name": "latest-linux-arm64.yml",
+      "browser_download_url": "https://github.com/stablyai/orca/releases/download/v1.4.257/latest-linux-arm64.yml"
+    },
+    {
+      "name": "latest-linux.yml",
+      "browser_download_url": "https://github.com/stablyai/orca/releases/download/v1.4.257/latest-linux.yml"
+    },
+    {
+      "name": "latest-mac.yml",
+      "browser_download_url": "https://github.com/stablyai/orca/releases/download/v1.4.257/latest-mac.yml"
+    },
+    {
+      "name": "latest.yml",
+      "browser_download_url": "https://github.com/stablyai/orca/releases/download/v1.4.257/latest.yml"
+    },
+    {
+      "name": "Orca-1.4.257-arm64-mac.zip",
+      "browser_download_url": "https://github.com/stablyai/orca/releases/download/v1.4.257/Orca-1.4.257-arm64-mac.zip"
+    },
+    {
+      "name": "Orca-1.4.257-arm64-mac.zip.blockmap",
+      "browser_download_url": "https://github.com/stablyai/orca/releases/download/v1.4.257/Orca-1.4.257-arm64-mac.zip.blockmap"
+    },
+    {
+      "name": "Orca-1.4.257-mac.zip",
+      "browser_download_url": "https://github.com/stablyai/orca/releases/download/v1.4.257/Orca-1.4.257-mac.zip"
+    },
+    {
+      "name": "Orca-1.4.257-mac.zip.blockmap",
+      "browser_download_url": "https://github.com/stablyai/orca/releases/download/v1.4.257/Orca-1.4.257-mac.zip.blockmap"
+    },
+    {
+      "name": "orca-ide-1.4.257.aarch64.rpm",
+      "browser_download_url": "https://github.com/stablyai/orca/releases/download/v1.4.257/orca-ide-1.4.257.aarch64.rpm"
+    },
+    {
+      "name": "orca-ide-1.4.257.x86_64.rpm",
+      "browser_download_url": "https://github.com/stablyai/orca/releases/download/v1.4.257/orca-ide-1.4.257.x86_64.rpm"
+    },
+    {
+      "name": "orca-ide_1.4.257_amd64.deb",
+      "browser_download_url": "https://github.com/stablyai/orca/releases/download/v1.4.257/orca-ide_1.4.257_amd64.deb"
+    },
+    {
+      "name": "orca-ide_1.4.257_arm64.deb",
+      "browser_download_url": "https://github.com/stablyai/orca/releases/download/v1.4.257/orca-ide_1.4.257_arm64.deb"
+    },
+    {
+      "name": "orca-linux-arm64.AppImage",
+      "browser_download_url": "https://github.com/stablyai/orca/releases/download/v1.4.257/orca-linux-arm64.AppImage"
+    },
+    {
+      "name": "orca-linux.AppImage",
+      "browser_download_url": "https://github.com/stablyai/orca/releases/download/v1.4.257/orca-linux.AppImage"
+    },
+    {
+      "name": "orca-macos-arm64.dmg",
+      "browser_download_url": "https://github.com/stablyai/orca/releases/download/v1.4.257/orca-macos-arm64.dmg"
+    },
+    {
+      "name": "orca-macos-arm64.dmg.blockmap",
+      "browser_download_url": "https://github.com/stablyai/orca/releases/download/v1.4.257/orca-macos-arm64.dmg.blockmap"
+    },
+    {
+      "name": "orca-macos-x64.dmg",
+      "browser_download_url": "https://github.com/stablyai/orca/releases/download/v1.4.257/orca-macos-x64.dmg"
+    },
+    {
+      "name": "orca-macos-x64.dmg.blockmap",
+      "browser_download_url": "https://github.com/stablyai/orca/releases/download/v1.4.257/orca-macos-x64.dmg.blockmap"
+    },
+    {
+      "name": "orca-server-linux-arm64.tar.gz",
+      "browser_download_url": "https://github.com/stablyai/orca/releases/download/v1.4.257/orca-server-linux-arm64.tar.gz"
+    },
+    {
+      "name": "orca-server-linux-x64.tar.gz",
+      "browser_download_url": "https://github.com/stablyai/orca/releases/download/v1.4.257/orca-server-linux-x64.tar.gz"
+    },
+    {
+      "name": "orca-server-sha256sums.txt",
+      "browser_download_url": "https://github.com/stablyai/orca/releases/download/v1.4.257/orca-server-sha256sums.txt"
+    },
+    {
+      "name": "orca-sourcemaps-v1.4.257.zip",
+      "browser_download_url": "https://github.com/stablyai/orca/releases/download/v1.4.257/orca-sourcemaps-v1.4.257.zip"
+    },
+    {
+      "name": "orca-windows-setup.exe",
+      "browser_download_url": "https://github.com/stablyai/orca/releases/download/v1.4.257/orca-windows-setup.exe"
+    },
+    {
+      "name": "orca-windows-setup.exe.blockmap",
+      "browser_download_url": "https://github.com/stablyai/orca/releases/download/v1.4.257/orca-windows-setup.exe.blockmap"
+    }
+  ]
+}

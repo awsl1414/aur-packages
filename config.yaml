@@ -112,3 +112,12 @@ packages:
     arch:
       - x86_64
       - aarch64
+
+  orca-ide:
+    name: orca-ide
+    pkgbuild: "packages/orca-ide/PKGBUILD"
+    update_source_url: true
+    enable: true
+    arch:
+      - x86_64
+      - aarch64
