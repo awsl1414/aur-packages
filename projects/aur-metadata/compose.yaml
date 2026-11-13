@@ -10,11 +10,9 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      # 覆盖镜像内配置以调整监听地址/数据库路径等（无需重新构建）
       - ./configs/config.docker.toml:/app/configs/config.docker.toml:ro
-      - metadata-data:/app/data # 持久化 SQLite 数据库（具名卷属主由引擎自动处理，勿改绑定挂载）
+      # 目录不用手动创建。rootful Docker 下容器自行改属主；rootless 下需
+      # 宿主目录可写（chmod 0777 ./data），详见 README「数据持久化」
+      - ./data:/app/data
     dns:
       - "119.29.29.29" # 必须，否则 qq 解析不到内容
-
-volumes:
-  metadata-data:

@@ -21,7 +21,7 @@ oidb_command = "0x9b8e"
 oidb_service_type = 1
 
 [database]
-# 具名卷挂载点（见 compose.yaml），容器内写绝对路径
+# 数据目录挂载点（见 compose.yaml），容器内写绝对路径
 sqlite_path = "/app/data/aur_packages.db"
 
 [github]

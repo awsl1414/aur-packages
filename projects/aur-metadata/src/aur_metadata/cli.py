@@ -2,8 +2,10 @@
 
 import argparse
 import asyncio
+import json
 import logging
 import sys
+import urllib.request
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from importlib.metadata import PackageNotFoundError, version
@@ -152,6 +154,25 @@ def _debug_extract(
     return 0
 
 
+def _healthcheck(port: int) -> int:
+    """请求自身接口判断服务是否就绪，供容器 HEALTHCHECK 调用。
+
+    端口由调用方按「命令行覆盖 > 配置」确定，与 serve 走同一套取值逻辑。
+    除 HTTP 200 外还要求响应体是业务成功码，避免同端口上别的服务返回 200
+    页面时被误判为就绪；列表接口会读数据库，因此同时覆盖「应用已启动」和
+    「数据库可用」（尚无快照时该接口仍返回 200）。
+    """
+    url: str = f"http://127.0.0.1:{port}/api/v1/packages"
+    try:
+        with urllib.request.urlopen(url, timeout=4) as response:
+            if response.status != 200:
+                return 1
+            body: object = json.loads(response.read())
+    except (OSError, ValueError):
+        return 1
+    return 0 if isinstance(body, dict) and body.get("code") == 0 else 1
+
+
 def main() -> int:
     """CLI 入口：默认启动 uvicorn 服务；``debug-extract <name>`` 试提取指定包"""
     _configure_logging()
@@ -176,16 +197,19 @@ def main() -> int:
     parser.add_argument(
         "command",
         nargs="?",
-        choices=("serve", "debug-extract"),
+        choices=("serve", "debug-extract", "healthcheck"),
         default="serve",
-        help="serve 启动服务（默认）；debug-extract 按包配置试提取版本与 URL",
+        help="serve 启动服务（默认）；debug-extract 按包配置试提取版本与 URL；"
+        "healthcheck 探测自身 HTTP 端口是否就绪",
     )
     parser.add_argument("package", nargs="?", default=None, help="debug-extract 的包名")
     args = parser.parse_args()
 
     config = load_config(args.config)
-    packages = load_packages(args.packages)
+    if args.command == "healthcheck":
+        return _healthcheck(args.port if args.port is not None else config.server.port)
 
+    packages = load_packages(args.packages)
     if args.command == "debug-extract":
         if args.package is None:
             parser.error("debug-extract 需要提供包名（可用包见 packages.toml）")
