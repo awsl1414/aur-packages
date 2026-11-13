@@ -4,10 +4,11 @@
 
 架构设计：
 1. 并行更新所有维护的 AUR 包（使用 asyncio.gather）
-2. 所有上游解析统一由 aur-metadata 的 API 完成，客户端只消费
-   {version, urls, download_urls, hashes} 结构
-3. metadata 未提供 hashes（或部分架构缺失）时，回退到按 download_urls
-  （QQ 等鉴权源的实时签名链接；缺失时退回 urls）下载 + 本地计算
+2. 上游解析优先由 aur-metadata 的 API 完成，客户端消费
+   {version, urls, download_urls} 结构；GitHub 来源包在 API 请求失败时回退到
+   本地 release 解析
+3. 校验和一律由客户端按 download_urls（QQ 等鉴权源的实时签名链接；缺失时退回
+   urls）下载安装包后本地计算
 """
 
 import asyncio
@@ -21,6 +22,8 @@ from aur_auto_update.constants import ArchEnum
 from aur_auto_update.fetcher import Fetcher
 from aur_auto_update.parsers.api_parser import ApiParser, ParsedPackage
 from aur_auto_update.pkgbuild_editor import PKGBUILDEditor
+from aur_auto_update.services.github_release_service import GithubReleaseService
+from aur_auto_update.services.package_version_provider import PackageVersionProvider
 from aur_auto_update.utils.downloader import Downloader
 from aur_auto_update.utils.hash import calculate_file_hash
 from aur_auto_update.utils.url_utils import generate_download_filename
@@ -58,8 +61,8 @@ class PackageUpdater:
         # 从配置中获取下载设置
         download_settings = self.config.settings.download
 
-        # 初始化下载器（仅在 metadata 未提供 hashes 时回退使用）。构造即检测
-        # aria2c，置于 Fetcher 之前：缺失时在此抛错，不会留下已创建的 httpx 客户端
+        # 初始化下载器（计算校验和时下载安装包）。构造即检测 aria2c，置于
+        # Fetcher 之前：缺失时在此抛错，不会留下已创建的 httpx 客户端
         self.downloader = Downloader(
             max_retries=download_settings.max_retries,
             retry_wait=download_settings.retry_wait,
@@ -81,7 +84,14 @@ class PackageUpdater:
         # 唯一解析器：消费 metadata API 的统一响应
         self.parser = ApiParser()
 
-        # 配置文件所在目录为 PKGBUILD 与回退下载目录的解析基准
+        # 版本来源：metadata 优先，GitHub 来源包在失败时回退到本地 release 解析
+        self.version_provider = PackageVersionProvider(
+            self.fetcher,
+            self.parser,
+            GithubReleaseService(self.fetcher),
+        )
+
+        # 配置文件所在目录为 PKGBUILD 与下载目录的解析基准
         # （config.yaml 位于仓库根，故即仓库根）
         self.pkgbuild_root = self.config.base_dir
 
@@ -89,10 +99,10 @@ class PackageUpdater:
         """释放资源"""
         await self.fetcher.client.aclose()
 
-    def _build_fetch_url(self, package_name: str, hash_algorithm: str) -> str:
-        """拼接 metadata API 查询 URL：{base_url}/{name}?algorithm={algo}"""
+    def _build_fetch_url(self, package_name: str) -> str:
+        """拼接 metadata API 查询 URL：{base_url}/{name}"""
         base_url = self.config.settings.api.base_url.rstrip("/")
-        return f"{base_url}/{package_name}?algorithm={hash_algorithm}"
+        return f"{base_url}/{package_name}"
 
     def _get_pkgbuild_path(self, pkgbuild_relative_path: str) -> Path:
         """
@@ -132,22 +142,6 @@ class PackageUpdater:
             return False
         return True
 
-    def _select_api_hashes(
-        self, parsed: ParsedPackage, supported_archs: list[ArchEnum]
-    ) -> dict[str, str]:
-        """从 ``parsed.hashes`` 中挑选出支持架构的校验和。
-
-        返回 ``{arch_value: checksum}``；缺失架构不计入（可能由调用方回退下载）。
-        """
-        checksums: dict[str, str] = {}
-        for arch in supported_archs:
-            checksum = parsed.hashes.get(arch.value)
-            if checksum:
-                checksums[arch.value] = checksum
-            else:
-                logger.warning("  API 未提供 %s 架构的 hash", arch.value)
-        return checksums
-
     async def _get_checksums(
         self,
         parsed: ParsedPackage,
@@ -157,39 +151,36 @@ class PackageUpdater:
         hash_algorithm: str,
         verify_only: bool = False,
     ) -> tuple[dict[str, str], bool]:
-        """获取各架构校验和：优先用 metadata API 提供的 hashes，否则下载计算。
+        """下载各架构安装包并在本地计算校验和。
 
-        metadata 通过 ``data.hashes`` 提供校验和时直接采用，跳过本地下载。若 hashes
-        为空或缺部分架构，按 ``parsed.download_urls``（QQ 等鉴权源的实时签名链接，
-        缺失时退回 ``parsed.urls``）下载缺失架构并在本地计算 hash。
+        下载链接优先取 ``parsed.download_urls``（QQ 等鉴权源的实时签名链接，
+        原始 urls 直接下载会被上游拒绝），缺失时退回 ``parsed.urls``。
 
         返回 ``(checksums, success)``。写路径（``verify_only=False``）在任一架构
-        下载失败、或合并后仍有架构未获得校验和时返回 ``False``（放弃更新，避免
-        新 pkgver 配旧校验和）；``verify_only=True`` 时即便全部失败也返回
-        ``success=True``，但 ``checksums`` 可能为空，调用方需自行检查空字典。
+        下载失败、或仍有架构未获得校验和时返回 ``False``（放弃更新，避免新 pkgver
+        配旧校验和）；``verify_only=True`` 时即便全部失败也返回 ``success=True``，
+        但 ``checksums`` 可能为空，调用方需自行检查空字典。
         """
-        api_hashes = self._select_api_hashes(parsed, supported_archs)
-        if api_hashes and len(api_hashes) == len(supported_archs):
-            logger.info("  使用 API 提供的校验和，跳过下载")
-            return api_hashes, True
-
-        # 部分/全部缺失 → 回退下载缺失架构（优先实时可下载链接：QQ 等鉴权源
-        # 的原始 urls 直接下载会被上游拒绝）
-        missing_archs = [
-            arch for arch in supported_archs if arch.value not in api_hashes
-        ]
         arch_urls: dict[str, str] = {}
-        for arch in missing_archs:
+        missing_url: list[str] = []
+        for arch in supported_archs:
             url = parsed.download_urls.get(arch.value) or parsed.urls.get(arch.value)
             if url:
                 arch_urls[arch.value] = url
-        if not arch_urls:
-            logger.error(
-                "  无法获取缺失架构的下载URL（API hashes 与 urls 均不足）"
-            )
-            return api_hashes, False
+            else:
+                missing_url.append(arch.value)
+                logger.error("  %s 架构缺少下载 URL，无法计算校验和", arch.value)
 
-        logger.info("  API hashes 不完整，回退下载计算: %s", list(arch_urls))
+        # 先判 URL 完整性再下载：写路径缺任一架构都会整体放弃（见下方完整性校验），
+        # 提前返回可避免白下载其余架构的几百 MB 安装包
+        if missing_url and not verify_only:
+            logger.error("  以下架构无下载 URL，放弃更新: %s", missing_url)
+            return {}, False
+        if not arch_urls:
+            logger.error("  所有支持架构均无下载 URL")
+            return {}, False
+
+        logger.info("  下载安装包并本地计算校验和: %s", list(arch_urls))
         downloaded, success = await self._download_and_verify(
             package_name,
             new_version,
@@ -198,22 +189,22 @@ class PackageUpdater:
             verify_only=verify_only,
         )
         if not success:
-            return api_hashes, False
+            return downloaded, False
 
-        # 合并 API 提供的 + 本地计算的
-        merged = {**api_hashes, **downloaded}
         # 完整性校验：缺失架构会把旧文件的校验和随新 pkgver 一起留在 PKGBUILD，
         # makepkg 校验必炸，故写路径视为整体失败
-        missing = [arch.value for arch in supported_archs if arch.value not in merged]
+        missing = [
+            arch.value for arch in supported_archs if arch.value not in downloaded
+        ]
         if missing:
             if verify_only:
                 logger.warning(
                     "  以下架构未获得校验和（仅验证模式，不中断）: %s", missing
                 )
-                return merged, True
+                return downloaded, True
             logger.error("  以下架构未获得校验和，放弃更新: %s", missing)
-            return merged, False
-        return merged, True
+            return downloaded, False
+        return downloaded, True
 
     async def _download_and_verify(
         self,
@@ -224,12 +215,11 @@ class PackageUpdater:
         verify_only: bool = False,
     ) -> tuple[dict[str, str], bool]:
         """
-        下载文件并计算校验和（回退路径）
+        下载文件并计算校验和
 
         使用 Downloader 的并发下载功能，并行下载单个包的所有架构
         """
-        # 回退下载目录（metadata 未提供 hashes 时本地下载计算），
-        # 相对配置文件所在目录解析；目录由 Downloader 按目标路径创建
+        # 下载目录，相对配置文件所在目录解析；目录由 Downloader 按目标路径创建
         download_dir = self.pkgbuild_root / "downloads"
 
         downloads = {
@@ -293,21 +283,16 @@ class PackageUpdater:
                 self.config.settings.hash_algorithm
             )
 
-            # 1. 从 metadata API 获取最新版本信息
-            fetch_url = self._build_fetch_url(package_config.name, hash_algorithm)
+            # 1. 获取版本信息：metadata API 优先，GitHub 来源包在失败时回退
+            fetch_url = self._build_fetch_url(package_config.name)
             logger.info("  1. 从 %s 获取版本信息...", fetch_url)
-            response_data = await self.fetcher.fetch_text(fetch_url)
-            if not response_data:
+            parsed = await self.version_provider.fetch(package_config, fetch_url)
+            if parsed is None:
                 logger.error("  无法获取版本信息")
                 return False
 
-            # 2. 解析统一响应
+            # 2. 解析版本信息（provider 已返回结构化结果）
             logger.info("  2. 解析版本信息...")
-            parsed = self.parser.parse(response_data)
-            if parsed is None:
-                logger.error("  无法解析版本信息")
-                return False
-
             new_version = parsed.version
             logger.info("  最新版本: %s", new_version)
 
@@ -378,8 +363,8 @@ class PackageUpdater:
 
         复用 update_package 已创建的 editor，避免重复加载 PKGBUILD。
         两种场景：
-        1. 当前版本 > 新版本（version_comparison < 0）：版本降级，获取远端哈希
-           （API 提供或下载验证），不写 PKGBUILD。返回 True 仅在验证成功时。
+        1. 当前版本 > 新版本（version_comparison < 0）：版本降级，下载远端文件
+           验证校验和，不写 PKGBUILD。返回 True 仅在验证成功时。
         2. 当前版本 = 新版本（version_comparison == 0）：比较本地/远端哈希，
            若发生变化则自增 pkgrel 并写入新校验和，PKGBUILD 仍会被更新。
 
@@ -393,7 +378,7 @@ class PackageUpdater:
                 "  跳过更新: 新版本 %s 低于当前版本 %s", new_version, current_version
             )
             logger.info("  说明: 当前包版本较新，无需降级")
-            logger.info("  注意: 仍将校验远端 hashes（API 提供）或下载验证...")
+            logger.info("  注意: 仍将下载远端文件校验...")
 
             # verify_only=True 时即便全部失败也返回 True，需自行校验空 checksums
             checksums, _ = await self._get_checksums(
@@ -425,7 +410,7 @@ class PackageUpdater:
             else:
                 logger.warning("  无法获取 %s 架构的当前哈希值", arch.value)
 
-        # 获取远端 hashes：API 优先提供，否则下载计算
+        # 下载远端文件并计算校验和
         new_checksums, success = await self._get_checksums(
             parsed,
             supported_archs,
@@ -482,16 +467,15 @@ class PackageUpdater:
         处理版本更新流程（new_version > current_version）。
 
         步骤：
-        1. 获取 checksums：API 优先提供，否则按 download_urls（缺失退回 urls）
-           下载计算
+        1. 按 download_urls（缺失退回 urls）下载各架构安装包并本地计算校验和
         2. 若 update_source_url=True，用 parsed.urls 写入 PKGBUILD source 字段
         3. 更新 PKGBUILD：pkgver、pkgrel=1、source、checksum
         4. save 写入磁盘
         """
-        logger.info("  3. 获取校验和（API 提供 or 下载）...")
+        logger.info("  3. 下载安装包并计算校验和...")
         logger.info("  支持的架构: %s", [arch.value for arch in supported_archs])
 
-        # 获取 checksums：API 优先，否则 fallback 到下载
+        # 下载安装包并计算校验和
         checksums, success = await self._get_checksums(
             parsed,
             supported_archs,

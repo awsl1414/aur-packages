@@ -21,7 +21,7 @@ from .rule import RuleChain, RuleDebParser, UrlRuleMap
 logger = logging.getLogger(__name__)
 
 # 签名链接复用窗口（秒）：保守取 30 分钟——远短于链接实际有效期，但足以让
-# 同包轮询查询与同次采集（版本域 + hash 域各 resolve 一次）命中缓存，
+# 同一次采集内的版本提取与多次查询（GET 的 download_urls）命中缓存，
 # 不再放大对 im.qq.com 的签名 RPC
 _SIGN_TTL_SECONDS: float = 1800
 

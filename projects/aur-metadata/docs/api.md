@@ -70,7 +70,7 @@ HTTP 状态码与 `code` 前三位对齐（404 / 422 / 429 / 502 / 503 / 500）�
 | `version` | `string` | 版本号（含构建号，如 `3.2.29_260528`） |
 | `urls` | `object<string, string>` | 架构 → 原始未签名下载 URL（写入 PKGBUILD 的稳定链接） |
 | `download_urls` | `object<string, string\|null>` | 架构 → 查询时实时生成的可直接下载 URL（QQ 为临时签名链接，会过期）；`null` 表示该架构签名失败；空 dict 表示本响应未提供实时链接（如 refresh 路径），消费方应回退 `urls` 或自行完成鉴权 |
-| `hashes` | `object<string, string\|null>` | 架构 → 文件 hash；单架构 `null` 表示计算/签名失败 |
+
 
 ---
 
@@ -98,7 +98,7 @@ GET /api/v1/packages
 
 ---
 
-### 查询指定包的最新版本与文件 hash
+### 查询指定包的最新版本与下载 URL
 
 ```
 GET /api/v1/packages/{name}
@@ -112,17 +112,11 @@ GET /api/v1/packages/{name}
 | --- | --- | --- |
 | `name` | `string` | 包名（如 `qq`） |
 
-查询参数：
+**数据来源（DB 读 + 实时签名）**：接口只读数据库返回最新成功版本快照，**不触发采集、不下载安装包体**。仅鉴权类源（QQ）会在查询时发起轻量签名 RPC 生成 `download_urls`，单架构失败置 `null` 降级、不影响响应。首次查询尚无任何成功快照的包时返回 `503`（数据未就绪），需等定时采集或手动 `refresh`。
 
-| 参数 | 类型 | 默认 | 说明 |
-| --- | --- | --- | --- |
-| `algorithm` | `string` | `b2` | hash 算法：`b2`（BLAKE2b）/ `sha256` / `sha512`；传不支持的值返回 `422` |
+快照的新鲜度只由每包的定时采集保证；本服务不计算校验和，消费方下载安装包后本地计算。
 
-**数据来源（DB 读 + 实时签名 + 后台异步刷新）**：接口只读数据库返回最新成功版本快照与所请求算法的各架构 hash，**永不下载安装包体**——响应快且不会因上游下载失败而 502。仅鉴权类源（QQ）会在查询时发起轻量签名 RPC 生成 `download_urls`，单架构失败置 `null` 降级、不影响响应。若版本快照年龄超过 `[database].version_stale_seconds`，接口会在返回后 fire-and-forget 触发一次后台采集（受节流与并发锁约束），使下次轮询拿到新鲜数据；首次查询尚无任何成功快照的包时返回 `503`（数据未就绪）。
-
-版本采集与 hash 下载是两个独立域：版本号永远先于 hash 落库，hash 下载失败只会让对应架构的 hash 为 `null`，不会影响版本号的可用性。
-
-**响应** `200` — `ApiResponse<PackageInfo>`（单架构 `null` 表示该架构签名/下载失败或尚未采集）
+**响应** `200` — `ApiResponse<PackageInfo>`（`download_urls` 中单架构 `null` 表示该架构签名失败）
 
 ```json
 {
@@ -140,11 +134,6 @@ GET /api/v1/packages/{name}
       "x86_64": "https://qqdl.gtimg.cn/.../QQ_3.2.29_260528_amd64_01.deb?sign=...",
       "aarch64": "https://qqdl.gtimg.cn/.../QQ_3.2.29_260528_arm64_01.deb?sign=...",
       "loong64": null
-    },
-    "hashes": {
-      "x86_64": "8a1e...（blake2b 摘要）",
-      "aarch64": "f3c2...",
-      "loong64": null
     }
   }
 }
@@ -155,7 +144,6 @@ GET /api/v1/packages/{name}
 | 业务码 | HTTP | `message` |
 | --- | --- | --- |
 | `40400` | `404` | `包 'xxx' 未注册` |
-| `42200` | `422` | `参数校验失败: <字段>: <原因>` |
 | `50300` | `503` | `包 'xxx' 数据尚未就绪，请稍后重试`（尚无成功版本快照） |
 | `50000` | `500` | `内部错误` |
 
@@ -167,8 +155,9 @@ GET /api/v1/packages/{name}
 POST /api/v1/packages/{name}/refresh
 ```
 
-立即采集指定包的最新版本与文件 hash 并写入数据库，复用定时采集的同一采集 + 落库路径。
-用于改完配置后立即生效、排障，或主动刷新快照。**不依赖调度器启用**（采集与调度解耦）。
+立即采集指定包的最新版本与下载 URL 并写入数据库，复用定时采集的同一路径。
+只抓版本源/安装包头部，不下载完整安装包、不计算校验和。用于改完配置后立即生效、
+排障，或主动刷新快照。**不依赖调度器启用**（采集与调度解耦）。
 
 **请求**
 
@@ -186,7 +175,7 @@ POST /api/v1/packages/{name}/refresh
 | --- | --- | --- |
 | `40400` | `404` | `包 'xxx' 未注册` |
 | `42900` | `429` | `包 'xxx' 采集过于频繁，请稍后重试` |
-| `50200` | `502` | 版本源拉取或版本号解析失败（hash 下载失败不抛错，仅对应架构 hash 为 `null`） |
+| `50200` | `502` | 版本源拉取或版本号解析失败 |
 
 ---
 
@@ -223,7 +212,8 @@ POST /api/v1/packages/reload
 
 - **包配置**以 SQLite 数据库 `packages` 表为唯一来源；新增包只需插入一行（`parser_type` / `fetch_url` / `archs` / `schedule_type` / `interval_seconds` / `cron_expr`），重启或调用 reload 即生效。
 - **调度模式**：`interval`（按 `interval_seconds` 固定间隔）或 `cron`（标准 5 字段 `cron_expr`，按 `[scheduler].timezone` 求值）。二选一。
-- **启动即采集**：`[scheduler].run_on_startup` 控制 interval 模式启动时是否立即采集一次（当前配置为 `false`，首次采集推迟一个间隔，避免每次重启都跑全量；设为 `true` 则启动即采集一次）；cron 模式始终从下一个表达式匹配时刻触发。
-- **采集结果**分两域独立落库：`package_versions`（版本快照，状态 `success` / `failed`，仅反映版本抓取）与 `package_hashes`（架构 × 算法粒度，含逐架构 `status` / `error`）。两者各自独立事务，版本先行落库、永不被 hash 下载失败回滚。
+- **启动即采集**：`[scheduler].run_on_startup` 控制 interval 模式启动时是否立即采集一次（默认开启：重启后立即补一轮，避免停机期间的版本变化要等满一个间隔才可见；设为 `false` 则首次采集推迟一个间隔）；cron 模式始终从下一个表达式匹配时刻触发。
+- **执行模型**：每包一个独立 task（`max_running_jobs=1`），互不排队；迟到任务不丢弃（`misfire_grace_time=None`），积压由 coalesce 与并发上限收敛。
+- **采集结果**落 `package_versions`（状态 `success` / `failed`）。版本未变时复用现有 success 行，只刷新 `urls` 与 `fetched_at`；版本变化或失败才新增行。
 - **最新版本**可通过视图 `v_latest_versions` 查询（取每个包最新 `success` 版本行，含 `urls`）；aur-packages 批量读取建议直连 SQLite 查该视图，无需走 HTTP。
-- `GET /packages/{name}` 不下载安装包体：只返回快照（鉴权类源仅实时签名 RPC 生成 `download_urls`）；版本过期时后台异步刷新，不影响响应。
+- `GET /packages/{name}` 只读快照（鉴权类源仅实时签名 RPC 生成 `download_urls`），不触发采集；新鲜度由每包定时任务保证。

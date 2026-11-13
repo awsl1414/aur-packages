@@ -66,7 +66,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
                 fetcher,
                 registry,
                 min_collect_interval_seconds=config.scheduler.min_collect_interval_seconds,
-                version_stale_seconds=config.database.version_stale_seconds,
             )
             app.state.package_service = package_service
 
@@ -105,7 +104,7 @@ def create_app(config: AppConfig, packages: list[PackageConfig]) -> FastAPI:
     """
     app: FastAPI = FastAPI(
         title="aur-metadata",
-        description="为 aur-auto-update 提供应用版本、文件 hash 等元数据的服务",
+        description="为 aur-auto-update 提供应用版本与下载链接的元数据服务",
         version=_app_version(),
         lifespan=lifespan,
     )

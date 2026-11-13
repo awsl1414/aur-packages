@@ -10,11 +10,3 @@ class ArchEnum(Enum):
     AARCH64 = "aarch64"
     LOONG64 = "loong64"
     ANY = "any"
-
-
-class HashAlgorithmEnum(Enum):
-    """支持的哈希算法"""
-
-    SHA256 = "sha256"
-    SHA512 = "sha512"
-    B2 = "b2"

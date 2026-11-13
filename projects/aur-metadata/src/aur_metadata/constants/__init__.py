@@ -5,9 +5,8 @@
 ``BaseParser``）；本包只保留不依赖环境的真正常量。
 """
 
-from aur_metadata.constants.package import ArchEnum, HashAlgorithmEnum
+from aur_metadata.constants.package import ArchEnum
 
 __all__ = [
     "ArchEnum",
-    "HashAlgorithmEnum",
 ]

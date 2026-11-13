@@ -1,8 +1,8 @@
 """aur_metadata.services.schedule_service 测试。
 
-覆盖：trigger 构造、schedule 签名、collect_now（PackageService 手动刷新，
-不依赖调度器）的节流/并发互斥/未找到、_collect 落库与失败兜底、reload 的
-签名跳过与内存清理。
+覆盖：trigger 构造、schedule 签名、每包独立 task 注册（max_running_jobs=1、
+misfire_grace_time=None）、_collect_version 落库与失败兜底、reload 的签名跳过
+与内存清理。
 
 AsyncScheduler 用 FakeScheduler 桩替换（调度注册/reload 不依赖真实调度线程）。
 """
@@ -21,11 +21,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from aur_metadata.config import SchedulerConfig
 from aur_metadata.constants import ArchEnum
 from aur_metadata.models import PackageVersion
-from aur_metadata.services.package_service import (
-    CollectThrottledError,
-    PackageNotFoundError,
-    PackageService,
-)
+from aur_metadata.services.package_service import PackageService
 from aur_metadata.services.schedule_service import ScheduleService
 from tests.fakes import FakeFetcher, make_app_config, make_qq_registry
 
@@ -40,14 +36,13 @@ def _cfg() -> SchedulerConfig:
         enabled=True,
         timezone="Asia/Shanghai",
         jitter_seconds=0,
-        misfire_grace_seconds=300,
         min_collect_interval_seconds=300,
         run_on_startup=False,
     )
 
 
 class FakeScheduler:
-    """记录调度的桩，模拟 AsyncScheduler 的子集接口。"""
+    """记录调度与 task 注册的桩，模拟 AsyncScheduler 的子集接口。"""
 
     def __init__(self, existing_ids: list[str] | None = None) -> None:
         self.added: list[str] = []
@@ -55,6 +50,27 @@ class FakeScheduler:
         self.schedules: list[SimpleNamespace] = [
             SimpleNamespace(id=i) for i in (existing_ids or [])
         ]
+        # task_id → configure_task 的关键字参数
+        self.tasks: dict[str, dict[str, Any]] = {}
+        self.subscriptions: list[Any] = []
+
+    async def configure_task(self, task_id: str, **kwargs: Any) -> None:
+        self.tasks[task_id] = kwargs
+
+    def subscribe(self, callback: Any, event_types: Any) -> Any:
+        self.subscriptions.append((callback, event_types))
+        return SimpleNamespace(unsubscribe=lambda: None)
+
+    @property
+    def data_store(self) -> Any:
+        """reload 移除孤儿 task 时访问；桩只需提供 remove_task"""
+        scheduler = self
+
+        class _Store:
+            async def remove_task(self, task_id: str) -> None:
+                scheduler.tasks.pop(task_id, None)
+
+        return _Store()
 
     async def add_schedule(
         self, func: Any, trigger: Any, *, id: str, kwargs: Any = None, **_: Any
@@ -77,7 +93,7 @@ class FakeScheduler:
 
 def _svc(fetcher: FakeFetcher | None = None) -> PackageService:
     """单包 'qq'（x86_64）的 PackageService；fetcher 可注入（并发测试用）。"""
-    f = fetcher or FakeFetcher(text="cfg", hashes={"x86_64": "h1"})
+    f = fetcher or FakeFetcher(text="cfg")
     return PackageService(f.as_fetcher(), make_qq_registry([ArchEnum.X86_64]), 300)
 
 
@@ -150,67 +166,53 @@ def test_schedule_signature_tracks_config() -> None:
     ) == ("cron", None, "* * * * *")
 
 
-# ── collect_now ──────────────────────────────────────────────────────────────
+# ── 每包独立 task 注册 ──────────────────────────────────────────────────────
 
 
-async def test_collect_now_unknown_package() -> None:
-    """name 不在 registry → PackageNotFoundError，无需 DB"""
-    with pytest.raises(PackageNotFoundError):
-        await _svc().collect_now("ghost")
+async def test_start_registers_independent_task_per_package() -> None:
+    """每个包一个独立 task：max_running_jobs=1、misfire_grace_time=None。"""
+    sched = FakeScheduler()
+    service = _build_service(_svc(), sched)
+    await service.start([_pkg()])  # type: ignore[list-item]
+    assert sched.tasks == {
+        "pkg-1-version": {"func": service._collect_version, "max_running_jobs": 1,
+                          "misfire_grace_time": None}
+    }
+    assert sched.added == ["pkg-1-version"]
 
 
-async def test_collect_now_throttled() -> None:
-    """节流窗口内 → CollectThrottledError，在 Package.get 前抛出，无需 DB"""
-    svc = _svc()
-    svc._last_collected["qq"] = datetime.now(UTC)
-    with pytest.raises(CollectThrottledError):
-        await svc.collect_now("qq")
+async def test_two_packages_get_distinct_tasks() -> None:
+    """两个包各自独立 task，不再共享同一 task 串行排队"""
+    sched = FakeScheduler()
+    service = _build_service(_svc(), sched)
+    await service.start([_pkg(id=1, name="qq"), _pkg(id=2, name="other")])  # type: ignore[list-item]
+    assert set(sched.tasks) == {"pkg-1-version", "pkg-2-version"}
+    assert set(sched.added) == {"pkg-1-version", "pkg-2-version"}
 
 
-async def test_collect_now_success_persists(db, make_package) -> None:
-    pkg = await make_package()
-    info = await _svc().collect_now("qq")
-    assert info.version == "1.0.0"
-    v = await PackageVersion.get(package=pkg)
-    assert v.status == "success"
+async def test_start_subscribes_job_released() -> None:
+    """订阅 JobReleased，记录被误期/异常结束的任务"""
+    sched = FakeScheduler()
+    service = _build_service(_svc(), sched)
+    await service.start([])
+    assert len(sched.subscriptions) == 1
 
 
-async def test_collect_now_concurrent_second_is_throttled(db, make_package) -> None:
-    """并发两次手动刷新：第一次持锁慢采集，第二次等锁后命中节流 → 429。
-
-    用 FakeFetcher.entered 事件确定性等待第一次真正进入 fetch_text（已过锁与节流
-    检查），再发起第二次——替代基于 sleep 的时序假设，避免 CI 高负载下 flaky。
-    """
-    await make_package()
-    entered = asyncio.Event()
-    fetcher = FakeFetcher(
-        text="cfg", hashes={"x86_64": "h1"}, delay=0.2, entered=entered
-    )
-    svc = _svc(fetcher)
-
-    first = asyncio.create_task(svc.collect_now("qq"))
-    await entered.wait()  # 第一次已持锁并在 fetch 中
-    with pytest.raises(CollectThrottledError):
-        await svc.collect_now("qq")
-    await first
-    assert fetcher.text_calls == 1  # 第二次未真正回源
+# ── _collect_version ────────────────────────────────────────────────────────
 
 
-# ── _collect ─────────────────────────────────────────────────────────────────
-
-
-async def test_collect_missing_package_logged(db) -> None:
+async def test_collect_version_missing_package_logged(db) -> None:
     """不存在的 package_id：Package.get 抛错被捕获、只记日志、不影响调度器"""
     service = _build_service(_svc(), FakeScheduler())
-    await service._collect(999999)  # 不应抛
+    await service._collect_version(999999)  # 不应抛
 
 
-async def test_collect_failure_records_failed(db, make_package) -> None:
-    """版本抓取失败 → svc 落 failed 审计行，_collect 不逃逸到调度器"""
+async def test_collect_version_failure_records_failed(db, make_package) -> None:
+    """版本抓取失败 → svc 落 failed 审计行，_collect_version 不逃逸到调度器"""
     pkg = await make_package()
     svc = _svc(FakeFetcher(text=None))  # 版本源失败
     service = _build_service(svc, FakeScheduler())
-    await service._collect(pkg.id)  # 不抛
+    await service._collect_version(pkg.id)  # 不抛
     v = await PackageVersion.get(package=pkg)
     assert v.status == "failed" and v.version is None and v.error
 
@@ -221,9 +223,9 @@ async def test_collect_failure_records_failed(db, make_package) -> None:
 async def test_reload_skips_unchanged_schedules(db, make_package) -> None:
     """调度配置未变更的包不重建 schedule（保留计时），仅变更项才 add_schedule"""
     await make_package(name="qq", interval_seconds=3600)
-    sched = FakeScheduler(existing_ids=["pkg-1"])  # qq.id==1 已存在
+    sched = FakeScheduler(existing_ids=["pkg-1-version"])  # qq.id==1 已存在
     service = _build_service(_svc(), sched)
-    service._schedule_signatures["pkg-1"] = ("interval", 3600, None)  # 与 DB 一致
+    service._schedule_signatures["pkg-1-version"] = ("interval", 3600, None)  # 与 DB 一致
 
     names = await service.reload()
     assert names == ["qq"]
@@ -233,24 +235,24 @@ async def test_reload_skips_unchanged_schedules(db, make_package) -> None:
 async def test_reload_rebuilds_changed_schedule(db, make_package) -> None:
     """interval 变更 → 签名不同 → 重建 schedule"""
     await make_package(name="qq", interval_seconds=1800)
-    sched = FakeScheduler(existing_ids=["pkg-1"])
+    sched = FakeScheduler(existing_ids=["pkg-1-version"])
     service = _build_service(_svc(), sched)
-    service._schedule_signatures["pkg-1"] = ("interval", 3600, None)  # 旧值
+    service._schedule_signatures["pkg-1-version"] = ("interval", 3600, None)  # 旧值
 
     await service.reload()
-    assert sched.added == ["pkg-1"]
+    assert sched.added == ["pkg-1-version"]
 
 
 async def test_reload_removes_disabled_and_cleans_memory(db, make_package) -> None:
     """已停用包：移除 schedule，并清理 svc 持有的 _locks / _last_collected"""
     await make_package(name="qq", enabled=False)
-    sched = FakeScheduler(existing_ids=["pkg-1"])
+    sched = FakeScheduler(existing_ids=["pkg-1-version"])
     svc = _svc()
     service = _build_service(svc, sched)
     svc._locks["qq"] = asyncio.Lock()
     svc._last_collected["qq"] = datetime.now(UTC)
 
     await service.reload()
-    assert sched.removed == ["pkg-1"]
+    assert sched.removed == ["pkg-1-version"]
     assert "qq" not in svc._locks
     assert "qq" not in svc._last_collected

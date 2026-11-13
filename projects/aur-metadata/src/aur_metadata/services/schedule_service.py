@@ -1,8 +1,15 @@
 """定时采集调度服务
 
-基于 APScheduler 4：每包一个 schedule，按 ``packages`` 表的 schedule_type
-（interval / cron）触发；采集与落库委托 PackageService.collect，本服务只负责
-注册 schedule、执行采集回调。per-package 锁与节流均由 PackageService 持有。
+基于 APScheduler 4：每包一个独立 task + 一个 schedule，按 ``packages`` 表的
+schedule_type（interval / cron）触发；采集与落库委托
+``PackageService.collect_version``，本服务只负责注册 task/schedule、执行回调。
+
+每包独立 task 是必需的：APScheduler 默认 ``task_defaults.max_running_jobs=1``，
+多个 schedule 共用同一 task 会串行排队，排在队尾的包长期轮不到采集。独立 task
+各自受执行器约束，互不阻塞。
+
+``misfire_grace_time`` 显式设为 ``None``——迟到任务照常执行，不再被静默丢弃；
+积压由 ``CoalescePolicy.latest``（默认）与每 task ``max_running_jobs=1`` 收敛。
 
 scheduler 实例由 ``cli.py`` 的 lifespan 通过 ``async with AsyncScheduler()``
 管理生命周期。
@@ -12,7 +19,14 @@ import logging
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from apscheduler import AsyncScheduler, ConflictPolicy
+from apscheduler import (
+    AsyncScheduler,
+    ConflictPolicy,
+    JobOutcome,
+    JobReleased,
+    TaskLookupError,
+)
+from apscheduler.abc import Subscription
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from tortoise.exceptions import DoesNotExist
@@ -23,6 +37,23 @@ from aur_metadata.services.package_service import PackageService
 from aur_metadata.services.registry_loader import load_registry_from_db
 
 logger = logging.getLogger(__name__)
+
+# schedule/task id 前缀：``pkg-<id>-version``
+_ID_PREFIX = "pkg-"
+_ID_SUFFIX = "-version"
+
+
+def _task_id(package_id: int) -> str:
+    """每包独立 task 与 schedule 共用的 id"""
+    return f"{_ID_PREFIX}{package_id}{_ID_SUFFIX}"
+
+
+def _parse_package_id(schedule_id: str) -> int | None:
+    """从 ``pkg-<id>-version`` 解析 package_id；非本服务创建的 schedule 返回 None"""
+    if not (schedule_id.startswith(_ID_PREFIX) and schedule_id.endswith(_ID_SUFFIX)):
+        return None
+    middle: str = schedule_id[len(_ID_PREFIX) : -len(_ID_SUFFIX)]
+    return int(middle) if middle.isdigit() else None
 
 
 class ScheduleService:
@@ -42,33 +73,59 @@ class ScheduleService:
         self._tz = ZoneInfo(scheduler_cfg.timezone)
         # schedule id → 配置签名：reload 时据此跳过未变更项，保留其计时避免重置
         self._schedule_signatures: dict[str, tuple[str, int | None, str | None]] = {}
+        # JobReleased 订阅句柄：start 只订阅一次，stop 时注销，避免重复订阅导致 N 倍日志
+        self._job_subscription: Subscription | None = None
 
     async def start(self, pkgs: list[Package]) -> None:
-        """启动调度器并注册所有包的 schedule。
+        """启动调度器并注册所有包的 task/schedule。
 
         ``pkgs`` 由 lifespan 从 ``load_registry_from_db`` 取得，避免重复查库。
         """
+        if self._job_subscription is None:
+            self._job_subscription = self._scheduler.subscribe(
+                self._on_job_released, JobReleased
+            )
         for pkg in pkgs:
             await self._add_schedule(pkg, fire_now=self._cfg.run_on_startup)
         await self._scheduler.start_in_background()
         logger.info("定时采集调度器已启动，共 %d 个包", len(pkgs))
 
-    async def _add_schedule(self, pkg: Package, fire_now: bool) -> None:
-        """注册单个包的 schedule；id=``pkg-{id}``，conflict_policy=replace 便于 reload 更新。
+    def _on_job_released(self, event: JobReleased) -> None:
+        """记录被误期或异常结束的任务，补上 APScheduler 静默丢弃的观测缺口"""
+        if event.outcome in (JobOutcome.missed_start_deadline, JobOutcome.error):
+            logger.warning(
+                "调度任务 %s 结束异常：outcome=%s schedule=%s",
+                event.task_id,
+                event.outcome.name,
+                event.schedule_id,
+            )
 
-        ``fire_now`` 控制 interval 模式首火：仅服务真正启动时按 run_on_startup 立即采集；
-        reload 场景恒为 False（等下次自然触发），避免 reload 退化为全量立即采集。
+    async def _add_schedule(self, pkg: Package, fire_now: bool) -> None:
+        """注册单个包的独立 task 与 schedule，conflict_policy=replace 便于 reload 更新。
+
+        ``configure_task`` 必须每次启动重新执行：bound method 无法序列化为
+        ``func_ref``，task 的可调用对象只存在于进程内存（MemoryDataStore 重启即
+        清空），换成持久化 datastore 前必须另行处理。
+
+        ``fire_now`` 控制 interval 模式首火：仅服务真正启动时按 run_on_startup
+        立即采集；reload 场景恒为 False（等下次自然触发）。
         """
+        task_id: str = _task_id(pkg.id)
+        await self._scheduler.configure_task(
+            task_id,
+            func=self._collect_version,
+            max_running_jobs=1,
+            misfire_grace_time=None,
+        )
         await self._scheduler.add_schedule(
-            self._collect,
+            task_id,
             self._build_trigger(pkg, fire_now),
-            id=f"pkg-{pkg.id}",
+            id=task_id,
             kwargs={"package_id": pkg.id},
             max_jitter=self._cfg.jitter_seconds,
-            misfire_grace_time=self._cfg.misfire_grace_seconds,
             conflict_policy=ConflictPolicy.replace,
         )
-        self._schedule_signatures[f"pkg-{pkg.id}"] = self._schedule_signature(pkg)
+        self._schedule_signatures[task_id] = self._schedule_signature(pkg)
 
     def _schedule_signature(self, pkg: Package) -> tuple[str, int | None, str | None]:
         """调度相关配置签名：变更才需重建 schedule"""
@@ -99,8 +156,8 @@ class ScheduleService:
         start_time = datetime.now(self._tz) + timedelta(seconds=pkg.interval_seconds)
         return IntervalTrigger(seconds=pkg.interval_seconds, start_time=start_time)
 
-    async def _collect(self, package_id: int) -> None:
-        """定时回调：委托 PackageService 采集。全程兜底——单包失败不影响 scheduler"""
+    async def _collect_version(self, package_id: int) -> None:
+        """定时回调：委托 PackageService 采集版本。全程兜底——单包失败不影响 scheduler"""
         try:
             pkg: Package = await Package.get(id=package_id)
         except DoesNotExist:
@@ -109,9 +166,9 @@ class ScheduleService:
         # 其余 DB 异常向上抛给 APScheduler 记录（job 级失败不影响调度器）
 
         try:
-            await self._svc.collect(pkg.name)
+            await self._svc.collect_version(pkg.name)
         except Exception:
-            # 域内失败（版本/hash）已由 svc 落库；此处仅兜底记录意外异常
+            # 版本失败已由 svc 落 failed 审计行；此处仅兜底记录意外异常
             logger.exception("采集 %s 异常", pkg.name)
 
     async def reload(self) -> list[str]:
@@ -123,7 +180,9 @@ class ScheduleService:
         - load_registry_from_db 已剔除坏行并只查一次库，此处复用其结果不再重复查询
         - 仅重建配置签名变更或新增的 schedule，未变更项保留计时，避免 reload 把
           interval next-fire 重置为 now+interval 而跳过即将到期的采集
-        - reload 恒用 ``fire_now=False``，避免 reload 退化为全量立即采集
+        - reload 恒用 ``fire_now=False``，避免 reload 退化为全量立即采集；代价是
+          新增包要等一个间隔才有首条快照，期间 GET 返回 503，需立即取数时用
+          ``POST /packages/{name}/refresh``
         - 清理已删除/停用包的运行时状态（svc 持有的锁与节流记录），防止内存只增不减
         """
         # 1. 重建内存 registry，复用 valid_pkgs 同步调度（不重复查库）
@@ -137,15 +196,22 @@ class ScheduleService:
         # 3. 同步 schedule：移除已停用/已删项，新增/更新变更项
         enabled_ids: set[int] = {p.id for p in pkgs}
         existing_ids: set[int] = {
-            int(s.id.split("-", 1)[1])
+            pid
             for s in await self._scheduler.get_schedules()
-            if s.id.startswith("pkg-")
+            if (pid := _parse_package_id(s.id)) is not None
         }
         for pid in existing_ids - enabled_ids:
-            await self._scheduler.remove_schedule(f"pkg-{pid}")
-            self._schedule_signatures.pop(f"pkg-{pid}", None)
+            sid: str = _task_id(pid)
+            await self._scheduler.remove_schedule(sid)
+            # 一并移除 task 定义：AsyncScheduler 没有 remove_task，须走 data_store，
+            # 否则长期运行的服务会为已删/停用包累积孤儿 task 与 bound method 引用
+            try:
+                await self._scheduler.data_store.remove_task(sid)
+            except TaskLookupError:
+                pass
+            self._schedule_signatures.pop(sid, None)
         for pkg in pkgs:
-            sid: str = f"pkg-{pkg.id}"
+            sid: str = _task_id(pkg.id)
             if self._schedule_signatures.get(sid) == self._schedule_signature(pkg):
                 continue  # 调度配置未变更 → 保留现有计时
             await self._add_schedule(pkg, fire_now=False)
@@ -154,7 +220,10 @@ class ScheduleService:
         return [p.name for p in pkgs]
 
     async def stop(self) -> None:
-        """停止调度器并等待彻底退出"""
+        """停止调度器并等待彻底退出，注销事件订阅"""
         await self._scheduler.stop()
         await self._scheduler.wait_until_stopped()
+        if self._job_subscription is not None:
+            self._job_subscription.unsubscribe()
+            self._job_subscription = None
         logger.info("定时采集调度器已停止")

@@ -210,3 +210,135 @@ settings:
                 pkgbuild="packages/test/PKGBUILD",
                 hash_algorithm="md5",
             )
+
+
+class TestGithubSourceConfig:
+    """GitHub 回退配置：解析、规则 fail-fast 与旧配置兼容"""
+
+    def test_github_optional(self) -> None:
+        """未配置 github 的包照常加载（旧 config.yaml 兼容）"""
+        config = PackageConfig(name="qq", pkgbuild="packages/qq/PKGBUILD")
+        assert config.github is None
+
+    def test_single_version_rule_wrapped(self) -> None:
+        """单条版本规则写成表时自动包装成列表"""
+        config = PackageConfig.model_validate(
+            {
+                "name": "app",
+                "pkgbuild": "packages/app/PKGBUILD",
+                "github": {
+                    "repo": "owner/repo",
+                    "version": {"source": "tag_name", "regex": r"^v(.+)$", "group": 1},
+                    "assets": {"x86_64": "*_amd64.deb"},
+                },
+            }
+        )
+        assert config.github is not None
+        assert len(config.github.version) == 1
+        assert config.github.version[0].group == 1
+
+    def test_repo_must_be_owner_slash_name(self) -> None:
+        with pytest.raises(ValueError, match="owner/repo"):
+            PackageConfig.model_validate(
+                {
+                    "name": "app",
+                    "pkgbuild": "packages/app/PKGBUILD",
+                    "github": {
+                        "repo": "invalid",
+                        "version": {"regex": r"v(.+)"},
+                        "assets": {"x86_64": "*"},
+                    },
+                }
+            )
+
+    def test_group_out_of_range_rejected(self) -> None:
+        """group 越界在加载期拦下，避免运行时取到空版本"""
+        with pytest.raises(ValueError, match="捕获组数"):
+            PackageConfig.model_validate(
+                {
+                    "name": "app",
+                    "pkgbuild": "packages/app/PKGBUILD",
+                    "github": {
+                        "repo": "owner/repo",
+                        "version": {"regex": r"^v(\d+)$", "group": 3},
+                        "assets": {"x86_64": "*"},
+                    },
+                }
+            )
+
+    def test_template_and_group_conflict(self) -> None:
+        with pytest.raises(ValueError, match="不可同填"):
+            PackageConfig.model_validate(
+                {
+                    "name": "app",
+                    "pkgbuild": "packages/app/PKGBUILD",
+                    "github": {
+                        "repo": "owner/repo",
+                        "version": {
+                            "regex": r"(\d+)\.(\d+)",
+                            "group": 1,
+                            "template": "{0}.{1}",
+                        },
+                        "assets": {"x86_64": "*"},
+                    },
+                }
+            )
+
+    def test_template_group_count_mismatch(self) -> None:
+        with pytest.raises(ValueError, match="不匹配"):
+            PackageConfig.model_validate(
+                {
+                    "name": "app",
+                    "pkgbuild": "packages/app/PKGBUILD",
+                    "github": {
+                        "repo": "owner/repo",
+                        "version": {"regex": r"(\d+)", "template": "{0}.{1}"},
+                        "assets": {"x86_64": "*"},
+                    },
+                }
+            )
+
+    def test_invalid_source_rejected(self) -> None:
+        with pytest.raises(ValueError, match="tag_name 或 name"):
+            PackageConfig.model_validate(
+                {
+                    "name": "app",
+                    "pkgbuild": "packages/app/PKGBUILD",
+                    "github": {
+                        "repo": "owner/repo",
+                        "version": {"source": "body", "regex": r"v(.+)"},
+                        "assets": {"x86_64": "*"},
+                    },
+                }
+            )
+
+    def test_github_assets_must_cover_archs(self) -> None:
+        """github.assets 缺 arch 中的架构 → 加载期报错，而不是等 metadata 宕机才失败"""
+        with pytest.raises(ValueError, match="github.assets 缺少架构"):
+            PackageConfig.model_validate(
+                {
+                    "name": "app",
+                    "pkgbuild": "packages/app/PKGBUILD",
+                    "arch": ["x86_64", "aarch64"],
+                    "github": {
+                        "repo": "owner/repo",
+                        "version": {"regex": r"v(.+)"},
+                        "assets": {"x86_64": "*_amd64.deb"},
+                    },
+                }
+            )
+
+    def test_github_assets_covering_archs_ok(self) -> None:
+        config = PackageConfig.model_validate(
+            {
+                "name": "app",
+                "pkgbuild": "packages/app/PKGBUILD",
+                "arch": ["x86_64"],
+                "github": {
+                    "repo": "owner/repo",
+                    "version": {"regex": r"v(.+)"},
+                    "assets": {"x86_64": "*_amd64.deb"},
+                },
+            }
+        )
+        assert config.github is not None

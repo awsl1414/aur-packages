@@ -4,12 +4,13 @@
 settings:
   # 全局默认哈希算法（支持 b2、sha512、sha256）
   hash_algorithm: b2
-  # metadata API（projects/aur-metadata）：所有上游解析统一在服务端完成，
-  # 客户端通过 GET {base_url}/{name}?algorithm={algo} 获取 version/urls/hashes
+  # metadata API（projects/aur-metadata）：上游解析优先在服务端完成，
+  # 客户端通过 GET {base_url}/{name} 获取 version/urls/download_urls
   api:
     base_url: "https://aur.why.vin/api/v1/packages"
   # 下载设置：timeout/max_retries/retry_wait 同时作用于 metadata API 的 HTTP 客户端
-  # （Fetcher），connections/show_progress 仅在 API 未返回 hashes 时回退本地下载使用
+  # （Fetcher）；下载安装包计算校验和时使用
+  # connections/show_progress 仅用于 aria2c 下载
   download:
     # 下载重试次数
     max_retries: 3
@@ -22,7 +23,7 @@ settings:
     # 是否显示下载进度
     show_progress: true
   # 忽略 SSL 证书校验错误（自签名/过期证书的 metadata API 或上游下载源），
-  # 同时作用于 httpx 客户端与 aria2c 回退下载。仅建议在受控环境中开启
+  # 同时作用于 httpx 客户端与 aria2c 下载。仅建议在受控环境中开启
   ignore_ssl_errors: false
 
 # 包配置
@@ -87,6 +88,8 @@ packages:
       - x86_64
       - aarch64
 
+  # GitHub 来源包的 github 段镜像 projects/aur-metadata/configs/packages.toml 的
+  # 采集规则；仅在 metadata API 请求失败时用于本地回退，两处规则须同步维护。
   zen-browser:
     name: zen-browser
     pkgbuild: "packages/zen-browser-twilight-bin/PKGBUILD"
@@ -95,6 +98,19 @@ packages:
     arch:
       - x86_64
       - aarch64
+    github:
+      repo: zen-browser/desktop
+      tag: twilight-1
+      # release name 形如 "Twilight build - 1.25t (2026-11-11 at 22:04:21)"
+      version:
+        - source: name
+          regex: '(\d+\.\d+[a-z]?)\s*\((\d{4})-(\d{2})-(\d{2})'
+          template: "{0}.{1}{2}{3}"
+        - source: name
+          regex: '\d+\.\d+[a-z]?'
+      assets:
+        x86_64: zen.linux-x86_64.tar.xz
+        aarch64: zen.linux-aarch64.tar.xz
 
   bt-dualboot-ng:
     name: bt-dualboot-ng
@@ -121,6 +137,16 @@ packages:
     arch:
       - x86_64
       - aarch64
+    github:
+      repo: stablyai/orca
+      # 严格三段式：仓库另有 mobile-android-vX.Y.Z 产品线，宽松匹配会写错版本
+      version:
+        - source: tag_name
+          regex: '^v(\d+\.\d+\.\d+)$'
+          group: 1
+      assets:
+        x86_64: "*_amd64.deb"
+        aarch64: "*_arm64.deb"
 
   # 上游当前只发 amd64 deb；补 arm64 后在此加 aarch64 并同步 packages.toml
   rustmusic:
@@ -130,3 +156,11 @@ packages:
     enable: true
     arch:
       - x86_64
+    github:
+      repo: LingyunStudio/RustMusic
+      version:
+        - source: tag_name
+          regex: '^v(\d+\.\d+\.\d+)$'
+          group: 1
+      assets:
+        x86_64: "*_amd64.deb"

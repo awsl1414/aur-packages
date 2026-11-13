@@ -2,14 +2,13 @@
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Awaitable, Callable
 from urllib.parse import urlparse
 
 import httpx
 from httpx import AsyncClient, HTTPError
 
 from aur_metadata.config import GithubConfig, HttpConfig
-from aur_metadata.utils.hash import get_hash_builder
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +91,6 @@ class Fetcher:
     ) -> None:
         # client 不挂默认头，按请求选择 header（原因见 _default_headers）
         self.client = client
-        self._semaphore = asyncio.Semaphore(http.max_concurrent_downloads)
         # 日志中响应体截断长度（字符），避免大响应体刷屏
         self._log_body_max_length: int = http.log_body_max_length
         # 瞬时网络错误重试参数（应对国内访问上游不稳定），构造时 clamp ≥1
@@ -121,7 +119,7 @@ class Fetcher:
         - 瞬时错误（``_is_retryable``）：指数退避 ``backoff * 2**(n-1)`` 后重试
         - 确定性失败（4xx 等）或已达 ``retry_max_attempts``：立即/最终向上抛出
 
-        重试只发生在网络层，hash 算法等业务错误由调用方自行捕获，不进入本方法。
+        重试只发生在网络层；解析等业务错误由调用方自行捕获，不进入本方法。
         """
         last_exc: HTTPError | None = None
         for i in range(self._retry_max_attempts):
@@ -212,70 +210,3 @@ class Fetcher:
             if isinstance(e, httpx.HTTPStatusError) and e.response is not None:
                 logger.error("  状态码: %d", e.response.status_code)
             return None
-
-    async def fetch_and_hash_multi(
-        self,
-        url: str,
-        algorithms: Iterable[str],
-    ) -> dict[str, str] | None:
-        """流式下载一次，同时计算多种算法的 hash，不落盘。
-
-        多算法共享同一条下载流（逐 chunk 喂给各 builder），下载只发生一次，
-        额外开销仅是多次 hash 计算（远小于下载耗时）。返回 ``{algorithm: digest}``；
-        下载失败返回 None（共享流，要么全成功要么全失败）。瞬时网络错误自动重试。
-        """
-        request_headers: dict[str, str] = _with_github_auth(
-            url, self._default_headers, self._github_token
-        )
-        algo_list: list[str] = list(algorithms)
-
-        async def _attempt() -> dict[str, str]:
-            # builder 须在每次尝试内新建，避免重试时累积上一次的部分流
-            builders = {a: get_hash_builder(a)() for a in algo_list}
-            async with self.client.stream(
-                "GET", url, headers=request_headers
-            ) as response:
-                response.raise_for_status()
-                async for chunk in response.aiter_bytes(self._chunk_size):
-                    for hash_func in builders.values():
-                        hash_func.update(chunk)
-            return {a: h.hexdigest() for a, h in builders.items()}
-
-        try:
-            return await self._retry(url, _attempt)
-        except HTTPError as e:
-            logger.error(
-                "流式下载并计算 hash 失败 %s：%s", url, _describe_http_error(e)
-            )
-            if isinstance(e, httpx.HTTPStatusError) and e.response is not None:
-                logger.error("  状态码: %d", e.response.status_code)
-            return None
-        except ValueError as e:
-            # 算法无效是配置错误，重试无意义，直接记录
-            logger.error("hash 算法无效: %s", e)
-            return None
-
-    async def fetch_and_hash_many(
-        self,
-        urls: dict[str, str],
-        algorithms: Iterable[str],
-    ) -> dict[str, dict[str, str] | None]:
-        """并发下载多个 URL，每个同时算多种算法，不落盘。
-
-        ``urls`` 为 ``{key: url}``，返回 ``{key: {algorithm: digest} | None}``；
-        某 key 下载失败则其值为 None。通过 Semaphore 限流。
-        """
-
-        async def _download_one(
-            key: str, url: str
-        ) -> tuple[str, dict[str, str] | None]:
-            async with self._semaphore:
-                result: dict[str, str] | None = await self.fetch_and_hash_multi(
-                    url, algorithms
-                )
-                return key, result
-
-        results: list[tuple[str, dict[str, str] | None]] = await asyncio.gather(
-            *[_download_one(key, url) for key, url in urls.items()]
-        )
-        return dict(results)

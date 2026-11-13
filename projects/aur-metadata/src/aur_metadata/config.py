@@ -56,7 +56,6 @@ class HttpConfig:
     user_agent: str
     default_timeout: float
     chunk_size: int
-    max_concurrent_downloads: int
     log_body_max_length: int
     # 瞬时网络错误（连接超时/TLS 重置/对端中断等）的总尝试次数（含首次），1 表示不重试
     retry_max_attempts: int
@@ -81,8 +80,6 @@ class DatabaseConfig:
 
     # 已解析为绝对路径的 SQLite 文件路径（相对项目根的配置会被展开）
     sqlite_path: Path
-    # GET /{name} 命中 DB 快照的最大年龄（秒）；超过则触发后台异步刷新
-    version_stale_seconds: int
 
 
 @dataclass(frozen=True)
@@ -102,8 +99,7 @@ class SchedulerConfig:
     enabled: bool
     timezone: str
     jitter_seconds: int
-    misfire_grace_seconds: int
-    # 单包两次采集的最小间隔（秒），限制手动刷新 / 后台刷新触发频率，防滥用
+    # 单包两次采集的最小间隔（秒），限制手动刷新触发频率，防滥用
     min_collect_interval_seconds: int
     # 服务启动时是否立即采集一次（仅 interval 模式；cron 始终按表达式首次触发）
     run_on_startup: bool
@@ -179,7 +175,6 @@ def load_config(path: Path | str | None = None) -> AppConfig:
             user_agent=str(http_data["user_agent"]),
             default_timeout=float(http_data["default_timeout"]),
             chunk_size=int(http_data["chunk_size"]),
-            max_concurrent_downloads=int(http_data["max_concurrent_downloads"]),
             log_body_max_length=int(http_data["log_body_max_length"]),
             retry_max_attempts=int(http_data["retry_max_attempts"]),
             retry_backoff_seconds=float(http_data["retry_backoff_seconds"]),
@@ -193,7 +188,6 @@ def load_config(path: Path | str | None = None) -> AppConfig:
         ),
         database=DatabaseConfig(
             sqlite_path=sqlite_path,
-            version_stale_seconds=int(database_data["version_stale_seconds"]),
         ),
         github=GithubConfig(
             # 环境变量优先于配置文件，避免敏感凭证落入仓库
@@ -208,7 +202,6 @@ def load_config(path: Path | str | None = None) -> AppConfig:
             enabled=bool(scheduler_data["enabled"]),
             timezone=str(scheduler_data["timezone"]),
             jitter_seconds=int(scheduler_data["jitter_seconds"]),
-            misfire_grace_seconds=int(scheduler_data["misfire_grace_seconds"]),
             min_collect_interval_seconds=int(
                 scheduler_data["min_collect_interval_seconds"]
             ),

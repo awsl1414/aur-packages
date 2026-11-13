@@ -44,7 +44,7 @@ class FakePackageService:
     async def list_packages(self) -> list[str]:
         return self._names
 
-    async def get_info(self, name: str, hash_algorithm: str = "b2") -> PackageInfo:
+    async def get_info(self, name: str) -> PackageInfo:
         if self._error is not None:
             raise self._error
         assert self._info is not None
@@ -52,7 +52,7 @@ class FakePackageService:
 
 
 class FakeScheduleService:
-    """可控服务桩：驱动 refresh_package（collect_now）与 reload_packages"""
+    """可控服务桩：驱动 refresh_package（collect_version_now）与 reload_packages"""
 
     def __init__(
         self,
@@ -65,7 +65,7 @@ class FakeScheduleService:
         self._error = error
         self._names = names or []
 
-    async def collect_now(self, name: str) -> PackageInfo:
+    async def collect_version_now(self, name: str) -> PackageInfo:
         if self._error is not None:
             raise self._error
         assert self._info is not None
@@ -77,7 +77,7 @@ class FakeScheduleService:
 
 def _info() -> PackageInfo:
     return PackageInfo(
-        name="qq", version="1.0.0", urls={"x86_64": "u"}, hashes={"x86_64": "h"}
+        name="qq", version="1.0.0", urls={"x86_64": "u"}
     )
 
 
@@ -90,7 +90,7 @@ def _svc_sched(**kw: Any) -> ScheduleService:
 
 
 def _svc_refresh(**kw: Any) -> PackageService:
-    """refresh_package 直连 PackageService（collect_now），桩鸭子类型同构"""
+    """refresh_package 直连 PackageService（collect_version_now），桩鸭子类型同构"""
     return cast(PackageService, FakeScheduleService(**kw))
 
 

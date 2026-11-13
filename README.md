@@ -9,8 +9,8 @@
 
 | 项目 | 说明 |
 | ---- | ---- |
-| [`projects/aur-metadata`](projects/aur-metadata/) | 包元数据服务：定时追踪上游版本、计算文件 hash（b2/sha256/sha512），经 HTTP API 供更新工具查询 |
-| [`projects/aur-auto-update`](projects/aur-auto-update/) | AUR 包自动更新工具：消费 aur-metadata 的 API，自动更新 `packages/` 下 PKGBUILD 的版本号与校验和 |
+| [`projects/aur-metadata`](projects/aur-metadata/) | 包元数据服务：定时追踪上游版本与下载链接，经 HTTP API 供更新工具查询 |
+| [`projects/aur-auto-update`](projects/aur-auto-update/) | AUR 包自动更新工具：消费 aur-metadata 的 API，下载安装包本地计算校验和并更新 `packages/` 下 PKGBUILD；metadata 不可用时 GitHub 来源包回退到本地 release 解析 |
 | `packages/` | AUR PKGBUILD 与本地源文件（由 CI 在版本更新后自动发布到 AUR） |
 
 ## 快速开始

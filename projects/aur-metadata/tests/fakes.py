@@ -9,7 +9,6 @@ import gzip
 import io
 import lzma
 import tarfile
-from collections.abc import Iterable
 from pathlib import Path
 from typing import cast
 
@@ -54,7 +53,6 @@ def make_app_config() -> AppConfig:
             user_agent="test-agent",
             default_timeout=5.0,
             chunk_size=1024,
-            max_concurrent_downloads=2,
             log_body_max_length=200,
             retry_max_attempts=1,
             retry_backoff_seconds=0.0,
@@ -66,15 +64,12 @@ def make_app_config() -> AppConfig:
             oidb_command="0x9b8e",
             oidb_service_type=1,
         ),
-        database=DatabaseConfig(
-            sqlite_path=Path("test.db"), version_stale_seconds=7200
-        ),
+        database=DatabaseConfig(sqlite_path=Path("test.db")),
         github=GithubConfig(token=None),
         scheduler=SchedulerConfig(
             enabled=True,
             timezone="Asia/Shanghai",
             jitter_seconds=0,
-            misfire_grace_seconds=300,
             min_collect_interval_seconds=300,
             run_on_startup=False,
         ),
@@ -121,11 +116,11 @@ class FakeParser(BaseParser):
 
 
 class FakeFetcher:
-    """可控 Fetcher：fetch_text 返回预设文本，fetch_and_hash_many 返回预设 hash。
+    """可控 Fetcher：fetch_text 返回预设文本，fetch_head 返回预设头部字节。
 
-    - ``text=None`` 模拟版本源抓取失败；``hashes`` 缺某 key → 该架构 hash 为 None（下载失败）
+    - ``text=None`` 模拟版本源抓取失败
     - ``delay``/``entered`` 用于放大锁持有窗口的并发测试（替代基于 sleep 的时序假设）
-    - ``text_calls``/``hash_calls`` 计数，断言是否触网
+    - ``text_calls``/``head_calls`` 计数，断言是否触网
 
     与 ``Fetcher`` 同构（鸭子类型），注入 PackageService 时需用 ``as_fetcher()`` 转换。
     """
@@ -133,20 +128,17 @@ class FakeFetcher:
     def __init__(
         self,
         text: str | None = "",
-        hashes: dict[str, str | None] | None = None,
         delay: float = 0.0,
         entered: asyncio.Event | None = None,
         head: bytes | dict[str, bytes] | None = None,
     ) -> None:
         self._text = text
-        self._hashes = hashes or {}
         self._delay = delay
         self._entered = entered
         # fetch_head 预设：bytes 对所有 URL 一视同仁；dict 按 URL 精确匹配；
         # None 模拟头部下载失败
         self._head = head
         self.text_calls: int = 0
-        self.hash_calls: int = 0
         self.head_calls: int = 0
 
     async def fetch_text(
@@ -166,17 +158,6 @@ class FakeFetcher:
         if isinstance(self._head, dict):
             return self._head.get(url)
         return self._head[:max_bytes]
-
-    async def fetch_and_hash_many(
-        self, urls: dict[str, str], algorithms: Iterable[str]
-    ) -> dict[str, dict[str, str] | None]:
-        """桩：某架构在 ``_hashes`` 有值视为下载成功，全部算法均返回该 digest；缺失则 None。"""
-        self.hash_calls += 1
-        out: dict[str, dict[str, str] | None] = {}
-        for key in urls:
-            digest: str | None = self._hashes.get(key)
-            out[key] = ({a: digest for a in algorithms}) if digest is not None else None
-        return out
 
     def as_fetcher(self) -> Fetcher:
         """伪装成 Fetcher 供 PackageService 使用（ty 兼容）。"""
@@ -244,6 +225,7 @@ def make_qq_registry(
     version: str | None = "1.0.0",
     signed_by_arch: dict[str, str] | None = None,
     raise_on_resolve: bool = False,
+    parser: BaseParser | None = None,
 ) -> PackageRegistry:
     """构造单包 'qq' 的 registry：archs 决定可解析架构，每架构 URL 自动派生。
 
@@ -255,7 +237,8 @@ def make_qq_registry(
     url_by_arch: dict[str, str] = {a.value: f"https://x/{a.value}.deb" for a in archs}
     entry = PackageEntry(
         name="qq",
-        parser=FakeParser(
+        parser=parser
+        or FakeParser(
             version,
             url_by_arch,
             signed_by_arch=signed_by_arch,

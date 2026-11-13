@@ -13,7 +13,7 @@ from typing import Any, cast
 import pytest
 
 from aur_metadata.constants import ArchEnum
-from aur_metadata.models import Package, PackageHash, PackageVersion
+from aur_metadata.models import Package, PackageVersion
 from aur_metadata.parsers.deb import DebControlVersionMixin, DebParser
 from aur_metadata.registry import PackageEntry, PackageRegistry
 from aur_metadata.services.package_service import PackageService
@@ -52,15 +52,10 @@ def _registry(
 
 def _deb_service(
     head: bytes | dict[str, bytes] | None = _DEB_HEAD,
-    hashes: dict[str, str | None] | None = None,
     parser: DebControlVersionMixin | None = None,
     text: str | None = None,
 ) -> PackageService:
-    fetcher = FakeFetcher(
-        text=text,
-        hashes=hashes or {"x86_64": "h1", "aarch64": "h2"},
-        head=head,
-    )
+    fetcher = FakeFetcher(text=text, head=head)
     if parser is None:
         parser = DebParser(
             _APP_CONFIG,
@@ -86,15 +81,12 @@ async def _make_deb_package(make_package, **overrides: Any) -> Package:
 # ── 静态 URL（DebParser）─────────────────────────────────────────────────────
 
 
-async def test_collect_deb_success_persists_version_and_hashes(
-    db, make_package
-) -> None:
+async def test_collect_deb_success_persists_snapshot(db, make_package) -> None:
     pkg = await _make_deb_package(make_package)
     svc = _deb_service()
-    info = await svc.collect("app")
+    info = await svc.collect_version("app")
     assert info.version == "2.0.0_100"
     assert info.urls == _DEB_URLS
-    assert info.hashes == {"x86_64": "h1", "aarch64": "h2"}
 
     fetcher = cast(FakeFetcher, svc.fetcher)
     assert fetcher.text_calls == 0  # 静态 URL：版本源响应不参与
@@ -103,15 +95,13 @@ async def test_collect_deb_success_persists_version_and_hashes(
     v: PackageVersion = await PackageVersion.get(package=pkg, status="success")
     assert v.version == "2.0.0_100"
     assert json.loads(v.urls) == _DEB_URLS
-    # 三种算法 × 两架构
-    assert await PackageHash.filter(version=v, status="success").count() == 6
 
 
 async def test_collect_deb_head_failure_records_and_raises(db, make_package) -> None:
     """头部下载失败 → failed 审计行 + RuntimeError"""
     pkg = await _make_deb_package(make_package)
     with pytest.raises(RuntimeError):
-        await _deb_service(head=None).collect("app")
+        await _deb_service(head=None).collect_version("app")
     v: PackageVersion = await PackageVersion.get(package=pkg)
     assert v.status == "failed" and "提取版本号" in v.error
 
@@ -120,7 +110,7 @@ async def test_collect_deb_bad_structure_records_and_raises(db, make_package) ->
     """头部非 deb 结构 → 版本提取失败 → failed 审计行"""
     pkg = await _make_deb_package(make_package)
     with pytest.raises(RuntimeError):
-        await _deb_service(head=b"garbage not a deb").collect("app")
+        await _deb_service(head=b"garbage not a deb").collect_version("app")
     v: PackageVersion = await PackageVersion.get(package=pkg)
     assert v.status == "failed" and v.version is None
 
@@ -133,32 +123,18 @@ async def test_collect_deb_cross_arch_version_mismatch(db, make_package) -> None
         _DEB_URLS["aarch64"]: build_deb(version="2.0.0-99"),
     }
     with pytest.raises(RuntimeError):
-        await _deb_service(head=heads).collect("app")
+        await _deb_service(head=heads).collect_version("app")
     v: PackageVersion = await PackageVersion.get(package=pkg)
     assert v.status == "failed" and "版本不一致" in v.error
 
 
 async def test_collect_deb_partial_arch_urls_still_succeeds(db, make_package) -> None:
     """仅部分架构配置了 URL → 可用架构照常落库，缺失架构 hash 行失败"""
-    pkg = await _make_deb_package(make_package)
+    await _make_deb_package(make_package)
     svc = _deb_service(parser=DebParser(_APP_CONFIG, urls={"amd64": _DEB_URLS["x86_64"]}))
-    info = await svc.collect("app")
+    info = await svc.collect_version("app")
     assert info.version == "2.0.0_100"
     assert info.urls == {"x86_64": _DEB_URLS["x86_64"]}
-
-    v: PackageVersion = await PackageVersion.get(package=pkg, status="success")
-    rows = await PackageHash.filter(version=v)
-    failed_archs = {h.arch for h in rows if h.status == "failed"}
-    assert failed_archs == {"aarch64"}  # 缺 URL 架构 hash 落失败行
-
-
-async def test_collect_deb_version_survives_hash_failure(db, make_package) -> None:
-    """安装包路径同样满足核心回归：version 先行落库，hash 全失败不连坐"""
-    pkg = await _make_deb_package(make_package)
-    info = await _deb_service(hashes={"x86_64": None, "aarch64": None}).collect("app")
-    assert info.version == "2.0.0_100"
-    assert info.hashes == {"x86_64": None, "aarch64": None}
-    assert await PackageVersion.get(package=pkg, status="success") is not None
 
 
 async def test_collect_deb_partial_head_failure_still_succeeds(
@@ -168,7 +144,7 @@ async def test_collect_deb_partial_head_failure_still_succeeds(
     pkg = await _make_deb_package(make_package)
     # head 按 URL 精确匹配：aarch64 缺失 → 该架构跳过，x86_64 照常提取
     svc = _deb_service(head={_DEB_URLS["x86_64"]: _DEB_HEAD})
-    info = await svc.collect("app")
+    info = await svc.collect_version("app")
     assert info.version == "2.0.0_100"
     assert info.urls == _DEB_URLS  # URL 已定位，仅版本提取跳过
 
@@ -191,7 +167,7 @@ async def test_collect_deb_resolve_raw_url_exception_swallowed(
         urls={"amd64": _DEB_URLS["x86_64"], "arm64": _DEB_URLS["aarch64"]},
     )
     with pytest.raises(RuntimeError, match="采集 app 版本失败"):
-        await _deb_service(parser=raising_parser).collect("app")
+        await _deb_service(parser=raising_parser).collect_version("app")
     v: PackageVersion = await PackageVersion.get(package=pkg)
     assert v.status == "failed" and "提取版本号" in v.error
 
@@ -203,14 +179,10 @@ async def test_collect_deb_dynamic_urls_fetch_text_once(db, make_package) -> Non
     """无静态配置：先取版本源响应定位 URL，再逐架构下载头部"""
     pkg = await _make_deb_package(make_package, parser_config=None)
     svc = PackageService(
-        FakeFetcher(
-            text=json.dumps(_DEB_URLS),
-            hashes={"x86_64": "h1", "aarch64": "h2"},
-            head=_DEB_HEAD,
-        ).as_fetcher(),
+        FakeFetcher(text=json.dumps(_DEB_URLS), head=_DEB_HEAD).as_fetcher(),
         _registry(_DynamicDebParser(_APP_CONFIG)),
     )
-    info = await svc.collect("app")
+    info = await svc.collect_version("app")
     assert info.version == "2.0.0_100"
 
     fetcher = cast(FakeFetcher, svc.fetcher)
@@ -228,7 +200,7 @@ async def test_collect_deb_dynamic_url_source_failure(db, make_package) -> None:
         _registry(_DynamicDebParser(_APP_CONFIG)),
     )
     with pytest.raises(RuntimeError):
-        await svc.collect("app")
+        await svc.collect_version("app")
     v: PackageVersion = await PackageVersion.get(package=pkg)
     assert v.status == "failed" and "无法获取版本源" in v.error
     assert cast(FakeFetcher, svc.fetcher).head_calls == 0

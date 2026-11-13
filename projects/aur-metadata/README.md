@@ -1,14 +1,14 @@
 # aur-metadata
 
-> AUR 包元数据服务：追踪上游版本、计算文件 hash，供 [aur-auto-update](../aur-auto-update/) 查询
+> AUR 包元数据服务：追踪上游版本与下载链接，供 [aur-auto-update](../aur-auto-update/) 查询
 
 [![Python](https://img.shields.io/badge/Python-3.13%2B-blue)](https://www.python.org/)
 
 ## 简介
 
-`aur-metadata` 是本 monorepo 的服务端成员，负责获取应用版本、计算文件 hash，供 `aur-auto-update` 在更新 PKGBUILD 时调用。
+`aur-metadata` 是本 monorepo 的服务端成员，负责获取应用版本与下载链接，供 `aur-auto-update` 在更新 PKGBUILD 时调用；校验和由 `aur-auto-update` 下载安装包后本地计算。
 
-支持定时采集各包版本与文件 hash 并落库 SQLite；查询接口不下载安装包体（版本与 hash 独立采集、独立落库，版本先行永不被下载失败连坐；鉴权类源仅实时签名 RPC 生成可直接下载链接，失败降级），快照过期时后台异步刷新，永不阻塞响应。
+支持定时采集各包版本与下载链接并落库 SQLite；查询接口只读快照、不触发采集（鉴权类源仅实时签名 RPC 生成可直接下载链接，失败降级）。每包由独立 task 定时采集，迟到任务不丢弃；快照新鲜度由采集周期保证。
 
 ## 技术栈
 

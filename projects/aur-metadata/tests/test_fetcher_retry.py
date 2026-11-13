@@ -30,7 +30,6 @@ def _make_fetcher(
         user_agent=base.user_agent,
         default_timeout=base.default_timeout,
         chunk_size=base.chunk_size,
-        max_concurrent_downloads=base.max_concurrent_downloads,
         log_body_max_length=base.log_body_max_length,
         retry_max_attempts=max_attempts,
         retry_backoff_seconds=backoff,
@@ -104,16 +103,3 @@ async def test_retry_on_503_then_success() -> None:
     finally:
         await client.aclose()
 
-
-async def test_retry_exhausted_on_read_timeout_stream() -> None:
-    """流式下载持续 ReadTimeout → 重试至上限后返回 None。"""
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        raise httpx.ReadTimeout("读取超时")
-
-    f, calls, client = _make_fetcher(handler, max_attempts=2)
-    try:
-        assert await f.fetch_and_hash_multi("https://example.com/big", ["b2"]) is None
-        assert calls[0] == 2
-    finally:
-        await client.aclose()

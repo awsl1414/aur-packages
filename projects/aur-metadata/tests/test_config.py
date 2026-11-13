@@ -17,7 +17,6 @@ port = 8000
 user_agent = "test-agent"
 default_timeout = 5.0
 chunk_size = 1024
-max_concurrent_downloads = 1
 log_body_max_length = 100
 retry_max_attempts = 1
 retry_backoff_seconds = 0.0
@@ -31,13 +30,11 @@ oidb_service_type = 1
 
 [database]
 sqlite_path = "data/test.db"
-version_stale_seconds = 7200
 
 [scheduler]
 enabled = false
 timezone = "Asia/Shanghai"
 jitter_seconds = 0
-misfire_grace_seconds = 0
 min_collect_interval_seconds = 0
 run_on_startup = false
 """

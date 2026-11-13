@@ -4,7 +4,7 @@
 # 注释与测试改动不算。升版本需同步 `uv lock`（uv.lock 记录成员版本，--locked 会校验）。
 [project]
 name = "aur-metadata"
-version = "1.0.3"
+version = "1.0.4"
 description = "AUR packages metadata service"
 readme = "README.md"
 requires-python = ">=3.13"

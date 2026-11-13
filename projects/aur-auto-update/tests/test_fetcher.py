@@ -4,7 +4,7 @@ import httpx
 
 from aur_auto_update.fetcher import Fetcher
 
-URL = "https://aur.llz.asia/api/v1/packages/qq?algorithm=b2"
+URL = "https://aur.example.com/api/v1/packages/qq"
 
 
 def _response(status_code: int, text: str = "") -> httpx.Response:

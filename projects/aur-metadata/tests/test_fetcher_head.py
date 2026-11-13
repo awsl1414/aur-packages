@@ -25,7 +25,6 @@ def _make_fetcher(
         user_agent=base.user_agent,
         default_timeout=base.default_timeout,
         chunk_size=base.chunk_size,
-        max_concurrent_downloads=base.max_concurrent_downloads,
         log_body_max_length=base.log_body_max_length,
         retry_max_attempts=max_attempts,
         retry_backoff_seconds=0.0,

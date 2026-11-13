@@ -30,6 +30,23 @@ class TestBuildBaseArgs:
         assert "--file-allocation=none" in downloader._build_base_args()
 
 
+class TestStaleFileCleanup:
+    async def test_existing_file_removed_before_download(self, tmp_path: Path) -> None:
+        """下载前删除同名旧文件：滚动发布同名覆盖时，aria2c -c 不能沿用旧内容"""
+        downloader = _make_downloader()
+        target = tmp_path / "a.deb"
+        target.write_bytes(b"STALE")  # 上一轮下载残留
+
+        # aria2c 不实际执行（下载必然失败），只验证旧文件已被清理
+        with patch("aur_auto_update.utils.downloader.shutil.which", return_value="/usr/bin/aria2c"):
+            results = await downloader.download_all(
+                {"x86_64": ("https://example.com/a.deb", target)}
+            )
+
+        assert not target.exists()
+        assert results["x86_64"].success is False
+
+
 class TestUrlSafety:
     async def test_control_chars_in_url_rejected(self, tmp_path: Path) -> None:
         """URL 含控制字符（aria2c input file 指令注入面）→ 直接记失败，不触 aria2c"""

@@ -35,9 +35,22 @@
 | `name` | ✓ | metadata 注册的包名 |
 | `pkgbuild` | ✓ | PKGBUILD 路径（相对 `config.yaml` 所在目录） |
 | `arch` | ✓ | 架构列表，须与 `packages.toml` 的 `archs` 一致。上游只发部分架构时两者都只列已发布的（如 rustmusic 的 deb 仅有 amd64） |
-| `update_source_url` | — | 覆盖自动从 PKGBUILD 提取的 source URL |
+| `update_source_url` | — | 是否用 metadata 返回的 URL 更新 PKGBUILD 的 source 字段（默认 true；为 false 时只更新版本与校验和） |
 | `enable` | — | 是否启用该包（默认 true） |
 | `hash_algorithm` | — | 包级哈希算法覆盖，默认继承 `settings.hash_algorithm` |
+| `github` | — | GitHub 来源包的回退配置（见下） |
+
+`github` 段用于 metadata 服务不可用时回退到本地 release 解析，字段：
+
+| 字段 | 必填 | 说明 |
+| ---- | ---- | ---- |
+| `repo` | ✓ | `owner/repo` |
+| `tag` | — | 固定 release tag；留空则用 `/releases/latest` |
+| `version` | ✓ | 版本提取规则（表或表数组）。`source` 为 `tag_name`/`name`，`regex` 提取，`group` 取捕获组或 `template` 拼接；多条规则按序 fallback |
+| `assets` | ✓ | 架构 → asset 匹配规则。`*` 开头为后缀匹配，否则精确匹配文件名；键须覆盖 `arch` 清单 |
+
+该段的规则与 `projects/aur-metadata/configs/packages.toml` 中的采集规则作用相同，
+新增或修改 GitHub 包时两处须同步维护。
 
 ## 验证
 

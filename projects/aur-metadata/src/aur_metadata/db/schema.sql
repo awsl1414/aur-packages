@@ -1,7 +1,8 @@
 -- aur-metadata —— 定时采集结果库 schema（SQLite）
 --
--- 业务定位：定时任务按 packages 配置抓取各包版本、计算文件 hash，
--- 落库后供 aur-packages 更新 PKGBUILD 时查询。三张表 + 一个取「最新版本」的视图。
+-- 业务定位：定时任务按 packages 配置抓取各包版本与下载 URL，
+-- 落库后供 aur-packages 更新 PKGBUILD 时查询。两张表 + 一个取「最新版本」的视图。
+-- 校验和不在本库计算：消费方下载安装包后本地计算。
 --
 -- 与 ORM 的关系：Tortoise ORM 模型字段须与本文件保持一致；本文件作为
 -- 数据库结构的事实来源（source of truth），便于直接初始化或迁移比对。
@@ -48,16 +49,16 @@ CREATE TABLE IF NOT EXISTS packages (
 CREATE INDEX IF NOT EXISTS idx_packages_enabled ON packages (enabled);
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 版本快照：版本采集域，每次抓取版本源产出一条。
--- 与 hash 采集解耦——version 在此独立落库，不受 hash 下载成败影响。
--- 保留全部历史，便于版本变更检测与故障审计；最新版本通过视图查询。
+-- 版本快照：版本变化或采集失败时新增一行。
+-- 版本未变时复用现有 success 行（只刷新 urls 与 fetched_at），不新增历史。校验和由消费方（aur-auto-update）下载后本地计算，
+-- 本表不存储 hash。
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS package_versions (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     package_id  INTEGER NOT NULL,                                -- 所属包，关联 packages.id（ON DELETE CASCADE）
     version     TEXT,                                            -- 解析到的版本号；版本抓取失败时为 NULL
-    urls        TEXT,                                            -- 各架构原始下载 URL JSON（arch→url），成功时写入；供 hash 采集复用，免去重取版本源
-    status      TEXT    NOT NULL CHECK (status IN ('success', 'failed')), -- 仅反映版本抓取结果；hash 成败见 package_hashes
+    urls        TEXT,                                            -- 各架构原始下载 URL JSON（arch→url），成功时写入
+    status      TEXT    NOT NULL CHECK (status IN ('success', 'failed')), -- 仅反映版本抓取结果
     error       TEXT,                                            -- failed 时记录失败原因
     fetched_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),   -- 采集时间
     FOREIGN KEY (package_id) REFERENCES packages (id) ON DELETE CASCADE
@@ -65,26 +66,6 @@ CREATE TABLE IF NOT EXISTS package_versions (
 
 -- 取某包最新快照的核心索引：按包倒序取时间
 CREATE INDEX IF NOT EXISTS idx_versions_package_time ON package_versions (package_id, fetched_at DESC);
-
--- ─────────────────────────────────────────────────────────────────────────────
--- 文件 hash：版本快照下「架构 × 算法」粒度的记录
--- 对齐 src/aur_metadata/constants/package.py 的 ArchEnum（x86_64/aarch64/loong64/any）
--- 与 HashAlgorithmEnum（sha256/sha512/b2）。
--- ─────────────────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS package_hashes (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    version_id  INTEGER NOT NULL,                                -- 所属版本快照，关联 package_versions.id（ON DELETE CASCADE）
-    arch        TEXT    NOT NULL,                                -- CPU 架构，如 x86_64
-    algorithm   TEXT    NOT NULL,                                -- 哈希算法，如 b2
-    hash_value  TEXT,                                            -- 计算结果；失败时为 NULL
-    url         TEXT,                                            -- 原始下载 URL（parse_url 结果，稳定不过期；不存签名后的临时链接）
-    status      TEXT    NOT NULL CHECK (status IN ('success', 'failed')), -- 逐架构显式记录下载+计算成败
-    error       TEXT,                                            -- failed 时记录失败原因
-    fetched_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),  -- 该条 hash 的采集时间（UTC，ISO8601）
-    FOREIGN KEY (version_id) REFERENCES package_versions (id) ON DELETE CASCADE,
-    -- 同一版本下同一架构同一算法只保留一条，保证插入幂等
-    UNIQUE (version_id, arch, algorithm)
-) STRICT;
 
 
 -- ─────────────────────────────────────────────────────────────────────────────

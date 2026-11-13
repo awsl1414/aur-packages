@@ -105,6 +105,10 @@ class Downloader:
 
         for file_path in {p for _, p in safe_downloads.values()}:
             file_path.parent.mkdir(parents=True, exist_ok=True)
+            # 删掉同名旧文件：滚动发布（固定 tag、文件名不变、内容随版本日期覆盖）
+            # 时 pkgver 可能不变，而 aria2c -c 会把已存在的完整文件当作续传目标直接
+            # 沿用，导致校验和对应旧内容。每次下载都从零开始，由调用方按 URL 内容算 hash。
+            file_path.unlink(missing_ok=True)
 
         # 写入 aria2c input file
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:

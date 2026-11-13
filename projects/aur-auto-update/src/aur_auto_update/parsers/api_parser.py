@@ -1,4 +1,4 @@
-"""metadata API 统一响应解析器（唯一解析器）
+"""metadata API 统一响应解析器
 
 数据源：``aur-metadata`` 项目的 ``GET /api/v1/packages/{name}`` 接口。
 所有上游（QQ / Navicat / Trae / Zen / PyPI）的源解析均在 metadata 服务端完成，
@@ -11,8 +11,7 @@
         "name": "qq",
         "version": "3.2.31_260710",
         "urls":          { "<arch>": "<原始未签名下载 URL>" },
-        "download_urls": { "<arch>": "<实时可下载 URL or null>" },
-        "hashes":        { "<arch>": "<checksum hex or null>" }
+        "download_urls": { "<arch>": "<实时可下载 URL or null>" }
       }
     }
 
@@ -20,9 +19,10 @@
 链接，签名动作由 PKGBUILD 的 DLAGENTS 在 makepkg 阶段独立完成）。
 ``download_urls`` 为 metadata 服务端查询时实时生成的可直接下载链接（如 QQ 经
 GetSign 签名的临时链接，会过期；值为 null 表示该架构签名失败），仅供客户端
-回退下载使用，禁止写入 PKGBUILD。
-``hashes`` 由 metadata 服务端计算，可能为空或缺部分架构——此时由
-``PackageUpdater`` 按 ``download_urls``（缺失回退 ``urls``）下载 + 本地计算。
+下载使用，禁止写入 PKGBUILD。
+
+校验和不在 metadata 端计算：``PackageUpdater`` 按 ``download_urls``（缺失回退
+``urls``）下载安装包后本地计算。
 """
 
 import json
@@ -39,15 +39,12 @@ class ParsedPackage:
 
     - ``version``：语义化版本号
     - ``urls``：``{arch_value: 原始未签名 URL}``，写入 PKGBUILD ``source_<arch>=()``
-    - ``hashes``：``{arch_value: checksum}``，已过滤掉 None/空值；可能为空字典，
-      表示 metadata 未提供 hash，由调用方回退到本地下载计算
     - ``download_urls``：``{arch_value: 实时可下载 URL}``，已过滤掉 None/空值；
-      回退下载路径优先使用（QQ 等鉴权源必需），为空字典时回退 ``urls``
+      下载路径优先使用（QQ 等鉴权源必需），为空字典时回退 ``urls``
     """
 
     version: str
     urls: dict[str, str]
-    hashes: dict[str, str]
     download_urls: dict[str, str]
 
 
@@ -85,9 +82,6 @@ class ApiParser:
             logger.warning("API 响应 data.urls 中无有效架构 URL")
             return None
 
-        # hashes 可能为空（metadata 未提供）→ 调用方回退本地计算，不视为解析失败
-        hashes = self._clean_str_dict(data.get("hashes"))
-
         download_urls_raw = data.get("download_urls")
         if not isinstance(download_urls_raw, dict):
             logger.warning("API 响应缺少 data.download_urls 字段")
@@ -97,7 +91,6 @@ class ApiParser:
         return ParsedPackage(
             version=version,
             urls=urls,
-            hashes=hashes,
             download_urls=download_urls,
         )
 

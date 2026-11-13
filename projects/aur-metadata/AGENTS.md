@@ -6,7 +6,7 @@
 
 ## 项目定位
 
-本服务为 aur-auto-update 提供应用版本、文件 hash 等元数据，基于 FastAPI + Tortoise ORM（SQLite）+ APScheduler 实现。包配置以 SQLite `packages` 表为唯一来源，定时采集版本与 hash 落库；版本与 hash 为两个独立采集域（各自独立事务，版本先行落库，hash 下载失败不影响版本可用性）。查询接口不下载安装包体（鉴权类源仅实时签名 RPC 生成 `download_urls`、失败降级），快照过期时后台异步刷新。
+本服务为 aur-auto-update 提供应用版本与下载链接，基于 FastAPI + Tortoise ORM（SQLite）+ APScheduler 实现。包配置以 SQLite `packages` 表为唯一来源，每包一个独立 task 定时采集版本落库；不计算文件 hash（校验和由 aur-auto-update 本地计算）。查询接口只读快照、不触发采集（鉴权类源仅实时签名 RPC 生成 `download_urls`、失败降级）。
 
 ## 目录结构
 
@@ -16,15 +16,15 @@ src/aur_metadata/
 ├── config.py       # TOML 配置加载（dataclass，经构造函数注入，无模块级单例）
 ├── db/             # Tortoise 初始化 + schema.sql（包内数据文件，importlib.resources 加载）
 ├── models/         # ORM 模型（字段须与 db/schema.sql 手工对齐）
-├── fetcher.py      # httpx 封装：重试/限流/GitHub token/流式多 hash（HttpConfig 注入）
+├── fetcher.py      # httpx 封装：重试/限流/GitHub token/头部下载（HttpConfig 注入）
 ├── parsers/        # 上游解析器（BaseParser(app_config) 注入运行配置；registry 注册 parser_type）
 ├── services/       # 采集编排（package_service / schedule_service / package_seeder / registry_loader）
 ├── registry.py     # 内存包注册表
 ├── schemas.py      # Pydantic 响应模型
 ├── response.py     # ApiResponse[T] 统一包装 + BizError + ErrorCode
 ├── api/            # FastAPI 路由（deps.py 依赖注入 + v1/packages.py）
-├── constants/      # 与环境无关的枚举（ArchEnum, HashAlgorithmEnum）
-└── utils/          # 多算法 hash builder、deb（ar/control.tar）解析
+├── constants/      # 与环境无关的枚举（ArchEnum）
+└── utils/          # deb（ar/control.tar）解析
 ```
 
 ## 开发命令

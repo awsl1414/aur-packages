@@ -12,7 +12,7 @@
 | 成员 | 说明 | 入口 |
 | ---- | ---- | ---- |
 | `projects/aur-auto-update` | AUR 包自动更新工具，消费 aur-metadata 的 API 更新 PKGBUILD | `aur_auto_update.cli:main` → `aur-auto-update` |
-| `projects/aur-metadata` | 包元数据服务（FastAPI + Tortoise ORM/SQLite + APScheduler），追踪上游版本、计算文件 hash | `aur_metadata.cli:main` → `aur-metadata` |
+| `projects/aur-metadata` | 包元数据服务（FastAPI + Tortoise ORM/SQLite + APScheduler），追踪上游版本与下载链接 | `aur_metadata.cli:main` → `aur-metadata` |
 
 非 Python 资产在仓库根：`packages/`（AUR PKGBUILD）、`config.yaml`（updater 配置）、`structure/`、`docs/`。
 

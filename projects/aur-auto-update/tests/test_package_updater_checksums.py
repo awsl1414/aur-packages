@@ -1,8 +1,8 @@
-"""PackageUpdater._get_checksums 回退下载的 URL 选择单测。
+"""PackageUpdater._get_checksums 本地下载计算的单测。
 
-只覆盖 URL 优先级逻辑（download_urls 优先、缺失退回 urls、hashes 完整时跳过
-下载）与合并后的完整性校验，不触真实网络/aria2c：用桩下载器替换实例属性，
-文件内容由桩写入本地临时文件，校验和走真实计算路径。
+覆盖 URL 优先级（download_urls 优先、缺失退回 urls）与完整性校验，不触真实
+网络/aria2c：用桩下载器替换实例属性，文件内容由桩写入本地临时文件，校验和走
+真实计算路径。
 """
 
 from pathlib import Path
@@ -46,25 +46,22 @@ def _updater(tmp_path: Path, fake: _FakeDownloader) -> PackageUpdater:
 
 def _parsed(
     urls: dict[str, str],
-    hashes: dict[str, str],
     download_urls: dict[str, str] | None = None,
 ) -> ParsedPackage:
     return ParsedPackage(
         version="1.0.0",
         urls=urls,
-        hashes=hashes,
         download_urls=download_urls or {},
     )
 
 
 async def test_get_checksums_prefers_download_urls(tmp_path: Path) -> None:
-    """API hashes 缺失触发回退下载时，优先使用实时可下载链接（QQ 签名场景）"""
+    """下载时优先使用实时可下载链接（QQ 签名场景）"""
     fake = _FakeDownloader()
     updater = _updater(tmp_path, fake)
     checksums, success = await updater._get_checksums(
         _parsed(
             urls={"x86_64": "https://raw/x.deb"},
-            hashes={},
             download_urls={"x86_64": "https://signed/x.deb"},
         ),
         [ArchEnum.X86_64],
@@ -82,7 +79,7 @@ async def test_get_checksums_falls_back_to_urls(tmp_path: Path) -> None:
     fake = _FakeDownloader()
     updater = _updater(tmp_path, fake)
     checksums, success = await updater._get_checksums(
-        _parsed(urls={"x86_64": "https://raw/x.deb"}, hashes={}),
+        _parsed(urls={"x86_64": "https://raw/x.deb"}),
         [ArchEnum.X86_64],
         "qq",
         "1.0.0",
@@ -98,7 +95,7 @@ async def test_get_checksums_no_url_skips_arch(tmp_path: Path) -> None:
     fake = _FakeDownloader()
     updater = _updater(tmp_path, fake)
     checksums, success = await updater._get_checksums(
-        _parsed(urls={}, hashes={}),
+        _parsed(urls={}),
         [ArchEnum.X86_64],
         "qq",
         "1.0.0",
@@ -109,37 +106,18 @@ async def test_get_checksums_no_url_skips_arch(tmp_path: Path) -> None:
     assert fake.requested_urls == {}
 
 
-async def test_get_checksums_complete_hashes_skip_download(tmp_path: Path) -> None:
-    """API hashes 完整时直接采用，不触发任何下载"""
-    fake = _FakeDownloader()
-    updater = _updater(tmp_path, fake)
-    checksums, success = await updater._get_checksums(
-        _parsed(
-            urls={"x86_64": "https://raw/x.deb"},
-            hashes={"x86_64": "abc"},
-            download_urls={"x86_64": "https://signed/x.deb"},
-        ),
-        [ArchEnum.X86_64],
-        "qq",
-        "1.0.0",
-        "b2",
-    )
-    assert success is True
-    assert checksums == {"x86_64": "abc"}
-    assert fake.requested_urls == {}
-
-
 async def test_get_checksums_partial_arch_without_url_fails(tmp_path: Path) -> None:
-    """多架构缺一且该架构无任何可用 URL → 整体失败，避免带旧校验和升版本"""
+    """多架构缺一且该架构无任何可用 URL → 立即整体失败，不下载其余架构"""
     fake = _FakeDownloader()
     updater = _updater(tmp_path, fake)
     checksums, success = await updater._get_checksums(
-        _parsed(urls={"x86_64": "https://raw/x.deb"}, hashes={}),
+        _parsed(urls={"x86_64": "https://raw/x.deb"}),
         [ArchEnum.X86_64, ArchEnum.AARCH64],
         "qq",
         "1.0.0",
         "b2",
     )
     assert success is False
-    assert set(checksums) == {"x86_64"}
-    assert fake.requested_urls == {"x86_64": "https://raw/x.deb"}
+    assert checksums == {}
+    # 缺 URL 已注定整体放弃，不应白下载 x86_64 的安装包
+    assert fake.requested_urls == {}

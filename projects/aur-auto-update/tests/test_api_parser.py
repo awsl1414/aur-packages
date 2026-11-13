@@ -9,7 +9,7 @@ from typing import Any
 
 from aur_auto_update.parsers.api_parser import ApiParser
 
-# 完整合法的 API 响应：含 code / message / data(version + urls + download_urls + hashes)
+# 完整合法的 API 响应：含 code / message / data(version + urls + download_urls)
 API_RESPONSE: dict[str, Any] = {
     "code": 0,
     "message": "ok",
@@ -24,10 +24,6 @@ API_RESPONSE: dict[str, Any] = {
             "x86_64": "https://dn.navicat.com/download/signed/navicat17-premium-cs-x86_64.AppImage",
             "aarch64": None,  # 该架构签名失败
         },
-        "hashes": {
-            "x86_64": "c633020961f2fabe7a37f5998f41644ec425010d98ef75ae42bce0e3cbd7488691b93740f1123c12a4a28cd65022f596bc5fb3c0bd3dd1acdf040cb29d53489f",
-            "aarch64": "a0891e62a0d9fa4613afc21e5fd2d91020a48723cc1993ca5fa8827abd362d601463e7eab446ed8ff5f56abe9c8a7276f7a63808f97b5a4171cdbf71bc3897c5",
-        },
     },
 }
 
@@ -40,8 +36,6 @@ class TestApiParseSuccess:
         assert parsed.version == "17.3.10"
         assert set(parsed.urls.keys()) == {"x86_64", "aarch64"}
         assert parsed.urls["x86_64"].endswith(".AppImage")
-        assert set(parsed.hashes.keys()) == {"x86_64", "aarch64"}
-        assert parsed.hashes["x86_64"] == API_RESPONSE["data"]["hashes"]["x86_64"]
         # download_urls 中 null 值架构被过滤
         assert parsed.download_urls == {"x86_64": API_RESPONSE["data"]["download_urls"]["x86_64"]}
 
@@ -113,67 +107,6 @@ class TestApiParseUrls:
         parsed = parser.parse(json.dumps(data))
         assert parsed is not None
         assert set(parsed.urls.keys()) == {"aarch64"}
-
-
-class TestApiParseHashes:
-    def test_missing_hashes_field_returns_empty(self) -> None:
-        """data 中无 hashes 字段时 hashes 为空字典（调用方回退下载），不算解析失败"""
-        parser = ApiParser()
-        data = {
-            "code": 0,
-            "data": {"version": "1.0", "urls": {"x86_64": "https://x"}, "download_urls": {}},
-        }
-        parsed = parser.parse(json.dumps(data))
-        assert parsed is not None
-        assert parsed.hashes == {}
-
-    def test_empty_hashes(self) -> None:
-        """hashes 为空字典时正常返回，hashes 为空"""
-        parser = ApiParser()
-        data = {
-            "code": 0,
-            "data": {
-                "version": "1.0",
-                "urls": {"x86_64": "https://x"},
-                "download_urls": {},
-                "hashes": {},
-            },
-        }
-        parsed = parser.parse(json.dumps(data))
-        assert parsed is not None
-        assert parsed.hashes == {}
-
-    def test_none_hash_value_skipped(self) -> None:
-        """hash 值为 None（metadata schema 允许）时跳过该架构"""
-        parser = ApiParser()
-        data = {
-            "code": 0,
-            "data": {
-                "version": "1.0",
-                "urls": {"x86_64": "https://x", "aarch64": "https://a"},
-                "download_urls": {},
-                "hashes": {"x86_64": None, "aarch64": "valid_hash"},
-            },
-        }
-        parsed = parser.parse(json.dumps(data))
-        assert parsed is not None
-        assert parsed.hashes == {"aarch64": "valid_hash"}
-
-    def test_empty_hash_string_skipped(self) -> None:
-        """空字符串 hash 被跳过"""
-        parser = ApiParser()
-        data = {
-            "code": 0,
-            "data": {
-                "version": "1.0",
-                "urls": {"x86_64": "https://x", "aarch64": "https://a"},
-                "download_urls": {},
-                "hashes": {"x86_64": "", "aarch64": "valid_hash"},
-            },
-        }
-        parsed = parser.parse(json.dumps(data))
-        assert parsed is not None
-        assert parsed.hashes == {"aarch64": "valid_hash"}
 
 
 class TestApiParseDownloadUrls:

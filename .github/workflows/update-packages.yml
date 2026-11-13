@@ -43,6 +43,10 @@ jobs:
             projects/*/pyproject.toml
 
       - name: Sync dependencies and update packages
+        env:
+          # GitHub 来源包在 metadata 不可用时回退到 api.github.com；
+          # 匿名仅 60 次/时，三个包同时回退就可能耗尽，注入 token 提到 5000 次/时
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           uv sync --package aur-auto-update
           uv run --package aur-auto-update aur-auto-update
