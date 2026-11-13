@@ -7,7 +7,7 @@ settings:
   # metadata API（projects/aur-metadata）：上游解析优先在服务端完成，
   # 客户端通过 GET {base_url}/{name} 获取 version/urls/download_urls
   api:
-    base_url: "https://aur.why.vin/api/v1/packages"
+    base_url: "https://aur.llz.asia/api/v1/packages"
   # 下载设置：timeout/max_retries/retry_wait 同时作用于 metadata API 的 HTTP 客户端
   # （Fetcher）；下载安装包计算校验和时使用
   # connections/show_progress 仅用于 aria2c 下载
