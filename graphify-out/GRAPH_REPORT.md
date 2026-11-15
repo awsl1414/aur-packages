@@ -1,24 +1,24 @@
-# Graph Report - aur-packages  (2026-11-14)
+# Graph Report - aur-packages  (2026-11-15)
 
 ## Corpus Check
-- 137 files · ~49,978 words
+- 137 files · ~50,061 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 50 file(s) not represented in the graph (top: (none) 33, .install 7, .desktop 6)
 - WARNING: 50 of 193 files seen (26%) have no supported extractor and are missing from this graph entirely. It may look complete while representing only part of the codebase.
 
 ## Summary
-- 1880 nodes · 3639 edges · 191 communities (99 shown, 92 thin omitted)
-- Extraction: 89% EXTRACTED · 11% INFERRED · 0% AMBIGUOUS · INFERRED: 391 edges (avg confidence: 0.91)
+- 1918 nodes · 3662 edges · 204 communities (106 shown, 98 thin omitted)
+- Extraction: 90% EXTRACTED · 10% INFERRED · 0% AMBIGUOUS · INFERRED: 368 edges (avg confidence: 0.91)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `e35408fc`
+- Built from commit: `9ea20606`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - test_package_seeder.py
-- Path
+- PKGBUILDEditor
 - PackageConfig
 - db/__init__.py
 - .load_from_yaml
@@ -33,7 +33,7 @@
 - 设计
 - TestPKGBUILDEditorEpoch
 - test_package_service_deb.py
-- package_service.py
+- test_qq_parser.py
 - AppImage 解包
 - Electron 直装（tarball）
 - 类型注解规范
@@ -81,12 +81,12 @@
 - trae-cn Package (Domestic)
 - trae-sg Package (Singapore CDN)
 - trae-us Package (US CDN)
-- test_response.py
-- response.py
-- PKGBUILDEditor
-- .fetch_head
-- package_service.py
+- _make_downloader
+- ParsedPackage
+- Downloader
 - test_cli_healthcheck.py
+- test_app_integration.py
+- RuleParser
 - db/__init__.py
 - tests/__init__.py
 - ._add_schedule
@@ -105,32 +105,32 @@
 - package_updater.py
 - uv Package Manager
 - _service
-- get_package
-- ParsedPackage
+- _zen_parser
+- GithubReleaseService
 - PackageRegistry
 - navicat17-premium-zh-cn package (Chinese Simplified)
 - Trae AI IDE by ByteDance (CDN variants)
 - zen-browser-twilight-bin package (Firefox-based nightly)
-- conftest.py
-- test_fetcher.py
+- pathlib
+- Fetcher
 - aur-metadata/tests/test_config.py
-- make_app_config
-- TestGithubSourceConfig
+- package_service.py
+- _orca_parser
 - HashAlgorithmEnum (SHA256/SHA512/B2)
 - DebParser
-- PackageService
+- PackageInfo
 - version
 - with
-- FakeParser
+- make_qq_registry
 - aur_metadata/config.py
 - API 路由文档
-- typing
+- aur_metadata/constants/__init__.py
 - z-code.sh
 - packages.py
 - ArchEnum
 - 注释规范
 - ._log_structure_change
-- BizError
+- LogCaptureFixture
 - ArchEnum
 - commit
 - pytest
@@ -148,20 +148,30 @@
 - trae
 - trae-cn
 - trae-sg
-- FakeScheduleService
-- README.md
+- .version_from_package_head
+- 添加新软件包
 - aur-metadata
 - trae-us
 - z-code
 - zen-browser
 - ParsedPackage
 - push-to-aur
+- load_packages
 - _Handler
 - generate-srcinfo
 - on
-- .resolve_raw_url
+- AppConfig
 - aur_auto_update/config.py
+- aur-auto-update
 - _zcode_parser
+- rustmusic
+- _rustmusic_parser
+- json
+- test_rule_deb_parser_version_from_package_head
+- test_re_kind_returns_whole_match_by_default
+- test_pure_rule_parser_requires_version_rule
+- test_rule_chain_falls_back_to_next_rule
+- test_template_ignores_unreferenced_missing_groups
 
 ## God Nodes (most connected - your core abstractions)
 1. `PKGBUILDEditor` - 60 edges
@@ -169,11 +179,11 @@
 3. `Fetcher` - 36 edges
 4. `AppConfig` - 36 edges
 5. `PackageConfig` - 36 edges
-6. `RuleParser` - 33 edges
-7. `ApiParser` - 32 edges
-8. `BaseParser` - 32 edges
-9. `PackageUpdater` - 30 edges
-10. `make_app_config()` - 29 edges
+6. `ApiParser` - 32 edges
+7. `BaseParser` - 32 edges
+8. `PackageUpdater` - 30 edges
+9. `make_app_config()` - 29 edges
+10. `FakeScheduler` - 27 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `第 3 步：配置 updater` --references--> `pkgbuild()`  [INFERRED]
@@ -182,10 +192,10 @@
   .github/workflows/push-to-aur.yml → CLAUDE.md
 - `Push to AUR Workflow` --implements--> `.SRCINFO Sync Requirement`  [INFERRED]
   .github/workflows/push-to-aur.yml → docs/packaging-guide.md
-- ``PackageInfo`` --references--> `PackageInfo`  [INFERRED]
-  projects/aur-metadata/docs/api.md → projects/aur-metadata/src/aur_metadata/schemas.py
-- ``PackageList`` --references--> `PackageList`  [INFERRED]
-  projects/aur-metadata/docs/api.md → projects/aur-metadata/src/aur_metadata/schemas.py
+- `定时采集与数据库` --references--> `success()`  [INFERRED]
+  projects/aur-metadata/docs/api.md → projects/aur-metadata/src/aur_metadata/response.py
+- `使用` --references--> `pkgbuild()`  [INFERRED]
+  projects/aur-auto-update/README.md → projects/aur-auto-update/tests/test_pkgbuild_editor.py
 
 ## Import Cycles
 - None detected.
@@ -195,15 +205,15 @@
 - **Update → SRCINFO → Commit → AUR Push Pipeline** — github_workflows_update_packages, wf_arch_pkg_action, wf_aur_deploy_action, rules_srcinfo [INFERRED 0.85]
 - **makepkg checksum / cache-busting rule cluster** — rules_source_alias_cache, rules_carch_in_source, rules_local_source_hash, rules_rolling_release_checksum, tool_makepkg [INFERRED 0.85]
 
-## Communities (191 total, 92 thin omitted)
+## Communities (204 total, 98 thin omitted)
 
 ### Community 0 - "test_package_seeder.py"
-Cohesion: 0.07
-Nodes (30): load_packages(), PackageConfig, get_parser_types(), _definition_fields(), sync_packages_from_config(), SyncReport, _validate(), _cfg() (+22 more)
+Cohesion: 0.06
+Nodes (24): PackageConfig, get_parser_types(), _definition_fields(), sync_packages_from_config(), SyncReport, _validate(), _clean_config_env(), db() (+16 more)
 
-### Community 1 - "Path"
+### Community 1 - "PKGBUILDEditor"
 Cohesion: 0.05
-Nodes (6): PKGBUILDEditor, TestPKGBUILDEditorEdgeCases, TestPKGBUILDEditorGetters, TestPKGBUILDEditorUpdate, TestUpdateSourceArchEdgeCases, TestUpdateSourceEdgeCases
+Nodes (7): PKGBUILDEditor, pkgbuild(), TestPKGBUILDEditorEdgeCases, TestPKGBUILDEditorGetters, TestPKGBUILDEditorUpdate, TestUpdateSourceArchEdgeCases, TestUpdateSourceEdgeCases
 
 ### Community 3 - "PackageConfig"
 Cohesion: 0.09
@@ -213,8 +223,12 @@ Nodes (19): _build_service(), _cfg(), FakeScheduler, _pkg(), _svc(), test_build_
 Cohesion: 0.15
 Nodes (7): build_tortoise_config(), close_db(), get_db_url(), init_db(), _load_schema_sql(), _split_sql(), test_full_pipeline_with_real_schema_and_config()
 
+### Community 5 - ".load_from_yaml"
+Cohesion: 0.07
+Nodes (4): ConfigLoader, TestConfigLoader, TestGithubSourceConfig, TestHashAlgorithmValidation
+
 ### Community 7 - "BaseParser"
-Cohesion: 0.21
+Cohesion: 0.16
 Nodes (3): BaseParser, test_arch_value_from_enum(), test_arch_value_from_string()
 
 ### Community 8 - "AUR 打包实践指南"
@@ -222,28 +236,28 @@ Cohesion: 0.13
 Nodes (15): AUR 打包实践指南, license [官方规范], pkgdesc [官方规范], provides 和 conflicts [推荐实践], Shell 补全 [推荐实践], source 声明 [推荐实践], .SRCINFO [官方规范], 代码质量 [推荐实践] (+7 more)
 
 ### Community 9 - "PackageUpdater"
-Cohesion: 0.10
-Nodes (3): _dispatch(), PackageUpdater, UpdateSummary
+Cohesion: 0.07
+Nodes (5): _dispatch(), PackageUpdater, UpdateSummary, calculate_file_hash(), TestCalculateFileHash
 
 ### Community 10 - "ApiParser"
 Cohesion: 0.10
 Nodes (5): ApiParser, TestApiParseDownloadUrls, TestApiParseSuccess, TestApiParseUrls, TestApiParseVersionFailures
 
 ### Community 11 - "compare_versions"
-Cohesion: 0.09
-Nodes (23): test_parsed_release_json_roundtrip(), TraeParser, test_first_false_joins_all_hits(), test_jmespath(), test_no_transform_returns_selected_text(), test_rule_deb_parser_version_rule_not_required(), _entry(), _payload() (+15 more)
+Cohesion: 0.11
+Nodes (17): TraeParser, _entry(), _payload(), test_default_region_is_cn(), test_parse_url_download_not_list(), test_parse_url_each_arch(), test_parse_url_region_not_present(), test_parse_url_region_selection() (+9 more)
 
 ### Community 12 - "pytest"
-Cohesion: 0.10
-Nodes (22): make_qq_registry(), _service(), test_collect_version_fetch_failure_records_and_raises(), test_collect_version_new_version_inserts_row(), test_collect_version_now_info_has_empty_download_urls(), test_collect_version_now_throttled(), test_collect_version_now_unknown_package(), test_collect_version_parse_failure_records() (+14 more)
+Cohesion: 0.12
+Nodes (19): _service(), test_collect_version_fetch_failure_records_and_raises(), test_collect_version_new_version_inserts_row(), test_collect_version_now_info_has_empty_download_urls(), test_collect_version_now_throttled(), test_collect_version_now_unknown_package(), test_collect_version_persists_snapshot(), test_collect_version_same_version_reuses_row() (+11 more)
 
 ### Community 13 - "fakes.py"
 Cohesion: 0.29
 Nodes (6): Commit 规范, graphify, 开发命令, 注意事项, 添加新软件包, 项目结构（uv workspace monorepo）
 
 ### Community 14 - "aur_metadata/cli.py"
-Cohesion: 0.19
-Nodes (6): _app_version(), _configure_logging(), create_app(), _debug_extract(), _run(), main()
+Cohesion: 0.14
+Nodes (6): _configure_logging(), main(), _app_version(), _configure_logging(), create_app(), main()
 
 ### Community 15 - "设计"
 Cohesion: 0.15
@@ -254,8 +268,12 @@ Cohesion: 0.10
 Nodes (13): get_parser(), test_get_parser_deb_with_urls_config(), test_get_parser_empty_config_is_no_arg(), test_get_parser_returns_new_instance(), test_get_parser_rule_deb_needs_no_version_config(), test_get_parser_rule_invalid_config_raises(), test_get_parser_rule_requires_version_config(), test_get_parser_rule_with_rules_config() (+5 more)
 
 ### Community 17 - "test_package_service_deb.py"
+Cohesion: 0.09
+Nodes (15): DebControlVersionMixin, FakeFetcher, _deb_service(), _DynamicDebParser, _make_deb_package(), _registry(), test_collect_deb_bad_structure_records_and_raises(), test_collect_deb_cross_arch_version_mismatch() (+7 more)
+
+### Community 18 - "test_qq_parser.py"
 Cohesion: 0.10
-Nodes (14): FakeFetcher, _deb_service(), _DynamicDebParser, _make_deb_package(), _registry(), test_collect_deb_bad_structure_records_and_raises(), test_collect_deb_cross_arch_version_mismatch(), test_collect_deb_dynamic_url_source_failure() (+6 more)
+Nodes (10): _payload(), test_parse_url_accepts_string_arch(), test_parse_url_loongarch_as_plain_string(), test_parse_url_missing_arm_field(), test_parse_url_non_str_deb_value(), test_parse_url_unsupported_arch(), test_parse_url_x64_as_plain_string(), test_urls_share_single_parse() (+2 more)
 
 ### Community 19 - "AppImage 解包"
 Cohesion: 0.33
@@ -314,20 +332,20 @@ Cohesion: 0.50
 Nodes (3): Feedback, Install, trae-us
 
 ### Community 39 - "test_package_updater_checksums.py"
-Cohesion: 0.12
-Nodes (9): Downloader, DownloadResult, _FakeDownloader, _parsed(), test_get_checksums_falls_back_to_urls(), test_get_checksums_no_url_skips_arch(), test_get_checksums_partial_arch_without_url_fails(), test_get_checksums_prefers_download_urls() (+1 more)
+Cohesion: 0.17
+Nodes (8): DownloadResult, _FakeDownloader, _parsed(), test_get_checksums_falls_back_to_urls(), test_get_checksums_no_url_skips_arch(), test_get_checksums_partial_arch_without_url_fails(), test_get_checksums_prefers_download_urls(), _updater()
 
 ### Community 40 - "zen-browser-twilight.sh"
 Cohesion: 0.50
 Nodes (3): MOZ_APP_LAUNCHER, zen-browser-twilight.sh script, ZEN_USER_FLAGS
 
 ### Community 41 - "test_base_parser.py"
-Cohesion: 0.06
-Nodes (16): _make_downloader(), TestBuildBaseArgs, TestStaleFileCleanup, TestUrlSafety, _Concrete, test_cache_bad_json_not_reparsed(), test_cache_hits_same_response_object(), test_cache_invalidates_on_new_response() (+8 more)
+Cohesion: 0.13
+Nodes (12): _Concrete, test_cache_bad_json_not_reparsed(), test_cache_hits_same_response_object(), test_cache_invalidates_on_new_response(), test_invalid_json_logged_as_structure_change(), test_log_structure_change_format(), test_log_structure_change_non_str_repr(), test_log_structure_change_snippet_truncated() (+4 more)
 
 ### Community 44 - "test_rule_parser.py"
-Cohesion: 0.13
-Nodes (22): RuleParser, _rule(), _static_urls(), _structure_changed(), test_css_selector(), test_invalid_rule_raises(), test_invalid_url_rule_raises(), test_jmespath_invalid_json() (+14 more)
+Cohesion: 0.16
+Nodes (10): _rule(), _static_urls(), test_css_selector(), test_invalid_url_rule_raises(), test_non_dict_rule_raises(), test_parse_url_dynamic_rule(), test_parse_url_static_string_rules(), test_rule_chain_rejects_empty_list() (+2 more)
 
 ### Community 47 - "BaseParser"
 Cohesion: 0.22
@@ -354,108 +372,100 @@ Cohesion: 0.50
 Nodes (3): Feedback, Install, zen-browser-twilight-bin
 
 ### Community 63 - "test_api_packages.py"
-Cohesion: 0.16
-Nodes (15): refresh_package(), FakePackageService, _info(), _svc_pkg(), _svc_refresh(), _svc_sched(), test_get_package_data_not_ready(), test_get_package_not_found() (+7 more)
+Cohesion: 0.09
+Nodes (23): get_package(), list_packages(), refresh_package(), reload_packages(), ApiResponse, success(), CollectThrottledError, DataNotReadyError (+15 more)
 
 ### Community 64 - "rule.py"
-Cohesion: 0.25
-Nodes (3): _build_rule(), _sorted_kinds(), _validate_expr_syntax()
+Cohesion: 0.16
+Nodes (4): AppConfig, _build_rule(), _sorted_kinds(), _validate_expr_syntax()
 
 ### Community 65 - "generate_download_filename"
 Cohesion: 0.13
 Nodes (7): extract_extension_from_url(), extract_filename_from_url(), generate_download_filename(), _sanitize_component(), TestExtractExtensionFromUrl, TestExtractFilenameFromUrl, TestGenerateDownloadFilename
 
-### Community 80 - "test_response.py"
+### Community 80 - "_make_downloader"
 Cohesion: 0.13
-Nodes (7): PackageList, test_api_response_generic_roundtrip(), test_biz_error_carries_code_and_message(), test_error_code_to_http_status_mapping(), test_success_envelope(), test_unhandled_exception_returns_500(), test_unknown_biz_error_falls_back_to_500()
+Nodes (4): _make_downloader(), TestBuildBaseArgs, TestStaleFileCleanup, TestUrlSafety
 
-### Community 81 - "response.py"
-Cohesion: 0.25
-Nodes (6): _envelope(), register_exception_handlers(), _handle_biz_error(), _handle_unhandled(), _handle_validation_error(), test_envelope_shape()
+### Community 81 - "ParsedPackage"
+Cohesion: 0.21
+Nodes (4): ParsedPackage, PackageVersionProvider, _FakeGithub, test_provider_accepts_real_fetcher()
 
-### Community 82 - "PKGBUILDEditor"
-Cohesion: 0.22
-Nodes (4): _config(), _package(), test_lifespan_assembles_services_and_seeds(), test_openapi_version_from_package_metadata()
-
-### Community 83 - ".fetch_head"
-Cohesion: 0.17
-Nodes (4): _describe_http_error(), _attempt(), _is_retryable(), _with_github_auth()
-
-### Community 84 - "package_service.py"
-Cohesion: 0.15
-Nodes (5): PackageVersion, Meta, CollectThrottledError, DataNotReadyError, _utcnow()
-
-### Community 85 - "test_cli_healthcheck.py"
-Cohesion: 0.24
+### Community 83 - "test_cli_healthcheck.py"
+Cohesion: 0.27
 Nodes (7): _healthcheck(), _serve(), test_healthcheck_fails_on_http_error_status(), test_healthcheck_fails_on_non_zero_business_code(), test_healthcheck_fails_when_body_is_not_our_api(), test_healthcheck_fails_when_nothing_listens(), test_healthcheck_ready_on_business_success()
 
+### Community 84 - "test_app_integration.py"
+Cohesion: 0.24
+Nodes (4): _config(), _package(), test_lifespan_assembles_services_and_seeds(), test_openapi_version_from_package_metadata()
+
 ### Community 86 - "db/__init__.py"
-Cohesion: 0.12
-Nodes (4): PackageConfig, TestHashAlgorithmValidation, TestPackageConfig, TestPackageConfigUnknownArch
+Cohesion: 0.11
+Nodes (3): PackageConfig, TestPackageConfig, TestPackageConfigUnknownArch
 
 ### Community 87 - "tests/__init__.py"
 Cohesion: 0.17
 Nodes (4): compare_versions(), parse_version(), TestCompareVersions, TestParseVersion
 
 ### Community 88 - "._add_schedule"
-Cohesion: 0.11
-Nodes (3): lifespan(), ScheduleService, _task_id()
+Cohesion: 0.07
+Nodes (6): lifespan(), Package, Meta, _parse_package_id(), ScheduleService, _task_id()
 
 ### Community 89 - "aur_metadata/config.py"
 Cohesion: 0.17
 Nodes (7): _make_fetcher(), counting_handler(), test_no_retry_on_client_error_status(), test_retry_exhausted_returns_none(), test_retry_on_503_then_success(), test_retry_transient_then_success(), handler()
 
 ### Community 91 - "PackageService"
-Cohesion: 0.12
-Nodes (4): Package, Meta, PackageEntry, _VersionSnapshot
+Cohesion: 0.08
+Nodes (4): PackageFileVersionParser, PackageEntry, PackageService, _VersionSnapshot
 
 ### Community 93 - "aur-metadata"
 Cohesion: 0.17
 Nodes (11): build, container_name, dns, image, ports, restart, volumes, context (+3 more)
 
-### Community 103 - "package_updater.py"
-Cohesion: 0.12
-Nodes (3): _configure_logging(), main(), Fetcher
-
 ### Community 105 - "_service"
 Cohesion: 0.17
 Nodes (12): GithubSourceConfig, _pkg(), _service(), test_fixed_tag_url(), test_forbidden_not_retried(), test_github_headers_and_token(), test_missing_asset_fails(), test_non_retryable_status_fails() (+4 more)
 
-### Community 106 - "get_package"
-Cohesion: 0.20
-Nodes (5): get_package(), list_packages(), reload_packages(), ApiResponse, success()
+### Community 106 - "_zen_parser"
+Cohesion: 0.18
+Nodes (6): test_invalid_rule_raises(), test_zen_missing_name_returns_none(), test_zen_url_rules_target_linux_tarballs(), test_zen_version_falls_back_without_date(), test_zen_version_joins_date_suffix(), _zen_parser()
 
-### Community 107 - "ParsedPackage"
-Cohesion: 0.11
-Nodes (7): ParsedPackage, _extract_asset_urls(), _extract_version(), GithubReleaseService, PackageVersionProvider, _FakeGithub, test_provider_accepts_real_fetcher()
+### Community 107 - "GithubReleaseService"
+Cohesion: 0.22
+Nodes (3): _extract_asset_urls(), _extract_version(), GithubReleaseService
 
 ### Community 108 - "PackageRegistry"
-Cohesion: 0.12
-Nodes (10): ArchEnum, PackageRegistry, load_registry_from_db(), _entry(), test_loads_valid_packages(), test_entry_holds_parser_instance(), test_entry_is_frozen(), test_get_hit_and_miss() (+2 more)
+Cohesion: 0.17
+Nodes (7): PackageRegistry, _entry(), test_entry_holds_parser_instance(), test_entry_is_frozen(), test_get_hit_and_miss(), test_list_all_returns_copy(), test_replace_all_rebuilds_from_scratch()
 
-### Community 112 - "conftest.py"
-Cohesion: 0.07
-Nodes (9): ArchEnum, HashAlgorithmEnum, calculate_file_hash(), _Hash, TestCalculateFileHash, _clean_config_env(), db(), make_package() (+1 more)
+### Community 112 - "pathlib"
+Cohesion: 0.20
+Nodes (3): ArchEnum, HashAlgorithmEnum, _Hash
 
-### Community 113 - "test_fetcher.py"
-Cohesion: 0.13
-Nodes (11): _response(), test_extract_message_from_error_body(), test_fetch_text_network_error_retried(), test_fetch_text_no_retry_when_max_retries_zero(), test_fetch_text_permanent_error_no_retry(), test_fetch_text_retryable_exhausted(), test_fetch_text_retryable_then_success(), test_fetch_text_success() (+3 more)
+### Community 113 - "Fetcher"
+Cohesion: 0.05
+Nodes (25): _response(), test_extract_message_from_error_body(), test_fetch_text_network_error_retried(), test_fetch_text_no_retry_when_max_retries_zero(), test_fetch_text_permanent_error_no_retry(), test_fetch_text_retryable_exhausted(), test_fetch_text_retryable_then_success(), test_fetch_text_success() (+17 more)
 
 ### Community 114 - "aur-metadata/tests/test_config.py"
 Cohesion: 0.28
 Nodes (7): test_default_from_member_dir(), test_default_from_repo_root(), test_default_missing_lists_candidates(), test_env_var_beats_default(), test_explicit_arg_beats_env(), test_load_packages_default_from_repo_root(), _write()
 
-### Community 115 - "make_app_config"
-Cohesion: 0.20
-Nodes (8): _make_fetcher(), counting_handler(), test_fetch_head_404_returns_none(), test_fetch_head_invalid_max_bytes_raises(), test_fetch_head_reads_prefix_and_sends_range(), handler(), test_fetch_head_retry_transient_then_success(), test_fetch_head_short_body_returns_all()
+### Community 115 - "package_service.py"
+Cohesion: 0.22
+Nodes (3): PackageVersion, Meta, _utcnow()
+
+### Community 116 - "_orca_parser"
+Cohesion: 0.22
+Nodes (5): _orca_parser(), test_orca_url_rule_returns_none_when_asset_missing(), test_orca_url_rules_pick_deb_over_lookalike_assets(), test_orca_version_regex_rejects_malformed_tag(), test_orca_version_strips_tag_prefix()
 
 ### Community 118 - "DebParser"
-Cohesion: 0.08
-Nodes (12): AppConfig, PackageFileVersionParser, DebControlVersionMixin, DebParser, test_get_parser_deb_with_config(), test_parse_url_from_config(), test_parse_url_unknown_arch_warns_and_none(), test_parse_version_always_none() (+4 more)
-
-### Community 119 - "PackageService"
 Cohesion: 0.13
-Nodes (3): PackageInfo, PackageNotFoundError, PackageService
+Nodes (9): DebParser, test_get_parser_deb_with_config(), test_parse_url_from_config(), test_parse_url_unknown_arch_warns_and_none(), test_parse_version_always_none(), test_urls_canonical_keys_passthrough(), test_urls_deb_arch_aliases_normalized(), test_version_from_package_head_bad_structure() (+1 more)
+
+### Community 119 - "PackageInfo"
+Cohesion: 0.14
+Nodes (7): `PackageInfo`, `PackageList`, 数据模型, PackageInfo, PackageList, FakePackageService, FakeScheduleService
 
 ### Community 120 - "version"
 Cohesion: 0.21
@@ -465,17 +475,25 @@ Nodes (13): aarch64, x86_64, assets, repo, tag, version, github, github (+5 more
 Cohesion: 0.10
 Nodes (20): with, assets, cache-dependency-glob, commit_email, commit_message, commit_username, enable-cache, flags (+12 more)
 
+### Community 122 - "make_qq_registry"
+Cohesion: 0.18
+Nodes (4): FakeParser, make_qq_registry(), test_collect_version_parse_failure_records(), test_get_info_urls_aligns_with_current_archs()
+
 ### Community 123 - "aur_metadata/config.py"
-Cohesion: 0.16
+Cohesion: 0.18
 Nodes (10): 注意事项, DatabaseConfig, GithubConfig, HttpConfig, load_config(), QQConfig, _resolve_path(), SchedulerConfig (+2 more)
 
 ### Community 124 - "API 路由文档"
-Cohesion: 0.14
-Nodes (14): API 路由文档, `PackageInfo`, `PackageList`, 业务码, 列出所有已注册包, 定时采集与数据库, 成功响应, 手动触发采集并落库 (+6 more)
+Cohesion: 0.18
+Nodes (11): API 路由文档, 业务码, 列出所有已注册包, 定时采集与数据库, 成功响应, 手动触发采集并落库, 查询指定包的最新版本与下载 URL, 统一响应结构 (+3 more)
+
+### Community 125 - "aur_metadata/constants/__init__.py"
+Cohesion: 0.17
+Nodes (3): ArchEnum, load_registry_from_db(), test_loads_valid_packages()
 
 ### Community 127 - "packages.py"
-Cohesion: 0.29
-Nodes (3): get_package_service(), get_schedule_service(), ErrorCode
+Cohesion: 0.08
+Nodes (18): get_package_service(), get_schedule_service(), BizError, _envelope(), ErrorCode, register_exception_handlers(), _handle_biz_error(), _handle_unhandled() (+10 more)
 
 ### Community 129 - "ArchEnum"
 Cohesion: 0.25
@@ -485,9 +503,9 @@ Nodes (8): AUR 包自动更新工具, 开发, 快速开始, 技术栈, 支持的
 Cohesion: 0.33
 Nodes (5): 注释规范, 示例, 自检, 规则, 风格细节
 
-### Community 132 - "BizError"
-Cohesion: 0.22
-Nodes (4): BizError, _client_with(), endpoint(), test_handler_maps_each_biz_error_status()
+### Community 132 - "LogCaptureFixture"
+Cohesion: 0.36
+Nodes (6): _structure_changed(), test_jmespath_non_str_result(), test_parse_url_missing_arch(), test_regex_no_match(), test_rule_chain_reports_only_when_all_rules_miss(), test_selector_no_match()
 
 ### Community 133 - "ArchEnum"
 Cohesion: 0.40
@@ -498,8 +516,8 @@ Cohesion: 0.18
 Nodes (11): if, name, needs, runs-on, jobs, commit, update, changed_packages (+3 more)
 
 ### Community 135 - "pytest"
-Cohesion: 0.05
-Nodes (27): DebParseError, normalize_deb_version(), parse_deb_control_version(), _version_from_control_tar(), build_deb(), test_normalize_deb_version(), test_parse_accepts_trailing_bytes(), test_parse_bad_magic() (+19 more)
+Cohesion: 0.11
+Nodes (13): DebParseError, parse_deb_control_version(), _version_from_control_tar(), build_deb(), test_parse_accepts_trailing_bytes(), test_parse_bad_magic(), test_parse_control_member_missing_in_tar(), test_parse_control_name_without_dot_prefix() (+5 more)
 
 ### Community 136 - "z-code"
 Cohesion: 0.50
@@ -549,9 +567,13 @@ Nodes (6): trae-cn, arch, enable, name, pkgbuild, update_source_url
 Cohesion: 0.33
 Nodes (6): trae-sg, arch, enable, name, pkgbuild, update_source_url
 
-### Community 160 - "README.md"
-Cohesion: 0.17
-Nodes (10): 添加新软件包, 第 1 步：编写 PKGBUILD, 第 2 步：注册元数据采集, 第 3 步：配置 updater, 验证, aur-auto-update, 使用, 前置依赖 (+2 more)
+### Community 159 - ".version_from_package_head"
+Cohesion: 0.25
+Nodes (3): normalize_deb_version(), test_normalize_deb_version(), test_parse_control_version_all_compressions()
+
+### Community 160 - "添加新软件包"
+Cohesion: 0.40
+Nodes (5): 添加新软件包, 第 1 步：编写 PKGBUILD, 第 2 步：注册元数据采集, 第 3 步：配置 updater, 验证
 
 ### Community 161 - "aur-metadata"
 Cohesion: 0.17
@@ -577,6 +599,10 @@ Nodes (8): _FakeFetcher, _pkg(), _provider(), test_fallback_failure_returns_none
 Cohesion: 0.22
 Nodes (10): strategy, push-to-aur, package, if, name, needs, runs-on, strategy (+2 more)
 
+### Community 178 - "load_packages"
+Cohesion: 0.33
+Nodes (10): load_packages(), test_load_allows_explicit_empty_packages(), test_load_cron_schedule(), test_load_default_packages_file(), test_load_parses_fields_with_defaults(), test_load_rejects_bad_field_types(), test_load_rejects_duplicate_name_and_unknown_key(), test_load_rejects_missing_packages_key() (+2 more)
+
 ### Community 181 - "generate-srcinfo"
 Cohesion: 0.40
 Nodes (5): if, name, needs, runs-on, generate-srcinfo
@@ -586,32 +612,44 @@ Cohesion: 0.50
 Nodes (4): on, schedule, workflow_dispatch, cron
 
 ### Community 187 - "aur_auto_update/config.py"
-Cohesion: 0.12
-Nodes (6): ApiSettings, ConfigLoader, DownloadSettings, Settings, _validate_hash_algorithm(), VersionRule
+Cohesion: 0.17
+Nodes (5): ApiSettings, DownloadSettings, Settings, _validate_hash_algorithm(), VersionRule
+
+### Community 188 - "aur-auto-update"
+Cohesion: 0.40
+Nodes (4): aur-auto-update, 使用, 前置依赖, 模块结构
 
 ### Community 189 - "_zcode_parser"
 Cohesion: 0.29
 Nodes (4): test_zcode_url_rule_fails_on_renamed_artifact(), test_zcode_url_rules_extract_both_archs(), test_zcode_version_from_package_head(), _zcode_parser()
 
+### Community 190 - "rustmusic"
+Cohesion: 0.50
+Nodes (3): Feedback, Install, rustmusic
+
+### Community 194 - "json"
+Cohesion: 0.18
+Nodes (7): test_parsed_release_json_roundtrip(), test_first_false_joins_all_hits(), test_jmespath(), test_jmespath_rules_share_single_parse(), test_no_transform_returns_selected_text(), test_rule_deb_parser_version_rule_not_required(), test_template_unmatched_group_falls_back_instead_of_partial_value()
+
 ## Knowledge Gaps
-- **43 isolated node(s):** `aur-metadata`, `aria2c Multi-threaded Downloader`, `namcap PKGBUILD Linter`, `uv Package Manager`, `linuxqq-nt Package` (+38 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 911 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **92 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **43 isolated node(s):** `aria2c Multi-threaded Downloader`, `namcap PKGBUILD Linter`, `uv Package Manager`, `linuxqq-nt Package`, `Conventional Commits Standard` (+38 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 932 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **98 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `pkgbuild()` connect `README.md` to `Path`?**
-  _High betweenness centrality (0.069) - this node is a cross-community bridge._
+- **Why does `pkgbuild()` connect `PKGBUILDEditor` to `添加新软件包`, `aur-auto-update`?**
+  _High betweenness centrality (0.068) - this node is a cross-community bridge._
 - **Are the 5 inferred relationships involving `PKGBUILDEditor` (e.g. with `TestPKGBUILDEditorEdgeCases` and `TestPKGBUILDEditorGetters`) actually correct?**
   _`PKGBUILDEditor` has 5 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `aur-metadata`, `aria2c Multi-threaded Downloader`, `namcap PKGBUILD Linter` to the rest of the system?**
+- **What connects `aria2c Multi-threaded Downloader`, `namcap PKGBUILD Linter`, `uv Package Manager` to the rest of the system?**
   _43 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `test_package_seeder.py` be split into smaller, more focused modules?**
-  _Cohesion score 0.07456140350877193 - nodes in this community are weakly interconnected._
-- **Why does `添加新软件包` connect `README.md` to `README.md`?**
+  _Cohesion score 0.059887005649717516 - nodes in this community are weakly interconnected._
+- **Why does `Fetcher` connect `Fetcher` to `ParsedPackage`, `PackageUpdater`, `_service`, `GithubReleaseService`, `PackageService`, `aur_metadata/cli.py`, `ParsedPackage`, `test_package_service_deb.py`, `package_service.py`, `._add_schedule`, `aur_metadata/config.py`, `aur_metadata/config.py`?**
   _High betweenness centrality (0.058) - this node is a cross-community bridge._
 - **Are the 14 inferred relationships involving `PackageService` (e.g. with `get_package_service()` and `Fetcher`) actually correct?**
   _`PackageService` has 14 INFERRED edges - model-reasoned connections that need verification._
-- **Should `Path` be split into smaller, more focused modules?**
-  _Cohesion score 0.05195968645016797 - nodes in this community are weakly interconnected._
+- **Should `PKGBUILDEditor` be split into smaller, more focused modules?**
+  _Cohesion score 0.050284031138228484 - nodes in this community are weakly interconnected._
