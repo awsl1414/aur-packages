@@ -1,18 +1,27 @@
 # RustMusic deb 包解包目录结构快照
-# 来源: RustMusic_0.7.2_amd64.deb (control: Package rust-music / Version 0.7.2)
+# 来源: RustMusic_0.7.4_arm64.deb (control: Package rust-music / Version 0.7.4)
 # 提取: bsdtar -xf <deb> data.tar.gz && bsdtar -xf data.tar.gz -C data
-# 架构: amd64 (x86_64)；上游当前只发该架构
+# 架构: arm64 (aarch64)；amd64 变体结构完全一致（已逐行 diff），仅二进制架构不同
 data/
 └── usr/
     ├── bin/
-    │   └── rustmusic*
+    │   └── rustmusic*
     └── share/
         ├── applications/
-        │   └── RustMusic.desktop
+        │   └── RustMusic.desktop
         └── icons/
             └── hicolor/
+                ├── 128x128/
+                │   └── apps/
+                │       └── rustmusic.png
+                ├── 256x256@2/
+                │   └── apps/
+                │       └── rustmusic.png
+                ├── 32x32/
+                │   └── apps/
+                │       └── rustmusic.png
                 └── 512x512/
                     └── apps/
                         └── rustmusic.png
 
-9 directories, 3 files
+15 directories, 6 files

@@ -563,16 +563,28 @@ def _rustmusic_parser() -> RuleParser:
             "x86_64": {
                 "kind": "jmespath",
                 "expr": "assets[?ends_with(name, '_amd64.deb')].browser_download_url | [0]",
-            }
+            },
+            "aarch64": {
+                "kind": "jmespath",
+                "expr": "assets[?ends_with(name, '_arm64.deb')].browser_download_url | [0]",
+            },
         },
     )
 
 
-def test_rustmusic_extracts_version_and_amd64_deb() -> None:
-    """tag 去 v 前缀；deb 按后缀筛选，避开同 release 的 AppImage / exe / .sig"""
+def test_rustmusic_extracts_version_and_arch_debs() -> None:
+    """tag 去 v 前缀；deb 按后缀筛选，避开同 release 的 AppImage / exe / .sig。
+
+    上游 aarch64 deb 写作 ``arm64``，与 x86_64 的 ``amd64`` 不同名，
+    两条规则若互换会取到空列表。
+    """
     parser = _rustmusic_parser()
-    assert parser.parse_version(_RUSTMUSIC_RELEASE_JSON) == "0.7.2"
+    assert parser.parse_version(_RUSTMUSIC_RELEASE_JSON) == "0.7.4"
     assert parser.parse_url(ArchEnum.X86_64, _RUSTMUSIC_RELEASE_JSON) == (
-        "https://github.com/LingyunStudio/RustMusic/releases/download/v0.7.2/"
-        "RustMusic_0.7.2_amd64.deb"
+        "https://github.com/LingyunStudio/RustMusic/releases/download/v0.7.4/"
+        "RustMusic_0.7.4_amd64.deb"
+    )
+    assert parser.parse_url(ArchEnum.AARCH64, _RUSTMUSIC_RELEASE_JSON) == (
+        "https://github.com/LingyunStudio/RustMusic/releases/download/v0.7.4/"
+        "RustMusic_0.7.4_arm64.deb"
     )
